@@ -8,13 +8,6 @@
 import Foundation
 import SwiftUI
 
-//  A picker-selectable choice between the two progress-reporting styles
-//  explored in ProgressBarComparisonView, plus reusable views for each so
-//  they can be dropped into any view (like a button label) and switched
-//  live via the enum.
-//
-
-
 // enum to define names of progress bar style
 enum ProgressBarStyle: String, CaseIterable, Identifiable {
     case tqdm = "tqdm"
@@ -37,8 +30,8 @@ struct ProgressBarStylePicker: View {
     }
 }
 
-/// Hand-rolled tqdm-style text line. Needs the caller to track
-/// processed/total/startTime itself (see runTest()'s rewrite).
+///  tqdm-style text line progress bar.
+/// Uses the caller to track processed/total/startTime 
 struct TqdmProgressView: View {
     let processed: Int
     let total: Int
@@ -72,8 +65,7 @@ struct TqdmProgressView: View {
 
 
 /// Apple's native Progress/ProgressView, still updated manually by the
-/// caller every step (see runTest()'s rewrite) -- there's no auto-tracking
-/// for a plain processing loop, only the native rendering is "free" here.
+/// caller every step 
 struct AppleProgressView: View {
     let progress: Progress
 
@@ -90,9 +82,9 @@ struct AppleProgressView: View {
 }
 
 
-/// The switcher: renders whichever style is currently selected. This is
-/// the one you actually place in your view -- pass it both trackers'
-/// current state and it picks which to show.
+/// The switcher: renders whichever style is currently selected. This 
+/// goes in the view and gets passed the current state for each tracker
+/// only showing one actually selected
 struct PipelineProgressView: View {
     let style: ProgressBarStyle
     let processed: Int
