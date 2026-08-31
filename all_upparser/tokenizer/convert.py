@@ -1,14 +1,13 @@
 """Convert a trained tokenizer/segmenter checkpoint into a Core ML .mlpackage.
 
-Produces a model with FLEXIBLE sequence length (any character-sequence
-length up to --max_seq_len, not one fixed size) and float16 weights.
+Produces a model with flexible sequence length up to --max_seq_length, and float16 weights.
 
-Runs as a plain Python process on your Mac -- not inside Xcode. The
-resulting .mlpackage is what you drag into your Xcode project afterwards.
+This will take the output from training and make a .mlpackage which can be added to
+an Xcode project afterwards.
 
-Usage (from the ud_trainer/ project root, with the venv active):
+Usage (from the  project root, with the venv active):
 
-    pip install coremltools
+    pip install coremltools 
 
     python -m tokenizer.convert \
         --checkpoint out/tokenizer/best.pt \
@@ -16,12 +15,10 @@ Usage (from the ud_trainer/ project root, with the venv active):
         --output out/tokenizer/tokenizer.mlpackage \
         --max_seq_len 1024
 
-NOTE: this script has been carefully reviewed but not run end-to-end against
-a real coremltools install (this was written in a sandboxed environment
-without network access to install coremltools/PyTorch together). If
-conversion errors out, the traceback will point at exactly which op or
-dtype coremltools couldn't handle -- paste it back and it's usually a small,
-targeted fix rather than a rewrite.
+NOTE: 
+	--checkpoint is the path to either best.pt or last.pt 
+	-- model_dir expects the >folder< where the training script wrote output 
+	   files  config.json and char_vocab.json 
 """
 import argparse
 import json
@@ -57,11 +54,15 @@ class CharTokenizerInference(nn.Module):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--checkpoint", required=True, help="Path to best.pt (or last.pt)")
+    #ap.add_argument("--checkpoint", required=True, help="Path to best.pt (or last.pt)")
     ap.add_argument("--model_dir", required=True,
                      help="Directory containing config.json and char_vocab.json "
                           "(the --output directory you used when training)")
-    ap.add_argument("--output", required=True, help="Output .mlpackage path")
+    
+    ap.add_argument("--useBest", action="store_true", help="Load the best.pt checkpoint")
+    ap.add_argument("--useLast", action="store_true", help="Load the last.pt checkpoint")
+    
+    ap.add_argument("--output_name", required=True, help="Output .mlpackage path")
     ap.add_argument("--max_seq_len", type=int, default=1024,
                      help="Upper bound on characters-per-call the converted model will accept")
     ap.add_argument("--min_ios", choices=["iOS15", "iOS16", "iOS17"], default="iOS16",
@@ -81,7 +82,17 @@ def main():
         hidden_size=config["hidden_size"], num_layers=config["num_layers"],
         num_labels=config["num_labels"], dropout=0.0, pad_id=char_vocab.pad_id,
     )
-    state_dict = torch.load(args.checkpoint, map_location="cpu")
+    
+    # Determine the checkpoint path to use
+    if args.useBest:
+        checkpoint_path = f"{args.model_dir}/best.pt"
+    elif args.useLast:
+        checkpoint_path = f"{args.model_dir}/last.pt"
+    else:
+        # Handle the case where neither flag is provided
+        raise ValueError("You must specify either --useBest or --useLast")
+
+    state_dict = torch.load(checkpoint_path, map_location="cpu")
     model.load_state_dict(state_dict)
     model.eval()
 
@@ -105,14 +116,10 @@ def main():
         compute_precision=ct.precision.FLOAT16,
         convert_to="mlprogram",
     )
-
-    mlmodel.save(args.output)
-    print(f"Saved {args.output}")
-    print(f"Also bundle {args.model_dir}/char_vocab.json into your Xcode app -- "
-          "the model only outputs raw per-character class logits (4 classes: "
-          "inside-token / token-end / sentence-end / space), not decoded "
-          "tokens. Decoding those into actual token/sentence boundaries is "
-          "Swift-side post-processing logic.")
+    output_name_full = f"{args.model_dir}/{args.output_name}"
+    mlmodel.save(output_name_full)
+    print(f"Saved {output_name_full}")
+    print(f"Import {args.output_name} and {args.model_dir}/char_vocab.json into the Xcode project")
 
 
 if __name__ == "__main__":

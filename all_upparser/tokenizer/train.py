@@ -1,8 +1,7 @@
 """Training loop for the character-level tokenizer / sentence-segmenter.
 
-Runs as a plain Python (PyTorch) process on your Apple Silicon Mac, using
-the MPS backend for GPU acceleration. This is NOT run inside Xcode -- Xcode
-comes in later, when you drop the Core-ML-converted model into an app.
+Runs as a plain Python (PyTorch) on Apple Silicon Mac, using
+the MPS backend for GPU acceleration. 
 
 Usage (run from the ud_trainer/ project root):
 
