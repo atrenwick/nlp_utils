@@ -10,13 +10,14 @@ Usage (from the  project root, with the venv active):
     pip install coremltools 
 
     python -m tokenizer.convert \
-        --checkpoint out/tokenizer/best.pt \
         --model_dir out/tokenizer \
-        --output out/tokenizer/tokenizer.mlpackage \
+        --useBest \
+        --output_name witty_package_name \
         --max_seq_len 1024
 
 NOTE: 
-	--checkpoint is the path to either best.pt or last.pt 
+	--useBest to use model saved as best.pt in model_dir
+	--useLast to use last saved .pt in model_dir
 	-- model_dir expects the >folder< where the training script wrote output 
 	   files  config.json and char_vocab.json 
 """
