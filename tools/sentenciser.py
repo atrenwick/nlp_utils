@@ -1,10 +1,11 @@
 ## sentenciser consolidation
 # step1 : last item in p is EOS
 # general rule : if in EOS_list, == mark
-from lxml import etree
+
 import re
 import glob
 import os
+from lxml import etree
 from tqdm import tqdm
 
 def mark_EOS(input_tree, mode, pagination_type, lang):
@@ -59,6 +60,7 @@ def mark_EOS(input_tree, mode, pagination_type, lang):
             # if the prev isn't in the exclusion list, set T
             ## previous token is in neither excl_list nor abbrev_list 
             ## example == foo Bar :: Bar == foo gets EOS tag as new sent starts with capital.
+            ##TODO: this if is far too long
             if prev_tok not in excl_list and prev_tok not in abbrev_list and next_block.text not in punct_list and next_block.text not in excl_list and next_block.text[0].islower() is False:
               w_block.set("EOS", "True")
               prev_tok = w_block.text
@@ -165,18 +167,8 @@ def conllise_sentence(sent):
 
   return sent_as_conll
  
-# input_files = glob.glob('/Volumes/Sigma/medical/COVID/step2/*.xml')
-# done_files = input_files
-
-# target_files =[f for f in input_files if f not in done_files]
-# input_files = target_files
-# folders = ['cmaj_bidir_en','cmaj_mono_en','cmaj_bidir_fr','cmaj_mono_fr']
-# langs = ['en', 'en', 'fr', 'fr']
-# for folder, lang in zip(folders, langs):  
-#   input_files =glob.glob(f'/Volumes/KappaFour/EverythingCorpus/tinkering/cmaj/{folder}/step2/*tokenised.xml')
-
 lang="fr"
-input_files = glob.glob('/Volumes/ThetaEight/__parquet/success/done/1_referencetree/trainX/*')
+input_files = glob.glob('/Volumes/Theta/data_from_parquet/success/done/trainX/*')
 offset=0
 if 1==1:
   for input_file in tqdm(input_files):  
