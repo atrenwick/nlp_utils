@@ -1,5 +1,4 @@
 ## sentenciser consolidation
-## still need to update to deal with M. Macron…
 # step1 : last item in p is EOS
 # general rule : if in EOS_list, == mark
 from lxml import etree
