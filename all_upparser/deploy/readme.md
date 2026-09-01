@@ -25,6 +25,7 @@ To get this test pipeline to work, an Xcode project will need the following.
     `xpos_vocab.json`<br>
 
 Running the pipeline gives an output something like this :
+
 <img src="/all_upparser/deploy/TaggerParser.jpg" alt="Tagger-Parser output" width="200">
 <img src="/all_upparser/deploy/RulebaseLemmatiser.jpg" alt="Focus on lemmatiser output errors" width="200">
 
