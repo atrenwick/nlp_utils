@@ -25,7 +25,8 @@ To get this test pipeline to work, an Xcode project will need the following.
     `xpos_vocab.json`<br>
 
 Running the pipeline gives an output something like this :
-<img src="/deploy/TaggerParser.jpg" alt="Tagger-Parser output" width="200">
+<img src="/all_upparser/deploy/TaggerParser.jpg" alt="Tagger-Parser output" width="200">
 <img src="/all_upparser/deploy/RulebaseLemmatiser.jpg" alt="Focus on lemmatiser output errors" width="200">
-While this shows that the pipeline works, we can easily see the rule-based lemmatiser simply doesn't cut the mustard:
+
+While these show that the pipeline works, we can easily see the rule-based lemmatiser simply doesn't cut the mustard:
 The lemma of `je` is `moi` for some schools of thought, but not with a capital. And `suis` should be lemmatised to `suivre` 
