@@ -3,48 +3,48 @@ import Foundation
 
 
 // MARK: - Vocabulary
-structure to decode the vocab data JSON file
+//structure to decode the vocab data JSON file
 private struct VocabData: Decodable {
-   let itos: [String]
-   let pad: String
-   let unk: String
+    let itos: [String]
+    let pad: String
+    let unk: String
 }
-define the vocab class
+//define the vocab class
 final class Vocab {
-   let itos: [String]
-   let stoi: [String: Int]
-   let pad: String
-   let unk: String
+    let itos: [String]
+    let stoi: [String: Int]
+    let pad: String
+    let unk: String
+    
+    //   //init method for the vocab class
+    fileprivate init(data: VocabData) {
+        itos = data.itos
+        pad = data.pad
+        unk = data.unk
+        var map = [String: Int](minimumCapacity: data.itos.count)
+        for (i, s) in data.itos.enumerated() { map[s] = i }
+        stoi = map
+    }
 
-   //init method for the vocab class
-   fileprivate init(data: VocabData) {
-       itos = data.itos
-       pad = data.pad
-       unk = data.unk
-       var map = [String: Int](minimumCapacity: data.itos.count)
-       for (i, s) in data.itos.enumerated() { map[s] = i }
-       stoi = map
-   }
+    var unkId: Int { stoi[unk] ?? 1 }
 
-   var unkId: Int { stoi[unk] ?? 1 }
+    func encode(_ token: String) -> Int {
+        stoi[token] ?? unkId
+    }
 
-   func encode(_ token: String) -> Int {
-       stoi[token] ?? unkId
-   }
+    func decode(_ id: Int) -> String {
+        (id >= 0 && id < itos.count) ? itos[id] : unk
+    }
 
-   func decode(_ id: Int) -> String {
-       (id >= 0 && id < itos.count) ? itos[id] : unk
-   }
-
-func to get path to file, load, decode and return decoded data based on name of json file
-   static func load(named name: String, bundle: Bundle = .main) throws -> Vocab {
-       guard let url = bundle.url(forResource: name, withExtension: "json") else {
-           throw AllUpUDPipelineError.missingResource("\(name).json")
-       }
-       let data = try Data(contentsOf: url)
-       let decoded = try JSONDecoder().decode(VocabData.self, from: data)
-       return Vocab(data: decoded)
-   }
+    //func to get path to file, load, decode and return decoded data based on name of json file
+    static func load(named name: String, bundle: Bundle = .main) throws -> Vocab {
+        guard let url = bundle.url(forResource: name, withExtension: "json") else {
+            throw UDPipelineError.missingResource("\(name).json")
+        }
+        let data = try Data(contentsOf: url)
+        let decoded = try JSONDecoder().decode(VocabData.self, from: data)
+        return Vocab(data: decoded)
+    }
 }
 
 // MARK: - Tokenizer output
@@ -74,12 +74,13 @@ struct UDToken : Identifiable {
        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, "_","_"].joined(separator: "\t") + "\n"
    }
 }
-
+//
 // MARK: - Errors
 
 enum AllUpUDPipelineError: Error, LocalizedError {
     case missingResource(String)
     case modelLoadFailed(String)
+    case lemmatizationFailed(String)
     case predictionFailed(String)
     case invalidLevel(Int)
 
@@ -89,6 +90,8 @@ enum AllUpUDPipelineError: Error, LocalizedError {
             return "Missing bundled resource: \(name). Did you add it to the app target?"
         case .modelLoadFailed(let name):
             return "Failed to load Core ML model '\(name)'. Did you add \(name).mlpackage to the app target?"
+        case .lemmatizationFailed(let msg):
+            return "Lemmatization failed: \(msg)"
         case .predictionFailed(let msg):
             return "Prediction failed: \(msg)"
         case .invalidLevel(let level):
@@ -105,6 +108,7 @@ final class AllUpUDPipeline {
 
     private let tokenizerModel: MLModel
     private let taggerModel: MLModel
+    private let lemmatizerRunner: LemmatizerRunner
 
     private let tokenizerCharVocab: Vocab
     private let wordVocab: Vocab
@@ -113,7 +117,7 @@ final class AllUpUDPipeline {
     private let xposVocab: Vocab
     private let featsVocab: Vocab
     private let deprelVocab: Vocab
-    private let lemmaRuleVocab: Vocab
+//    private let lemmaRuleVocab: Vocab
 
     init() throws {
         tokenizerModel = try Self.loadModel(named: "FR_tokenizer")
@@ -126,7 +130,8 @@ final class AllUpUDPipeline {
         xposVocab = try Vocab.load(named: "FR_xpos_vocab")
         featsVocab = try Vocab.load(named: "FR_feats_vocab")
         deprelVocab = try Vocab.load(named: "FR_deprel_vocab")
-        lemmaRuleVocab = try Vocab.load(named: "FR_lemma_rule_vocab")
+//        lemmaRuleVocab = try Vocab.load(named: "ignoreF_R_lemma_rule_vocab")
+        self.lemmatizerRunner = try LemmatizerRunner()
     }
 
     private static func loadModel(named name: String) throws -> MLModel {
@@ -196,7 +201,8 @@ final class AllUpUDPipeline {
         let uposLogits: MLMultiArray
         let xposLogits: MLMultiArray
         let featsLogits: MLMultiArray
-        let lemmaLogits: MLMultiArray
+//        let lemmaLogits: MLMultiArray
+        let decodedLemmas: [String]
         let arcLogits: MLMultiArray
         let labelLogits: MLMultiArray
     }
@@ -226,25 +232,52 @@ final class AllUpUDPipeline {
         ])
         let output = try taggerModel.prediction(from: provider)
 
-        guard
-            let uposLogits = output.featureValue(for: "upos_logits")?.multiArrayValue,
-            let xposLogits = output.featureValue(for: "xpos_logits")?.multiArrayValue,
-            let featsLogits = output.featureValue(for: "feats_logits")?.multiArrayValue,
-            let lemmaLogits = output.featureValue(for: "lemma_rule_logits")?.multiArrayValue,
-            let arcLogits = output.featureValue(for: "arc_logits")?.multiArrayValue,
-            let labelLogits = output.featureValue(for: "label_logits")?.multiArrayValue
-        else {
-            throw AllUpUDPipelineError.predictionFailed("tagger_parser produced missing output(s)")
+        // new version
+        guard let uposLogits = output.featureValue(for: "upos_logits")?.multiArrayValue,
+              let xposLogits = output.featureValue(for: "xpos_logits")?.multiArrayValue,
+              let featsLogits = output.featureValue(for: "feats_logits")?.multiArrayValue,
+              let arcLogits = output.featureValue(for: "arc_logits")?.multiArrayValue,
+              let labelLogits = output.featureValue(for: "label_logits")?.multiArrayValue else {
+            
+            let info = output.featureNames.map { name -> String in
+                let shape = output.featureValue(for: name)?.multiArrayValue?.shape ?? []
+                return "\(name): \(shape)"
+            }
+            print(info)
+            throw UDPipelineError.predictionFailed("missing expected model output type 310")
         }
+        //need to get, decode UPOS so they can be passed to lemmatiser
+        let decodedUpos = decodeUPOSInternal(uposLogits)
+        // get the lemmas with the LemmatizerRunner() as runner
+        let lemmas: [String]
+        do {
+            let runner = try LemmatizerRunner()
+            lemmas = try tokens.enumerated().map { i, form in
+                //TODO: need to load this LemmatizerRunner :: class - instance
+                try runner.lemmatize(form: form, upos: decodedUpos[i])
+            }
+        } catch {
+            // new error type to add
+            throw UDPipelineError.lemmatizationFailed("lemmatizer failed: \(error)")
+        }
+
 
         return TaggerRawOutput(
             sentence: sentence, seqLen: seqLen,
             uposLogits: uposLogits, xposLogits: xposLogits, featsLogits: featsLogits,
-            lemmaLogits: lemmaLogits, arcLogits: arcLogits, labelLogits: labelLogits
+            decodedLemmas: lemmas, arcLogits: arcLogits, labelLogits: labelLogits
         )
     }
 
     // MARK: Step 2 (decode) -- UPOS
+    private func decodeUPOSInternal(_ uposLogits: MLMultiArray) -> [String] {
+        let seqLen = uposLogits.shape[1].intValue  // shape: [1, seqLen, vocabSize]
+        return (1..<seqLen).map { t in
+            let id = argmax(uposLogits, prefix: [0, t], dimSize: uposVocab.itos.count)
+            return uposVocab.decode(id)
+        }
+    }
+
     private func decodeUPOS(_ raw: TaggerRawOutput) -> [String] {
         (1..<raw.seqLen).map { t in
             let id = argmax(raw.uposLogits, prefix: [0, t], dimSize: uposVocab.itos.count)
@@ -261,13 +294,31 @@ final class AllUpUDPipeline {
     }
 
     // MARK: Step 3 (decode) -- lemmatisation with edit-script rule
-    private func decodeLemmas(_ raw: TaggerRawOutput) -> [String] {
-        zip(1..<raw.seqLen, raw.sentence.tokens).map { t, form in
-            let id = argmax(raw.lemmaLogits, prefix: [0, t], dimSize: lemmaRuleVocab.itos.count)
-            return applyLemmaRule(form: form, rule: lemmaRuleVocab.decode(id))
+    /// //NOTE: getLemmas uses the NEW lemmatizer.
+    /// decodeLemmas function uses edit rules, and is here to enable easy roll-back, test, comparison
+    /// One lemma string per real word, reconstructed by applying the
+    /// predicted edit-script rule to that word's surface form.
+//    private func decodeLemmas(_ raw: TaggerRawOutput) -> [String] {
+//        zip(1..<raw.seqLen, raw.sentence.tokens).map { t, form in
+//            let id = argmax(raw.lemmaLogits, prefix: [0, t], dimSize: lemmaRuleVocab.itos.count)
+//            return applyLemmaRule(form: form, rule: lemmaRuleVocab.decode(id))
+//        }
+//    }
+    private func getLemmas(_ raw: TaggerRawOutput) -> [String] {
+        // set to true for dev test
+        let dev = false
+        var returnItem: [String]
+        if dev {
+            returnItem = []
+            for item in raw.decodedLemmas{
+                returnItem.append("dev_\(item)")
+            }
         }
+        else {
+            returnItem = raw.decodedLemmas
+        }
+        return returnItem
     }
-
     // MARK: Step 4 (decode) -- morphological features
     private func decodeFeats(_ raw: TaggerRawOutput) -> [String] {
         (1..<raw.seqLen).map { t in
@@ -318,7 +369,8 @@ final class AllUpUDPipeline {
             uposTags = decodeUPOS(raw)
 
             if level >= 3 {
-                lemmas = decodeLemmas(raw)
+                //lemmas = decodeLemmas(raw) get lemmas using rule based lemmatiser
+                lemmas = getLemmas(raw) // get lemmas with new model
             }
             if level >= 4 {
                 featsTags = decodeFeats(raw)
@@ -482,6 +534,201 @@ final class AllUpUDPipeline {
         return result
     }
 }
+
+//MARK: lemmatizer runner :
+//TODO: change hardcoded paths >>>> forResource <<<< when EN model trained
+final class LemmatizerRunner {
+
+    private let encoder: MLModel
+    private let decoderStep: MLModel
+
+    private let charStoi: [String: Int]
+    private let charItos: [String]
+    private let uposStoi: [String: Int]
+
+    private let padId: Int
+    private let unkId: Int
+    private let bosId: Int
+    private let eosId: Int
+
+    private let lemmaDict: [String: String]
+
+    private let maxLemmaLen = 32    // Must match MAX_SRC_LEN in convert_lemmatizer.py
+    private let maxSrcLen = 32
+
+    init() throws {
+        guard let encoderURL = Bundle.main.url(forResource: "FR_neuralLemmatizerEncoder", withExtension: "mlmodelc")
+                ?? Bundle.main.url(forResource: "FR_neuralLemmatizerEncoder", withExtension: "mlpackage") else {
+            throw LemmatizerError.resourceMissing("FR_neuralLemmatizerEncoder")
+        }
+        guard let decoderURL = Bundle.main.url(forResource: "FR_neuralLemmatizerDecoderStep", withExtension: "mlmodelc")
+                ?? Bundle.main.url(forResource: "FR_neuralLemmatizerDecoderStep", withExtension: "mlpackage") else {
+            throw LemmatizerError.resourceMissing("FR_neuralLemmatizerDecoderStep")
+        }
+
+        do {
+            self.encoder = try MLModel(contentsOf: encoderURL)
+            self.decoderStep = try MLModel(contentsOf: decoderURL)
+        } catch {
+            throw LemmatizerError.modelLoadFailed(error.localizedDescription)
+        }
+
+        // --- Load vocabularies -------------------------------------------------
+        guard let vocabsURL = Bundle.main.url(forResource: "FR_neurallemma_vocabs", withExtension: "json") else {
+            throw LemmatizerError.resourceMissing("FR_neurallemma_vocabs.json")
+        }
+        let vocabsData = try Data(contentsOf: vocabsURL)
+        let vocabs = try JSONDecoder().decode(LemmaVocabs.self, from: vocabsData)
+
+        self.charItos = vocabs.char
+        var cs: [String: Int] = [:]
+        for (i, c) in vocabs.char.enumerated() { cs[c] = i }
+        self.charStoi = cs
+
+        var us: [String: Int] = [:]
+        for (i, u) in vocabs.upos.enumerated() { us[u] = i }
+        self.uposStoi = us
+
+        self.padId = cs["<pad>"] ?? 0
+        self.unkId = cs["<unk>"] ?? 1
+        self.bosId = cs["<bos>"] ?? 2
+        self.eosId = cs["<eos>"] ?? 3
+
+        // --- Load the frequency dictionary --------------------------------------
+        guard let dictURL = Bundle.main.url(forResource: "FR_neurallemma_dict", withExtension: "json") else {
+            throw LemmatizerError.resourceMissing("FR_neurallemma_dict.json")
+        }
+        let dictData = try Data(contentsOf: dictURL)
+        self.lemmaDict = try JSONDecoder().decode([String: String].self, from: dictData)
+    }
+
+    /// Look up or predict the lemma for a single (form, UPOS) pair.
+    func lemmatize(form: String, upos: String) throws -> String {
+        let key = "\(form.lowercased())|\(upos)"
+        if let dictLemma = lemmaDict[key] {
+            return dictLemma
+        }
+        return try neuralLemmatize(form: form, upos: upos)
+    }
+
+    /// Convenience for a whole sentence at once.
+    func lemmatize(forms: [String], uposTags: [String]) throws -> [String] {
+        precondition(forms.count == uposTags.count, "forms and uposTags must be the same length")
+        return try zip(forms, uposTags).map { try lemmatize(form: $0, upos: $1) }
+    }
+
+    // ------------------------------------------------------------------------
+    // Neural fallback: run the encoder once, then loop the decoder step.
+    // ------------------------------------------------------------------------
+
+    private func neuralLemmatize(form: String, upos: String) throws -> String {
+        let rawIds = try form.lowercased().map { char -> Int in
+            let s = String(char)
+            guard let id = charStoi[s] else { return unkId }
+            return id
+        }
+        guard !rawIds.isEmpty else { return form }
+
+        // Pad/truncate to `convert_lemmatizer.py`'s MAX_SRC_LEN
+        let realLen = min(rawIds.count, maxSrcLen)
+        var srcIds = Array(rawIds.prefix(maxSrcLen))
+        while srcIds.count < maxSrcLen { srcIds.append(padId) }
+
+        let uposId = uposStoi[upos] ?? 0
+
+        // --- Encoder pass ----------------------------------------------------
+        let srcArray = try MLMultiArray(shape: [1, NSNumber(value: maxSrcLen)], dataType: .int32)
+        for (i, id) in srcIds.enumerated() { srcArray[[0, i] as [NSNumber]] = NSNumber(value: id) }
+
+        let maskArray = try MLMultiArray(shape: [1, NSNumber(value: maxSrcLen)], dataType: .int32)
+        for i in 0..<maxSrcLen {
+            maskArray[[0, i] as [NSNumber]] = NSNumber(value: i < realLen ? 1 : 0)
+        }
+
+        let uposArray = try MLMultiArray(shape: [1], dataType: .int32)
+        uposArray[[0] as [NSNumber]] = NSNumber(value: uposId)
+
+        let encoderInput = try MLDictionaryFeatureProvider(dictionary: [
+            "src": srcArray,
+            "mask": maskArray,
+            "upos": uposArray,
+        ])
+        let encoderOutput = try encoder.prediction(from: encoderInput)
+
+        guard let encOut = encoderOutput.featureValue(for: "enc_out")?.multiArrayValue,
+              var h = encoderOutput.featureValue(for: "init_h")?.multiArrayValue,
+              var c = encoderOutput.featureValue(for: "init_c")?.multiArrayValue else {
+            throw LemmatizerError.modelLoadFailed("encoder output missing expected fields type 154")
+        }
+
+        // --- Decoder loop ------------------------------------------------------
+        var curCharId = bosId
+        var outputChars: [String] = []
+
+        for _ in 0..<maxLemmaLen {
+            let curArray = try MLMultiArray(shape: [1], dataType: .int32)
+            curArray[[0] as [NSNumber]] = NSNumber(value: curCharId)
+
+            let stepInput = try MLDictionaryFeatureProvider(dictionary: [
+                "cur_char": curArray,
+                "h": h,
+                "c": c,
+                "enc_out": encOut,
+                "mask": maskArray,
+            ])
+            let stepOutput = try decoderStep.prediction(from: stepInput)
+
+            guard let logits = stepOutput.featureValue(for: "logits")?.multiArrayValue,
+                  let newH = stepOutput.featureValue(for: "new_h")?.multiArrayValue,
+                  let newC = stepOutput.featureValue(for: "new_c")?.multiArrayValue else {
+                throw LemmatizerError.modelLoadFailed("decoder step output missing expected fields type 177")
+            }
+
+            let nextId = argmax(logits)
+            if nextId == eosId { break }
+            if nextId != padId && nextId != bosId && nextId != unkId {
+                outputChars.append(charItos.indices.contains(nextId) ? charItos[nextId] : "")
+            } else if nextId == unkId {
+                // Model was unsure of this character; skip rather than
+                // inserting a literal "<unk>" into the lemma.
+            }
+
+            curCharId = nextId
+            h = newH
+            c = newC
+        }
+
+        let lemma = outputChars.joined()
+        return lemma.isEmpty ? form : lemma
+    }
+
+    private func argmax(_ array: MLMultiArray) -> Int {
+        let count = array.count
+        var bestIdx = 0
+        var bestVal = -Float.greatestFiniteMagnitude
+        for i in 0..<count {
+            let v = array[i].floatValue
+            if v > bestVal {
+                bestVal = v
+                bestIdx = i
+            }
+        }
+        return bestIdx
+    }
+}
+
+
+enum LemmatizerError: Error {
+    case modelLoadFailed(String)
+    case resourceMissing(String)
+    case unknownChar(Character)
+}
+
+struct LemmaVocabs: Codable {
+    let char: [String]
+    let upos: [String]
+}
+
 
 // MARK: - MLMultiArray helpers
 
