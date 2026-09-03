@@ -633,9 +633,10 @@ def main():
 
     #printing header, cols…
     # Define the widths as constants so they always match
-    W = {'ep': 5, 'ls': 8, 'nr': 8, 'hy': 8, 'tm': 6}    
+    W = {'tag': 7, 'ep': 5, 'ls': 8, 'nr': 8, 'hy': 8, 'tm': 6}    
     # Use the ^ symbol to center the text within the defined width
     header = (
+        f"{'':^{W['tag']}} | "
         f"{'Epoch':^{W['ep']}} | "
         f"{'Loss':^{W['ls']}} | "
         f"{'Neural%':^{W['nr']}} | "
@@ -665,7 +666,7 @@ def main():
             total_loss += loss.item()
             n_batches += 1
 
-        neural_acc, hybrid_acc = evaluate(model, dev_loader, device, char_vocab, dev_triples, lemma_dict)
+        neural_acc, hybrid_acc = evaluate(model, dev_loader, device, data['char_vocab'], data['dev_triples'], data['lemma_dict'])
         scheduler.step(hybrid_acc)
         endtime = time.time()
         delta = endtime - starttime    
