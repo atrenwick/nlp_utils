@@ -501,12 +501,20 @@ def setup_environment(args):
     log(f"using device: {device}")
     return device
 
-def save_artifacts(args, lemma_dict, counts, keeplist, droplist, char_vocab, upos_vocab):
+def save_artifacts(args, data):
     """Handles all file exports to the output directory."""
+    #0 get items from data
+    lemma_dict = data['lemma_dict']
+    char_vocab = data["char_vocab"]
+    upos_vocab = data["upos_vocab"]
+    keeplist = data['keeplist']
+    droplist = data['droplist']
+    counts = data['counts']
     # 1. Standard exports (always happen)
+
     with open(os.path.join(args.output, "lemma_dict.json"), "w", encoding="utf-8") as f:
         json.dump(lemma_dict, f, ensure_ascii=False, indent=1)
-        
+    
     with open(os.path.join(args.output, "lemma_vocabs.json"), "w", encoding="utf-8") as f:
         json.dump({"char": char_vocab.itos, "upos": upos_vocab.itos}, f, ensure_ascii=False, indent=1)
 
@@ -597,7 +605,7 @@ def main():
     data = prepare_data(args, device)
 
     # 3. Exports
-    save_artifacts(args, **data) # Unpacks the dictionary into function arguments
+    save_artifacts(args, data) # Unpacks the dictionary into function arguments
 
     # 4. Early Exit
     if args.export_only:
