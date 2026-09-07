@@ -1,3 +1,45 @@
+//
+//  UDPipeline.swift
+//
+//  Everything needed to load the two models produced by the Python
+//  training/conversion pipeline (tokenizer.mlpackage, tagger_parser.mlpackage)
+//  and their vocabulary files, and run raw text through a configurable
+//  subset of the pipeline to produce CoNLL-U-style output.
+//
+//  This file expects the following to already be added to the app target
+//  (see the accompanying README for exact steps and renaming instructions):
+//
+//    tokenizer.mlpackage
+//    tagger_parser.mlpackage
+//    tokenizer_char_vocab.json      (renamed from out/tokenizer/char_vocab.json)
+//    word_vocab.json                (from out/tagger_parser/)
+//    tagger_char_vocab.json         (renamed from out/tagger_parser/char_vocab.json)
+//    upos_vocab.json                (from out/tagger_parser/)
+//    xpos_vocab.json                (from out/tagger_parser/)
+//    feats_vocab.json               (from out/tagger_parser/)
+//    deprel_vocab.json              (from out/tagger_parser/)
+//    lemma_rule_vocab.json          (from out/tagger_parser/)
+//
+//  Two renames are required because both the tokenizer and the
+//  tagger_parser training runs each produced their own char_vocab.json --
+//  Xcode bundles all resources into one flat directory, so the identical
+//  filenames would otherwise collide.
+//
+//  MODULARISATION
+//  ---------------
+//  The tagger_parser Core ML model always computes UPOS, XPOS, FEATS,
+//  lemma-rule, and dependency-arc/label scores together in a single forward
+//  pass -- that's just how the underlying network is wired, and running it
+//  again per field would be pure waste. So `level` doesn't control how many
+//  times the model runs; it controls how many of that one call's outputs
+//  get *decoded* into the CoNLL-U line. Levels:
+//
+//    1 = tokenize only
+//    2 = + UPOS
+//    3 = + lemma
+//    4 = + FEATS
+//    5 = + dependency parsing (HEAD, DEPREL)
+//
 import CoreML
 import Foundation
 
@@ -47,37 +89,11 @@ final class Vocab {
     }
 }
 
-// MARK: - Tokenizer output
-struct TokenisedSentence: Hashable {
-   let id: String
-   let tokens: [String]
-}
 
-// MARK: - Tagged output
-struct UDToken : Identifiable {
-   var id = UUID()
-   let tokid: Int
-   let form: String
-   let lemma: String
-   let upos: String
-   let xpos: String
-   let feats: String
-   let head: String
-   let deprel: String
-   let col8: String
-   let col9: String
-   /// Tab-separated, in CoNLL-U column order (ID FORM LEMMA UPOS XPOS FEATS HEAD DEPREL).
-   var conlluLine: String {
-       [String(tokid), form, lemma, upos, xpos, feats, head, deprel].joined(separator: "\t")
-   }
-   var conllRaw: String{
-       [String(tokid), form, lemma, upos, xpos, feats, head, deprel, "_","_"].joined(separator: "\t") + "\n"
-   }
-}
-//
+
 // MARK: - Errors
 
-enum AllUpUDPipelineError: Error, LocalizedError {
+enum UDPipelineError: Error, LocalizedError {
     case missingResource(String)
     case modelLoadFailed(String)
     case lemmatizationFailed(String)
@@ -102,14 +118,15 @@ enum AllUpUDPipelineError: Error, LocalizedError {
 
 
 // MARK: - Pipeline
-final class AllUpUDPipeline {
-    static let rootToken = "<root>"
-    static let maxWordLen = 20
 
+final class UDPipeline {
+    static let rootToken = "<root>"
+    static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
+    
     private let tokenizerModel: MLModel
     private let taggerModel: MLModel
     private let lemmatizerRunner: LemmatizerRunner
-
+    
     private let tokenizerCharVocab: Vocab
     private let wordVocab: Vocab
     private let taggerCharVocab: Vocab
@@ -119,25 +136,26 @@ final class AllUpUDPipeline {
     private let deprelVocab: Vocab
 //    private let lemmaRuleVocab: Vocab
 
-    init() throws {
-        tokenizerModel = try Self.loadModel(named: "FR_tokenizer")
-        taggerModel = try Self.loadModel(named: "FR_tagger_parser")
+    init(languageCode: String) throws {
+        tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer")
+        taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser")
 
-        tokenizerCharVocab = try Vocab.load(named: "FR_tokenizer_char_vocab")
-        wordVocab = try Vocab.load(named: "FR_word_vocab")
-        taggerCharVocab = try Vocab.load(named: "FR_tagger_char_vocab")
-        uposVocab = try Vocab.load(named: "FR_upos_vocab")
-        xposVocab = try Vocab.load(named: "FR_xpos_vocab")
-        featsVocab = try Vocab.load(named: "FR_feats_vocab")
-        deprelVocab = try Vocab.load(named: "FR_deprel_vocab")
-//        lemmaRuleVocab = try Vocab.load(named: "ignoreF_R_lemma_rule_vocab")
-        self.lemmatizerRunner = try LemmatizerRunner()
+        tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab")
+        wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab")
+        taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab")
+        uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab")
+        xposVocab = try Vocab.load(named: "\(languageCode)_xpos_vocab")
+        featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab")
+        deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab")
+//        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab")
+        self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode)
     }
+    
 
     private static func loadModel(named name: String) throws -> MLModel {
         // Xcode compiles a bundled .mlpackage into a .mlmodelc at build
         guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else {
-            throw AllUpUDPipelineError.modelLoadFailed(name)
+            throw UDPipelineError.modelLoadFailed(name)
         }
         return try MLModel(contentsOf: url)
     }
@@ -157,7 +175,7 @@ final class AllUpUDPipeline {
         )
         let output = try tokenizerModel.prediction(from: provider)
         guard let logits = output.featureValue(for: "logits")?.multiArrayValue else {
-            throw AllUpUDPipelineError.predictionFailed("tokenizer produced no 'logits' output")
+            throw UDPipelineError.predictionFailed("tokenizer produced no 'logits' output")
         }
 
         var tokenLists: [[String]] = []
@@ -191,7 +209,7 @@ final class AllUpUDPipeline {
         }
     }
 
-    // MARK: Step 2 -- run the tagger-parser  
+    // MARK: Step 2 -- run the tagger-parser
 
     /// Holds the raw tensors from 1 tagger_parser model call for 1 sent
     ///`seqLen` includes the synthetic ROOT index 0, so real words are indices 1,2....<seqLen.
@@ -220,7 +238,6 @@ final class AllUpUDPipeline {
             let charIds = truncated.map { Int32(taggerCharVocab.encode(String($0))) }
             charIdLists.append(charIds.isEmpty ? [Int32(taggerCharVocab.unkId)] : charIds)
         }
-
         let maxWordLenInBatch = max(charIdLists.map { $0.count }.max() ?? 1, 1)
 
         let wordIdArray = try makeIntArray(wordIds, shape: [1, NSNumber(value: seqLen)])
@@ -250,23 +267,25 @@ final class AllUpUDPipeline {
         let decodedUpos = decodeUPOSInternal(uposLogits)
         // get the lemmas with the LemmatizerRunner() as runner
         let lemmas: [String]
+
         do {
-            let runner = try LemmatizerRunner()
+            let runner = self.lemmatizerRunner
             lemmas = try tokens.enumerated().map { i, form in
-                //TODO: need to load this LemmatizerRunner :: class - instance
                 try runner.lemmatize(form: form, upos: decodedUpos[i])
             }
         } catch {
             // new error type to add
             throw UDPipelineError.lemmatizationFailed("lemmatizer failed: \(error)")
         }
-
-
+    
+        
         return TaggerRawOutput(
             sentence: sentence, seqLen: seqLen,
             uposLogits: uposLogits, xposLogits: xposLogits, featsLogits: featsLogits,
             decodedLemmas: lemmas, arcLogits: arcLogits, labelLogits: labelLogits
         )
+
+
     }
 
     // MARK: Step 2 (decode) -- UPOS
@@ -277,7 +296,7 @@ final class AllUpUDPipeline {
             return uposVocab.decode(id)
         }
     }
-
+    /// One UPOS tag string per real word (indices 1..<seqLen), in order.
     private func decodeUPOS(_ raw: TaggerRawOutput) -> [String] {
         (1..<raw.seqLen).map { t in
             let id = argmax(raw.uposLogits, prefix: [0, t], dimSize: uposVocab.itos.count)
@@ -327,9 +346,187 @@ final class AllUpUDPipeline {
         }
     }
 
-    // MARK: Step 5 (decode) -- dependency parsing : One (head, deprel) pair per real word.
+    // MARK: Step 5 (decode) -- dependency parsing
+
+    /// One (head, deprel) pair per real word, decoded via Chu-Liu-Edmonds
+    /// (maximum spanning arborescence, rooted at node 0), which guarantees
+    /// a valid, cycle-free dependency tree with a single root -- unlike a
+    /// per-word greedy argmax, which can produce cycles or multiple roots.
+    private func decodeDependencies(_ raw: TaggerRawOutput) -> [(head: Int, deprel: String)] {
+        let n = raw.seqLen
+
+        // Dense head-score matrix: scoreMatrix[h][d] = score of dependent d
+        // attaching to head h. d == 0 (root can't be a dependent) and
+        // h == d (a word can't be its own head) are left at -infinity and
+        // are never read by the arc-selection loops below.
+        var scoreMatrix = [[Double]](repeating: [Double](repeating: -Double.infinity, count: n), count: n)
+        for d in 1..<n {
+            for h in 0..<n where h != d {
+                scoreMatrix[h][d] = raw.arcLogits[[0, d, h] as [NSNumber]].doubleValue
+            }
+        }
+
+        let heads = solveArborescence(activeNodes: Array(0..<n), scoreMatrix: scoreMatrix)
+
+        return (1..<n).map { t in
+            // Every non-root node is guaranteed a parent by
+            // solveArborescence; the `?? 0` fallback is defensive only.
+            let head = heads[t] ?? 0
+
+            var bestDeprelId = 0
+            var bestDeprelScore = -Double.infinity
+            for c in 0..<deprelVocab.itos.count {
+                let v = raw.labelLogits[[0, c, t, head] as [NSNumber]].doubleValue
+                if v > bestDeprelScore { bestDeprelScore = v; bestDeprelId = c }
+            }
+            return (head: head, deprel: deprelVocab.decode(bestDeprelId))
+        }
+    }
+
+    // MARK: Chu-Liu-Edmonds maximum spanning arborescence
+
+    /// Solves the maximum-weight spanning arborescence rooted at node 0
+    /// over exactly `activeNodes` (which must include 0), using
+    /// `scoreMatrix` for edge weights. Returns a map from every active node
+    /// except 0 to its chosen parent (also an active node).
+    ///
+    /// This is a standard recursive implementation of Chu-Liu-Edmonds:
+    /// greedily pick each node's best incoming edge; if that produces a
+    /// cycle, contract the cycle into one representative node with
+    /// reweighted edges, recurse on the smaller graph, then expand the
+    /// result back out. Recursion terminates because each contraction
+    /// strictly reduces the number of active nodes, and a graph with no
+    /// cycle is returned immediately as-is.
+    private func solveArborescence(activeNodes: [Int], scoreMatrix: [[Double]]) -> [Int: Int] {
+        // Step 1: each non-root active node's single best incoming edge.
+        var bestParent: [Int: Int] = [:]
+        for d in activeNodes where d != 0 {
+            var best = -Double.infinity
+            var bestH = -1
+            for h in activeNodes where h != d {
+                let s = scoreMatrix[h][d]
+                if s > best { best = s; bestH = h }
+            }
+            bestParent[d] = bestH
+        }
+
+        guard let cycle = findCycle(bestParent: bestParent, activeNodes: activeNodes) else {
+            // No cycle: the greedy choice is already optimal.
+            return bestParent
+        }
+
+        // Step 2: contract the cycle into a single representative node
+        // (reusing the smallest node id in the cycle, rather than minting a
+        // new one, keeps every id a real, meaningful node throughout).
+        let cycleSet = Set(cycle)
+        let representative = cycle.min()!
+
+        // Total weight of the cycle's own internal edges -- used below to
+        // work out the true cost of "breaking" the cycle at whichever node
+        // ends up accepting an external edge instead.
+        var cycleWeight = 0.0
+        for v in cycle {
+            cycleWeight += scoreMatrix[bestParent[v]!][v]
+        }
+
+        let newActiveNodes = activeNodes.filter { !cycleSet.contains($0) || $0 == representative }
+        var newScoreMatrix = scoreMatrix
+
+        // Bookkeeping so the contracted-graph result can be expanded back
+        // into real node ids afterward.
+        var enterFrom: [Int: Int] = [:] // u -> which cycle node the (u -> representative) edge really targets
+        var exitTo: [Int: Int] = [:]    // w -> which cycle node the (representative -> w) edge really originates from
+
+        for u in activeNodes where !cycleSet.contains(u) {
+            var bestIn = -Double.infinity
+            var bestVIn = -1
+            var bestOut = -Double.infinity
+            var bestVOut = -1
+            for v in cycle {
+                // Incoming: cost of accepting edge (u -> v) instead of v's
+                // current in-cycle edge, while keeping every other cycle
+                // edge intact.
+                let reweighted = scoreMatrix[u][v] - scoreMatrix[bestParent[v]!][v] + cycleWeight
+                if reweighted > bestIn { bestIn = reweighted; bestVIn = v }
+
+                // Outgoing: plain best edge leaving the cycle to u -- no
+                // reweighting needed, since which internal edge eventually
+                // gets broken doesn't affect edges leaving the cycle.
+                let s = scoreMatrix[v][u]
+                if s > bestOut { bestOut = s; bestVOut = v }
+            }
+            newScoreMatrix[u][representative] = bestIn
+            enterFrom[u] = bestVIn
+            newScoreMatrix[representative][u] = bestOut
+            exitTo[u] = bestVOut
+        }
+
+        // Step 3: recurse on the smaller, contracted graph.
+        let contractedParents = solveArborescence(activeNodes: newActiveNodes, scoreMatrix: newScoreMatrix)
+
+        // Step 4: expand back. Every cycle node keeps its original in-cycle
+        // parent, except the one node where an external edge broke the
+        // cycle -- that node's real parent is whichever external node fed
+        // into the cycle at that point.
+        var result = contractedParents
+        result.removeValue(forKey: representative)
+        for v in cycle {
+            result[v] = bestParent[v]
+        }
+        if let repParent = contractedParents[representative], let breakNode = enterFrom[repParent] {
+            result[breakNode] = repParent
+        }
+
+        // Any outside node whose contracted parent came out as the
+        // representative actually attaches to whichever real cycle node
+        // achieved that best exit edge.
+        for (node, parent) in contractedParents where parent == representative {
+            if let realParent = exitTo[node] {
+                result[node] = realParent
+            }
+        }
+
+        return result
+    }
+
+    /// Finds one cycle among `bestParent`'s pointers, if any exists, by
+    /// following each node's chain of parents and watching for a repeat.
+    /// Returns the cycle as a list of the original node ids involved, or
+    /// nil if the current bestParent pointers already form a valid tree.
+    private func findCycle(bestParent: [Int: Int], activeNodes: [Int]) -> [Int]? {
+        var visitedGlobally = Set<Int>()
+
+        for start in activeNodes where start != 0 && !visitedGlobally.contains(start) {
+            var path: [Int] = []
+            var pathSet = Set<Int>()
+            var current = start
+
+            while true {
+                if pathSet.contains(current) {
+                    let cycleStartIndex = path.firstIndex(of: current)!
+                    return Array(path[cycleStartIndex...])
+                }
+                if visitedGlobally.contains(current) || current == 0 {
+                    break // reached root, or a previously-confirmed cycle-free path -- no cycle here
+                }
+                path.append(current)
+                pathSet.insert(current)
+                visitedGlobally.insert(current)
+                current = bestParent[current]!
+            }
+        }
+        return nil
+    }
+    // MARK: end of new implementation of step5
+  
+
+
+    
+    /*
+     greedy,per-word argmax implementation : whole function in multiline quote
+    // MARK: Step 5 (decode) -- dependency parsing  greedy implementation: One (head, deprel) pair per real word.
     /// NOTE : this is a placeholder algorithm, used to test whether this pipeline works :  no guarantee the tree is licit, correct
-    /// TODO: change out for proper max-spanning tree
+    ///
     private func decodeDependencies(_ raw: TaggerRawOutput) -> [(head: Int, deprel: String)] {
         (1..<raw.seqLen).map { t in
             var bestHead = 0
@@ -348,13 +545,14 @@ final class AllUpUDPipeline {
             return (head: bestHead, deprel: deprelVocab.decode(bestDeprelId))
         }
     }
-
+   */
+     
     // MARK: Per-sentence processing: for progress-reporting callers
     /// Runs the same field-decoding logic as `run(text:level:mode:)`, but takes
     /// 1 tokenised sentence at a time, returning decoded `UDToken`
     func runOnSentence(_ sentence: TokenisedSentence, level: Int) throws -> [UDToken] {
         guard (1...5).contains(level) else {
-            throw AllUpUDPipelineError.invalidLevel(level)
+            throw UDPipelineError.invalidLevel(level)
         }
 
         let n = sentence.tokens.count
@@ -369,8 +567,7 @@ final class AllUpUDPipeline {
             uposTags = decodeUPOS(raw)
 
             if level >= 3 {
-                //lemmas = decodeLemmas(raw) get lemmas using rule based lemmatiser
-                lemmas = getLemmas(raw) // get lemmas with new model
+                lemmas = getLemmas(raw)
             }
             if level >= 4 {
                 featsTags = decodeFeats(raw)
@@ -395,7 +592,7 @@ final class AllUpUDPipeline {
     /// rules as `run(text:level:mode:)`for `runOnSentence`
     func formatSentence(_ tokens: [UDToken], mode: String) throws -> [String] {
         var lines: [OutputLine] = tokens.map { .row($0) }
-        lines.append(.blank) // blank line appened to match separator convention with `run` method
+        lines.append(.blank)
 
         switch mode {
         case "raw":
@@ -403,7 +600,7 @@ final class AllUpUDPipeline {
         case "tidy":
             return formatTidy(lines)
         default:
-            throw AllUpUDPipelineError.predictionFailed(
+            throw UDPipelineError.predictionFailed(
                 "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
             )
         }
@@ -411,9 +608,10 @@ final class AllUpUDPipeline {
 
     // MARK: Controller
 
-    /// Runs pipeline up to and including `level`,
-    /// Returns CoNLL-U-style lines (blank line between sentences).
-    /// Fields beyond the requested level are left as "_",
+    /// Runs raw text through the pipeline up to (and including) `level`,
+    /// and returns CoNLL-U-style lines (blank line between sentences).
+    /// Fields beyond the requested level are left as "_", matching CoNLL-U
+    /// convention for unannotated columns.
     ///
     ///   1 = tokenize only
     ///   2 = + UPOS
@@ -421,7 +619,8 @@ final class AllUpUDPipeline {
     ///   4 = + FEATS
     ///   5 = + dependency parsing (HEAD, DEPREL)
     ///
-    /// Note : XPOS isn't an option as no XPOS training data was used
+    /// XPOS is always "_" -- it wasn't one of the requested levels. See the
+    /// file header if you want it added to a level.
     ///
     /// `mode` controls formatting, independent of `level`:
     ///   "raw"  -- plain tab-separated CoNLL-U fields (what a .conllu file
@@ -430,7 +629,7 @@ final class AllUpUDPipeline {
     ///             line up when displayed in a monospaced Text view
     func run(text: String, level: Int, mode: String) throws -> [String] {
         guard (1...5).contains(level) else {
-            throw AllUpUDPipelineError.invalidLevel(level)
+            throw UDPipelineError.invalidLevel(level)
         }
 
         let sentences = try tokenize(text)
@@ -450,7 +649,7 @@ final class AllUpUDPipeline {
         case "tidy":
             return formatTidy(allLines)
         default:
-            throw AllUpUDPipelineError.predictionFailed(
+            throw UDPipelineError.predictionFailed(
                 "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
             )
         }
@@ -458,11 +657,6 @@ final class AllUpUDPipeline {
 
     // MARK: - Output formatting
 
-    /// One line of pipeline output, before formatting so  `formatTidy` can measure col widths
-    private enum OutputLine {
-        case row(UDToken)
-        case blank
-    }
 
     private func formatRaw(_ lines: [OutputLine]) -> [String] {
         lines.map { line in
@@ -533,234 +727,17 @@ final class AllUpUDPipeline {
         }
         return result
     }
-}
-
-//MARK: lemmatizer runner :
-//TODO: change hardcoded paths >>>> forResource <<<< when EN model trained
-final class LemmatizerRunner {
-
-    private let encoder: MLModel
-    private let decoderStep: MLModel
-
-    private let charStoi: [String: Int]
-    private let charItos: [String]
-    private let uposStoi: [String: Int]
-
-    private let padId: Int
-    private let unkId: Int
-    private let bosId: Int
-    private let eosId: Int
-
-    private let lemmaDict: [String: String]
-
-    private let maxLemmaLen = 32    // Must match MAX_SRC_LEN in convert_lemmatizer.py
-    private let maxSrcLen = 32
-
-    init() throws {
-        guard let encoderURL = Bundle.main.url(forResource: "FR_neuralLemmatizerEncoder", withExtension: "mlmodelc")
-                ?? Bundle.main.url(forResource: "FR_neuralLemmatizerEncoder", withExtension: "mlpackage") else {
-            throw LemmatizerError.resourceMissing("FR_neuralLemmatizerEncoder")
-        }
-        guard let decoderURL = Bundle.main.url(forResource: "FR_neuralLemmatizerDecoderStep", withExtension: "mlmodelc")
-                ?? Bundle.main.url(forResource: "FR_neuralLemmatizerDecoderStep", withExtension: "mlpackage") else {
-            throw LemmatizerError.resourceMissing("FR_neuralLemmatizerDecoderStep")
-        }
-
-        do {
-            self.encoder = try MLModel(contentsOf: encoderURL)
-            self.decoderStep = try MLModel(contentsOf: decoderURL)
-        } catch {
-            throw LemmatizerError.modelLoadFailed(error.localizedDescription)
-        }
-
-        // --- Load vocabularies -------------------------------------------------
-        guard let vocabsURL = Bundle.main.url(forResource: "FR_neurallemma_vocabs", withExtension: "json") else {
-            throw LemmatizerError.resourceMissing("FR_neurallemma_vocabs.json")
-        }
-        let vocabsData = try Data(contentsOf: vocabsURL)
-        let vocabs = try JSONDecoder().decode(LemmaVocabs.self, from: vocabsData)
-
-        self.charItos = vocabs.char
-        var cs: [String: Int] = [:]
-        for (i, c) in vocabs.char.enumerated() { cs[c] = i }
-        self.charStoi = cs
-
-        var us: [String: Int] = [:]
-        for (i, u) in vocabs.upos.enumerated() { us[u] = i }
-        self.uposStoi = us
-
-        self.padId = cs["<pad>"] ?? 0
-        self.unkId = cs["<unk>"] ?? 1
-        self.bosId = cs["<bos>"] ?? 2
-        self.eosId = cs["<eos>"] ?? 3
-
-        // --- Load the frequency dictionary --------------------------------------
-        guard let dictURL = Bundle.main.url(forResource: "FR_neurallemma_dict", withExtension: "json") else {
-            throw LemmatizerError.resourceMissing("FR_neurallemma_dict.json")
-        }
-        let dictData = try Data(contentsOf: dictURL)
-        self.lemmaDict = try JSONDecoder().decode([String: String].self, from: dictData)
+    
+    /// One line of pipeline output, before formatting so  `formatTidy` can measure col widths
+    private enum OutputLine {
+        case row(UDToken)
+        case blank
     }
 
-    /// Look up or predict the lemma for a single (form, UPOS) pair.
-    func lemmatize(form: String, upos: String) throws -> String {
-        let key = "\(form.lowercased())|\(upos)"
-        if let dictLemma = lemmaDict[key] {
-            return dictLemma
-        }
-        return try neuralLemmatize(form: form, upos: upos)
-    }
-
-    /// Convenience for a whole sentence at once.
-    func lemmatize(forms: [String], uposTags: [String]) throws -> [String] {
-        precondition(forms.count == uposTags.count, "forms and uposTags must be the same length")
-        return try zip(forms, uposTags).map { try lemmatize(form: $0, upos: $1) }
-    }
-
-    // ------------------------------------------------------------------------
-    // Neural fallback: run the encoder once, then loop the decoder step.
-    // ------------------------------------------------------------------------
-
-    private func neuralLemmatize(form: String, upos: String) throws -> String {
-        let rawIds = try form.lowercased().map { char -> Int in
-            let s = String(char)
-            guard let id = charStoi[s] else { return unkId }
-            return id
-        }
-        guard !rawIds.isEmpty else { return form }
-
-        // Pad/truncate to `convert_lemmatizer.py`'s MAX_SRC_LEN
-        let realLen = min(rawIds.count, maxSrcLen)
-        var srcIds = Array(rawIds.prefix(maxSrcLen))
-        while srcIds.count < maxSrcLen { srcIds.append(padId) }
-
-        let uposId = uposStoi[upos] ?? 0
-
-        // --- Encoder pass ----------------------------------------------------
-        let srcArray = try MLMultiArray(shape: [1, NSNumber(value: maxSrcLen)], dataType: .int32)
-        for (i, id) in srcIds.enumerated() { srcArray[[0, i] as [NSNumber]] = NSNumber(value: id) }
-
-        let maskArray = try MLMultiArray(shape: [1, NSNumber(value: maxSrcLen)], dataType: .int32)
-        for i in 0..<maxSrcLen {
-            maskArray[[0, i] as [NSNumber]] = NSNumber(value: i < realLen ? 1 : 0)
-        }
-
-        let uposArray = try MLMultiArray(shape: [1], dataType: .int32)
-        uposArray[[0] as [NSNumber]] = NSNumber(value: uposId)
-
-        let encoderInput = try MLDictionaryFeatureProvider(dictionary: [
-            "src": srcArray,
-            "mask": maskArray,
-            "upos": uposArray,
-        ])
-        let encoderOutput = try encoder.prediction(from: encoderInput)
-
-        guard let encOut = encoderOutput.featureValue(for: "enc_out")?.multiArrayValue,
-              var h = encoderOutput.featureValue(for: "init_h")?.multiArrayValue,
-              var c = encoderOutput.featureValue(for: "init_c")?.multiArrayValue else {
-            throw LemmatizerError.modelLoadFailed("encoder output missing expected fields type 154")
-        }
-
-        // --- Decoder loop ------------------------------------------------------
-        var curCharId = bosId
-        var outputChars: [String] = []
-
-        for _ in 0..<maxLemmaLen {
-            let curArray = try MLMultiArray(shape: [1], dataType: .int32)
-            curArray[[0] as [NSNumber]] = NSNumber(value: curCharId)
-
-            let stepInput = try MLDictionaryFeatureProvider(dictionary: [
-                "cur_char": curArray,
-                "h": h,
-                "c": c,
-                "enc_out": encOut,
-                "mask": maskArray,
-            ])
-            let stepOutput = try decoderStep.prediction(from: stepInput)
-
-            guard let logits = stepOutput.featureValue(for: "logits")?.multiArrayValue,
-                  let newH = stepOutput.featureValue(for: "new_h")?.multiArrayValue,
-                  let newC = stepOutput.featureValue(for: "new_c")?.multiArrayValue else {
-                throw LemmatizerError.modelLoadFailed("decoder step output missing expected fields type 177")
-            }
-
-            let nextId = argmax(logits)
-            if nextId == eosId { break }
-            if nextId != padId && nextId != bosId && nextId != unkId {
-                outputChars.append(charItos.indices.contains(nextId) ? charItos[nextId] : "")
-            } else if nextId == unkId {
-                // Model was unsure of this character; skip rather than
-                // inserting a literal "<unk>" into the lemma.
-            }
-
-            curCharId = nextId
-            h = newH
-            c = newC
-        }
-
-        let lemma = outputChars.joined()
-        return lemma.isEmpty ? form : lemma
-    }
-
-    private func argmax(_ array: MLMultiArray) -> Int {
-        let count = array.count
-        var bestIdx = 0
-        var bestVal = -Float.greatestFiniteMagnitude
-        for i in 0..<count {
-            let v = array[i].floatValue
-            if v > bestVal {
-                bestVal = v
-                bestIdx = i
-            }
-        }
-        return bestIdx
-    }
 }
 
 
-enum LemmatizerError: Error {
-    case modelLoadFailed(String)
-    case resourceMissing(String)
-    case unknownChar(Character)
-}
-
-struct LemmaVocabs: Codable {
-    let char: [String]
-    let upos: [String]
-}
-
-
-// MARK: - MLMultiArray helpers
-
-private func makeIntArray(_ values: [Int32], shape: [NSNumber]) throws -> MLMultiArray {
-    let arr = try MLMultiArray(shape: shape, dataType: .int32)
-    for (i, v) in values.enumerated() {
-        arr[i] = NSNumber(value: v)
-    }
-    return arr
-}
-
-private func makeCharIdArray(_ charIdLists: [[Int32]], maxWordLen: Int) throws -> MLMultiArray {
-    let t = charIdLists.count
-    let arr = try MLMultiArray(
-        shape: [1, NSNumber(value: t), NSNumber(value: maxWordLen)], dataType: .int32
-    )
-    for i in 0..<arr.count { arr[i] = 0 } // pad_id is always 0 by Vocab convention
-    for (wi, ids) in charIdLists.enumerated() {
-        for (ci, cid) in ids.enumerated() {
-            arr[[0, wi, ci] as [NSNumber]] = NSNumber(value: cid)
-        }
-    }
-    return arr
-}
-
-private func argmax(_ arr: MLMultiArray, prefix: [Int], dimSize: Int) -> Int {
-    var best = 0
-    var bestVal = -Double.infinity
-    for c in 0..<dimSize {
-        let idx = (prefix + [c]).map { NSNumber(value: $0) }
-        let v = arr[idx].doubleValue
-        if v > bestVal { bestVal = v; best = c }
-    }
-    return best
+enum OutputLine {
+    case row(UDToken)
+    case blank
 }
