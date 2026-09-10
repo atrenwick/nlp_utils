@@ -3,7 +3,7 @@
 //  Tagger
 //
 //  Created by Adam on 06/09/2026.
-// methods for use in either Lemmatizer class or UDPipeline class
+// methods for use across classes
 
 import Foundation
 import CoreML
@@ -96,7 +96,7 @@ func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
 func untokenisedInputToSents(text: [String], languageCode: LanguageCode) throws -> [[String]]{
     var returnItem: [[String]] = []
 //        var currentSent: [String] = []
-    let pipeline = try UDPipeline(languageCode: languageCode.rawValue)
+    let pipeline = try UDPipeline(languageCode: languageCode.rawValue, treebank: "gsd")
     for (_, sent) in text.enumerated(){
         let currentSent = try  pipeline.tokenize(sent)
         for chunk in currentSent{
@@ -153,10 +153,10 @@ func getTokens(languageCode: String, method: TokenisationMethod, inputFile: Stri
         print("Use conll input as tokenisation")
         return makeConllLinesFromFile(inputFile: inputFile)
 
-    case .predict:
+    case .retokenise:
         print("Use tokeniser to predict")
         do {
-            let pipeline = try UDPipeline(languageCode: languageCode)
+            let pipeline = try UDPipeline(languageCode: languageCode, treebank: "gsd")
             let tokenisedSentences = try pipeline.tokenize(targetString)
             print("printing chunks")
             print(tokenisedSentences)
@@ -179,9 +179,38 @@ func getTokens(languageCode: String, method: TokenisationMethod, inputFile: Stri
     
 //MARK: conlltools:: this is good for inspecting the tokenisation, and parsing if any, but it's not the seq of toks that the parser needs
 //TODO: func that returns a list of tokenised sentences
+func makeConllLinesFromURL(inputURL: URL?) -> [[String]]{
+//    var pretokenisedSentences: [[String]] = []
+    // load source file as a string
+//    let normalizedText: String = Bundle.main.loadText(inputFile, format: "conllu")
+    guard let inputFile = inputURL else {
+        print("guardlet failed")
+        return []
+    }
+    print("guardlet passed")
+    do {
+        // Reads raw text directly from your sandbox URL
+        let normalizedText = try String(contentsOf: inputFile, encoding: .utf8)
+        print("normalizedText passed")
+        // split the string into sentence chunks
+        let sentenceChunks: [String] = getConllSentenceChunks(rawConllString: normalizedText)
+        print("chunked")
+        // split each chunk == sentence into its lines
+        let pretokenisedSentences: [[String]] = makeConllLinesFromChunks(conllSentences: sentenceChunks)
+        print("Got file from conll")
+        return pretokenisedSentences
+        // Pass normalizedText downstream to your parsing functions...
+    } catch {
+        print("Failed to read text from sandbox file: \(error)")
+    }
+    return []
+}
+
+
+
 func makeConllLinesFromFile(inputFile: String) -> [[String]]{
     
-    // load source file as a string
+    // load source file as a string from bundle
     let normalizedText: String = Bundle.main.loadText(inputFile, format: "conllu")
     // split the string into sentence chunks
     let sentenceChunks: [String] = getConllSentenceChunks(rawConllString: normalizedText)
@@ -395,42 +424,33 @@ func getSentsForPipelineFromPretokConll(inputFile: String) ->[TokenisedSentence]
 
 
 
+//    private func runPipelineAndSave() {
+//        guard let folderURL = targetFolderURL else { return }
+//        isProcessing = true
+//
+//        DispatchQueue.global(qos: .userInitiated).async {
+//            // A. Perform background work / file generation
+//            let generatedData = "Sample exported content".data(using: .utf8)!
+//
+//            // B. Resolve destination path
+//            let destinationURL = folderURL.appendingPathComponent(self.fileName)
+//
+//            do {
+//                // C. Automatically save file without prompting again
+//                try generatedData.write(to: destinationURL)
+//                print("Successfully saved to \(destinationURL.path)")
+//            } catch {
+//                print("Failed to save file: \(error.localizedDescription)")
+//            }
+//
+//            DispatchQueue.main.async {
+//                self.isProcessing = false
+//            }
+//        }
+//    }
 
+    
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    
+            
 

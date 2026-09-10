@@ -20,7 +20,7 @@ enum TokenisationMethod: String, CaseIterable, Identifiable {
     var id: Self {self}
     case conll
 //    case naive
-    case predict
+    case retokenise
 }
 
 struct UDPipelineTestView: View {
@@ -35,6 +35,8 @@ struct UDPipelineTestView: View {
     //MARK: settings changed via UI
     @State private var selectedLanguage: LanguageCode = .FR
     @State private var currentTokenisationType: TokenisationMethod = .conll
+    @State private var selectedTreebank: Language.Treebank = .enTB1
+
     @State private var progressBarStyle: ProgressBarStyle = .tqdm
     
     //MARK: progresstracking vars
@@ -53,7 +55,7 @@ struct UDPipelineTestView: View {
     @State private var conllSentsOut: [ConllSent] = []
     
     //TODO: what's the diff between these first 2
-    @State private var pretokSentsOut: [TokenisedSentence] = []// input for PretokenisedSentView
+    @State private var pretokSentsOut: [TokenisedSentence] = []// input for PretokenisedSentViewSect
     @State private var intermedTokSents: [TokenisedSentence] = []
 
     private var visibleSents: [String] {
@@ -82,7 +84,7 @@ struct UDPipelineTestView: View {
                 .buttonStyle(.borderedProminent)
             }
             HStack{
-                Button(action: {runTest(tokType: .predict, isRunning: $isRunningRaw)})
+                Button(action: {runTest(tokType: .retokenise, isRunning: $isRunningRaw)})
                 {
                 ZStack {
                     Text("Test")
@@ -170,8 +172,8 @@ struct UDPipelineTestView: View {
                     .font(.footnote)
             }
 
-            PretokenisedSentView(pretokSentsOut: pretokSentsOut)
-            OutputLinesView(outputLines: outputLines)
+            PretokenisedSentViewSection(pretokSentsOut: pretokSentsOut)
+            OutputLinesViewSection(outputLines: outputLines)
             Spacer()
         }
         .padding()
@@ -195,7 +197,7 @@ struct UDPipelineTestView: View {
         Task {
             do {
                 
-                let pipeline = try UDPipeline(languageCode: selectedLanguage.rawValue)
+                let pipeline = try UDPipeline(languageCode: selectedLanguage.rawValue, treebank: selectedTreebank.short)
                 var allSentences: [TokenisedSentence] = []
 
                 
@@ -222,7 +224,7 @@ struct UDPipelineTestView: View {
 //                    }
 //                    print(allSentences[0])
 //                    print("allSentences count = \(allSentences.count)")
-                case .predict:
+                case .retokenise:
                     // Step 1: tokenize everything with model
                     for sentence in testSentences {
                         allSentences.append(contentsOf: try pipeline.tokenize(sentence))
@@ -288,39 +290,3 @@ struct UDPipelineTestView: View {
     UDPipelineTestView()
 }
 
-
-struct PretokenisedSentView : View {
-    let pretokSentsOut: [TokenisedSentence]
-    var body: some View{
-        ScrollView{
-            ForEach(pretokSentsOut, id:\.self){instance in
-                Text("moo")
-                ForEach(instance.tokens, id:\.self){tok in
-                Text(tok)}
-            }
-        }
-    }
-}
-
-struct OutputLinesView: View {
-    let outputLines: [String]
-    
-    private var visibleSents: [String] {
-        Array(outputLines.prefix(50))
-    }
-
-    var body: some View{
-        ScrollView {
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(Array(visibleSents.enumerated()), id: \.offset) { _, line in
-                    Text(line.isEmpty ? " " : line)
-                        .font(.system(.body, design: .monospaced))
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
-        }
-        .background(Color.gray.opacity(0.08))
-        .cornerRadius(8)
-    }
-}

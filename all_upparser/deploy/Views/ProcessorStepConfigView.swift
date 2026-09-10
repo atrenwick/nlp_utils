@@ -9,11 +9,11 @@ import SwiftUI
 
 
 
-struct ProcessorStepConfigView: View {
+struct ProcessorStepConfigViewSection: View {
     // Single source of truth from parent view (nil means all steps off)
-    @Binding var maxActiveStep: PipelineStep?
+    @Binding var maxActiveStep: PipelineStep
     @Binding var inputFileType: InputFileType
-    @State var useConllTokens: Bool = true
+    @Binding var selectedTokenisationMethod: TokenisationMethod
     var body: some View {
         Section(header: Text("Pipeline Execution Steps")) {
             Form{
@@ -30,17 +30,18 @@ struct ProcessorStepConfigView: View {
         }
         Section("Tokenisation"){
             Form{
-                Toggle(isOn: $useConllTokens){
-                    Text("Use \(inputFileType) tokenisation")}
+                ForEach(TokenisationMethod.allCases){tokMethod in
+                    Text(tokMethod.rawValue)
+                }
                 //.onChange(of: useConllTokens) $useConllTokens=true
-                
             }
         }
     }
     // Helper to check if a specific step is currently active
     private func isStepActive(_ step: PipelineStep) -> Bool {
-        if let maxStep = maxActiveStep {
-            return maxStep >= step
+         let maxStep = maxActiveStep
+        if maxStep >= step {
+            return true
         }
         return false
     }
@@ -60,7 +61,7 @@ struct ProcessorStepConfigView: View {
                     if let previousStep = PipelineStep(rawValue: step.rawValue - 1) {
                         maxActiveStep = previousStep
                     } else {
-                        maxActiveStep = nil
+                        maxActiveStep = .step1
                     }
                 }
             }
@@ -69,9 +70,10 @@ struct ProcessorStepConfigView: View {
 }
 
 #Preview {
-    @Previewable @State var maxActiveStep: PipelineStep? = .step2
+    @Previewable @State var maxActiveStep: PipelineStep = .step2
     @Previewable @State var inputFileType: InputFileType = .conll
-    ProcessorStepConfigView(maxActiveStep: $maxActiveStep, inputFileType: $inputFileType)
+    @Previewable @State var selectedTokenisationMethod: TokenisationMethod = .conll
+    ProcessorStepConfigViewSection(maxActiveStep: $maxActiveStep, inputFileType: $inputFileType, selectedTokenisationMethod: $selectedTokenisationMethod)
 }
 
 enum PipelineStep: Int, CaseIterable, Identifiable, Comparable {

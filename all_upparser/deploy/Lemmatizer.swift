@@ -40,8 +40,8 @@ final class LemmatizerRunner {
 
     private let lemmaDict: [String: String]
 
-    private let maxLemmaLen = 40    // Must match MAX_SRC_LEN in convert_lemmatizer.py :: 32 for FR, 40 for EN
-    private let maxSrcLen = 40 // :: 32 for FR, 40 for EN
+    private let maxLemmaLen = 32    // Must match MAX_SRC_LEN in convert_lemmatizer.py :: 32 for FR, 40 for EN
+    private let maxSrcLen = 32 // :: 32 for FR, 40 for EN
 
     init(languageCode: String) throws {
         guard let encoderURL = Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerEncoder", withExtension: "mlmodelc")
