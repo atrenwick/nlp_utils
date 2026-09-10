@@ -13,9 +13,15 @@ struct TaggerApp: App {
         WindowGroup {
             
             TabView{
-                Tab("Main", systemImage: "book.pages.fill"){
-                    ContentView()
+                Tab("Config", systemImage: "book.pages.fill"){
+                    PipelineSettingsView()
                 }
+                Tab("PipelineRun", systemImage: "book.pages.fill"){
+                    UDPipelineTestView()
+                }
+//                Tab("Main", systemImage: "book.pages.fill"){
+//                    ContentView()
+//                }
             }
         }
     }

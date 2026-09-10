@@ -1,45 +1,4 @@
-//
-//  UDPipeline.swift
-//
-//  Everything needed to load the two models produced by the Python
-//  training/conversion pipeline (tokenizer.mlpackage, tagger_parser.mlpackage)
-//  and their vocabulary files, and run raw text through a configurable
-//  subset of the pipeline to produce CoNLL-U-style output.
-//
-//  This file expects the following to already be added to the app target
-//  (see the accompanying README for exact steps and renaming instructions):
-//
-//    tokenizer.mlpackage
-//    tagger_parser.mlpackage
-//    tokenizer_char_vocab.json      (renamed from out/tokenizer/char_vocab.json)
-//    word_vocab.json                (from out/tagger_parser/)
-//    tagger_char_vocab.json         (renamed from out/tagger_parser/char_vocab.json)
-//    upos_vocab.json                (from out/tagger_parser/)
-//    xpos_vocab.json                (from out/tagger_parser/)
-//    feats_vocab.json               (from out/tagger_parser/)
-//    deprel_vocab.json              (from out/tagger_parser/)
-//    lemma_rule_vocab.json          (from out/tagger_parser/)
-//
-//  Two renames are required because both the tokenizer and the
-//  tagger_parser training runs each produced their own char_vocab.json --
-//  Xcode bundles all resources into one flat directory, so the identical
-//  filenames would otherwise collide.
-//
-//  MODULARISATION
-//  ---------------
-//  The tagger_parser Core ML model always computes UPOS, XPOS, FEATS,
-//  lemma-rule, and dependency-arc/label scores together in a single forward
-//  pass -- that's just how the underlying network is wired, and running it
-//  again per field would be pure waste. So `level` doesn't control how many
-//  times the model runs; it controls how many of that one call's outputs
-//  get *decoded* into the CoNLL-U line. Levels:
-//
-//    1 = tokenize only
-//    2 = + UPOS
-//    3 = + lemma
-//    4 = + FEATS
-//    5 = + dependency parsing (HEAD, DEPREL)
-//
+
 import CoreML
 import Foundation
 
@@ -131,23 +90,23 @@ final class UDPipeline {
     private let wordVocab: Vocab
     private let taggerCharVocab: Vocab
     private let uposVocab: Vocab
-    private let xposVocab: Vocab
+    //private let xposVocab: Vocab
     private let featsVocab: Vocab
     private let deprelVocab: Vocab
 //    private let lemmaRuleVocab: Vocab
 
-    init(languageCode: String) throws {
-        tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer")
-        taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser")
+    init(languageCode: String, treebank: String) throws {
+        tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer_\(treebank)")
+        taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser_\(treebank)")
 
-        tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab")
-        wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab")
-        taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab")
-        uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab")
-        xposVocab = try Vocab.load(named: "\(languageCode)_xpos_vocab")
-        featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab")
-        deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab")
-//        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab")
+        tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
+        wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
+        taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
+        uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
+        //xposVocab = try Vocab.load(named: "\(languageCode)_xpos_vocab\(treebank)")
+        featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
+        deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
+//        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab\(treebank)")
         self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode)
     }
     
@@ -305,12 +264,12 @@ final class UDPipeline {
     }
 
     // MARK: XPOS (not used at present, but here to make future mods easier if it's needed)
-    private func decodeXPOS(_ raw: TaggerRawOutput) -> [String] {
-        (1..<raw.seqLen).map { t in
-            let id = argmax(raw.xposLogits, prefix: [0, t], dimSize: xposVocab.itos.count)
-            return xposVocab.decode(id)
-        }
-    }
+//    private func decodeXPOS(_ raw: TaggerRawOutput) -> [String] {
+//        (1..<raw.seqLen).map { t in
+//            let id = argmax(raw.xposLogits, prefix: [0, t], dimSize: xposVocab.itos.count)
+//            return xposVocab.decode(id)
+//        }
+//    }
 
     // MARK: Step 3 (decode) -- lemmatisation with edit-script rule
     /// //NOTE: getLemmas uses the NEW lemmatizer.
@@ -729,10 +688,10 @@ final class UDPipeline {
     }
     
     /// One line of pipeline output, before formatting so  `formatTidy` can measure col widths
-    private enum OutputLine {
-        case row(UDToken)
-        case blank
-    }
+//    private enum OutputLine {
+//        case row(UDToken)
+//        case blank
+//    }
 
 }
 
@@ -741,3 +700,5 @@ enum OutputLine {
     case row(UDToken)
     case blank
 }
+
+

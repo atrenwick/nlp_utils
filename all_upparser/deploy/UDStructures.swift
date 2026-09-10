@@ -85,7 +85,7 @@ struct ConllSent : Identifiable {
         return "\n\n# sent_id = \(content)"
     }
     
-    
+    //TODO: add var to send to XML
     
     
     

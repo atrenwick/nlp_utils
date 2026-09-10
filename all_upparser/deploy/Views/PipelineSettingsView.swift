@@ -12,40 +12,52 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
-enum InputFileType: String, Identifiable, CaseIterable {
-    case conll
-    case txt
-    case xml
-    
-    var id: Self { self }
-
-    var isTokenised: Bool {
-        switch self {
-        case .conll: return true
-        case .txt: return false
-        case .xml: return true
-        }
-    }
-}
-
 
 struct PipelineSettingsView: View {
-    @State private var fileName: String = ""
-    @State private var targetFolderURL: URL? = nil
-    @State private var selectedOutputPlaform: OutputTarget = .ViewOnly
-
-    @State private var selectedLanguage: Language = .EN
-    @State private var selectedModel: Language.Model = .enModel1
-    @State var maxPipelineStep: PipelineStep? = .step1
+    
+    @State var fileContainerModel = SourceFileContainerModel()
+    
+    @State var fileName: String = ""
+    @State var targetFolderURL: URL? = nil
+    @State var selectedOutputPlaform: OutputTarget = .ViewOnly
+    @State var selectedLanguage: Language = .EN
+    @State var selectedTreebank: Language.Treebank = .enTB1
+    @State var maxPipelineStep: PipelineStep = .step1
     @State var inputFileType: InputFileType = .conll
+    @State var selectedTokenisationMethod: TokenisationMethod = .conll
 
+    @State var outputString: String = "not yet run"
+    @State var taggingInProgress: Bool = false
+    
+    @State var showImporter: Bool = false
+    @State var selectedInputFile: URL? = nil
+    
+    // for runnning func
+    @State private var testSentences: [String] = []
+    @State private var errorMessage: String?
+    @State private var outputLines: [String] = []
+    @State private var conllRawLines: [String] = []
+    @State private var conllSentsOut: [ConllSent] = []
+
+    @State private var processedCount = 0
+    @State private var totalCount = 0
+    @State private var startTime: Date?
+    @State private var appleProgress = Progress(totalUnitCount: 1)
+    @State private var hasStarted = false
+    
+    @State private var isSelectingFolder = false
+    @State private var exportStatusMessage: String?
+    
+    let runExplicit = false // hardcoded bool for testing verbosity, display of test elements
+
+    
     var body: some View {
-        
-        
         
         NavigationStack{
             Form {
-                
+                Section{
+                    ImportFileViewSection(fileContainerModel: fileContainerModel )
+                }
                 // First Picker
                 Section("Parameters"){
                     Picker("Inputtype", selection: $inputFileType){
@@ -59,23 +71,264 @@ struct PipelineSettingsView: View {
                         }
                     }
                     .onChange(of: selectedLanguage) { _, newLang in
-                        if let first = newLang.availableModels.first {
-                            selectedModel = first
+                        if let first = newLang.availableTBs.first {
+                            selectedTreebank = first
                         }
                     }
                     // Model picker, dynamically updating based on Lang picker
-                    Picker("Model", selection: $selectedModel) {
-                        ForEach(selectedLanguage.availableModels) { model in
-                            Text(model.rawValue)
+                    Picker("Treebank", selection: $selectedTreebank) {
+                        ForEach(selectedLanguage.availableTBs) { tb in
+                            Text(tb.short).tag(tb)
                         }
                     }
                     NavigationLink("Select processor steps"){
-                        ProcessorStepConfigView(maxActiveStep: $maxPipelineStep, inputFileType: $inputFileType)
+                        ProcessorStepConfigViewSection(maxActiveStep: $maxPipelineStep, inputFileType: $inputFileType, selectedTokenisationMethod: $selectedTokenisationMethod)
                     }
                 }
-                ExportConfigView(fileName: $fileName, targetFolderURL: $targetFolderURL, selectedOutputPlaform: $selectedOutputPlaform)
+                ExportConfigViewSection(fileName: $fileName, targetFolderURL: $targetFolderURL, selectedOutputPlaform: $selectedOutputPlaform)
                 
             }
+        }
+        //
+        if runExplicit {
+            HStack{
+                Button { // pretokSentsOut = tokenisedInputToSents(input: testSentences)
+                    outputString = testInstantiatePipeline(
+                        languageCode: selectedLanguage.rawValue,
+                        treebank: selectedTreebank.short
+                    )
+                    
+                } label: {
+                    Text("Test load")
+                }
+                .tint(.orange)
+                .buttonStyle(.borderedProminent)
+                
+                Button {
+                    outputString = "reset"
+                } label: {
+                    Text("reset")
+                }
+                .tint(.blue)
+                .buttonStyle(.borderedProminent)
+                
+                Text("Use \(selectedLanguage.displayName) \(selectedTreebank.short)")
+                Text(outputString)
+            }
+        }
+        Section {
+            // 3. User hits 'Go'
+            
+            if !isPipelineReady {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text(missingRequirementsMessage)
+                }
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.orange)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+            Button(
+                action:{
+                    runTagging(
+                        tokType: selectedTokenisationMethod,
+                        maxPipelineStep: maxPipelineStep,
+                        taggingInProgress: $taggingInProgress) }){
+                            ZStack {
+                                HStack {
+                                    Image(systemName: "play.fill")
+                                    Text("Run")
+                                        .fontWeight(.semibold)
+                                }
+                                .opacity(taggingInProgress ? 0 : 1)
+                                HStack{
+                                    ProgressView()
+                                        .opacity(taggingInProgress ? 1 : 0)
+                                }
+                            }
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .disabled(taggingInProgress || !isPipelineReady)
+                        .animation(.easeInOut(duration: 0.2), value: isPipelineReady)
+                        .padding()
+        }
+    }
+    
+    func testInstantiatePipeline(languageCode: String, treebank: String)   -> String {
+        // test instantiation of pipeline class based on params chosen
+        outputString = ""
+        
+        Task{
+            do {
+                let testPipeline = try UDPipeline(languageCode: selectedLanguage.rawValue, treebank: selectedTreebank.short)
+                await MainActor.run {
+                    outputString = "Success"
+                }
+            } catch{
+                await MainActor.run {
+                    outputString = "Fail : \(error.localizedDescription)"
+                }
+            }
+        }
+        return outputString
+    }
+    
+    private func runTagging(
+        tokType: TokenisationMethod,
+        maxPipelineStep: PipelineStep,
+        taggingInProgress: Binding<Bool>) {
+        taggingInProgress.wrappedValue = true
+        let tokType: TokenisationMethod = tokType
+        let inputFile = fileContainerModel.localSandboxFileURL
+        
+        errorMessage = nil
+        startTime = nil
+        hasStarted = true
+        
+        outputLines = []
+        conllRawLines = []
+        conllSentsOut = []
+
+        processedCount = 0
+        totalCount = 0
+    
+//        let inputFile = "\(selectedLanguage)_testConll.txt"
+        print("inputFile = \(inputFile)")
+        Task {
+            do {
+                
+                let pipeline = try UDPipeline(languageCode: selectedLanguage.rawValue, treebank: selectedTreebank.short)
+                var allSentences: [TokenisedSentence] = []
+
+                
+                //MARK: TOKENISATION and Sentencisation
+                switch tokType {
+                case .conll:
+                    let testlist1: [[String]] = makeConllLinesFromURL(inputURL: inputFile)
+                    let intermedSents: [ConllSent] = makeConllSent(conllLines: testlist1)
+//                    var mySents: [TokenisedSentence] = []
+                    
+                    for sent in intermedSents{
+                        let TokSentVers = sent.sentAsTokenisedSentence
+                        allSentences.append(TokSentVers)
+                    }
+                    guard  allSentences.count > 1 else { fatalError("No sentences in conll, baling out")}
+                    print("Mysents count = \(allSentences.count)")
+//
+                    print(allSentences[0])
+
+                    
+                    // this works, but builds toksent from source
+//                    intermedTokSents  = getSentsForPipelineFromPretokConll(inputFile: inputFile)
+//                    for sentence in intermedTokSents{
+//                        allSentences.append(sentence)
+//                    }
+//                    print(allSentences[0])
+//                    print("allSentences count = \(allSentences.count)")
+                case .retokenise:
+                    // Step 1: tokenize everything with model
+                    for sentence in testSentences {
+                        allSentences.append(contentsOf: try pipeline.tokenize(sentence))
+                    }
+                    print("Mode a: \(allSentences.count) sents ")
+                }
+                
+                await MainActor.run {
+                    totalCount = allSentences.count
+                    appleProgress = Progress(totalUnitCount: Int64(max(allSentences.count, 1)))
+                    startTime = Date()
+                }
+
+                var lines: [String] = []
+                var rawLines: [String] = []
+                var outSents: [ConllSent] = []
+                // MARK: Step 2: process sentences
+                // process one detected sentence at a time
+// >>>>>>>>Limiter here
+                let runfive = false
+                if runfive {
+                allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
+                
+                for sentence in allSentences {
+                    let tokens = try pipeline.runOnSentence(sentence, level: 5) //TODO: use state var here for level
+                    
+                    let mySent: ConllSent = ConllSent(
+                        sentID: sentence.id,
+                        conllData: tokens)
+                    outSents.append(mySent)
+                    lines.append(contentsOf: try pipeline.formatSentence(tokens, mode: "tidy"))
+                    rawLines.append(contentsOf: try pipeline.formatSentence(tokens, mode: "raw"))
+
+                    await MainActor.run {
+                        processedCount += 1
+                        appleProgress.completedUnitCount = Int64(processedCount)
+                    }
+                }
+                if runExplicit{
+                print("Printing conllRaw")
+                    for sentence in outSents {
+                        print(sentence.conllSentRaw)
+                    }
+                    let seqOutput = outSents.generateExportText()
+                    print(seqOutput)
+                    if let printPath = targetFolderURL?.path(){
+                        print(printPath)
+                    } else {
+                        print("Problem with print path from URL 274")
+                    }
+                    
+                    print("output name = \(fileName)")
+                    //try runWriteCoordinator(lines: lines, rawLines: rawLines)
+                    
+                    //let conllfileuriltest = try printFromConllSents(outsents: outSents)
+                    print("Main actor done, running function 277")
+                }
+                saveFileToChosenLocation(items: outSents, saveName: fileName, targetFolderURL: targetFolderURL)
+
+                await MainActor.run {
+                    outputLines.append(contentsOf: lines)
+                    conllRawLines.append(contentsOf: rawLines)
+                    conllSentsOut.append(contentsOf: outSents)
+                    taggingInProgress.wrappedValue = false
+                }
+            } catch {
+                print(error.localizedDescription)
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    taggingInProgress.wrappedValue = false
+                }
+            }
+        }
+    }
+
+    private func saveFileToChosenLocation(items: [ConllSent], saveName: String, targetFolderURL: URL?) {
+        guard let folderURL = targetFolderURL else {
+            if runExplicit {
+                print("Guard 292 fail")
+            }
+            return
+        }
+        if runExplicit {
+            print("Guard 292 passed")
+        }
+        do {
+            let savedURL = try ExporterService.exportDataToFile(
+                items: items,
+                customName: saveName,
+                targetFolderURL: folderURL
+            )
+            exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
+            if runExplicit {   print(exportStatusMessage)}
+        } catch {
+            exportStatusMessage = "Export failed: \(error.localizedDescription)"
+            if runExplicit {print(exportStatusMessage)}
         }
     }
 }
@@ -84,186 +337,47 @@ struct PipelineSettingsView: View {
     PipelineSettingsView()
 }
 
-// choose languages supported ::: LanguageCode enum
-// choose from one of languages for which there is a model
 
 
-
-// enum : is conll output for this app or somwehere else: controls CoNLL space formatting : use raw wtih \t, cf tidy with n spaces
-enum OutputTarget: String, CaseIterable, Identifiable{
-    var id: Self {self}
-    case Export
-    case ViewOnly
-}
-
-enum Language: String, CaseIterable, Identifiable {
-    case EN
-    case FR
-    case DE
-
-    var id: Self { self }
-
-    // Readable label for the first picker
-    var displayName: String {
-        switch self {
-        case .EN: return "en"
-        case .FR: return "fr"
-        case .DE: return "de"
+extension PipelineSettingsView {
+    // 1. Array of missing configuration items
+    var missingRequirements: [String] {
+        var missing: [String] = []
+        
+        // Rule 1: Check input file exists in sandbox
+        if fileContainerModel.localSandboxFileURL == nil {
+            missing.append("Input File")
         }
-    }
+        // TODO: add rule for input type when adding option for non-conll import
 
-    // Nested enum for all available models
-    enum Model: String, CaseIterable, Identifiable {
-        case enModel1 = "en_ewt"
-        case enModel2 = "en_gum"
-        case frModel1 = "fr_gsd"
-        case frModel2 = "fr_sequoia"
-        case deModel1 = "de_gsd"
-
-        var id: String { rawValue }
-    }
-
-    // Returns ONLY the models valid for this language
-    var availableModels: [Model] {
-        switch self {
-        case .EN: return [.enModel1, .enModel2]
-        case .FR:  return [.frModel1, .frModel2]
-        case .DE:  return [.deModel1]
-        }
-    }
-}
-
-struct SanitizedFileNameInputView: View {
-    @Binding var fileName: String
-    
-    // Set of characters prohibited in file names across major file systems
-    private let invalidFileNameCharacters: CharacterSet = {
-        var invalid = CharacterSet(charactersIn: #"/:\*?"<>|"#)
-        invalid.formUnion(.controlCharacters)
-        invalid.formUnion(.newlines)
-        return invalid
-    }()
-    
-    var body: some View {
-//        Form {
-//            Section(header: Text("Export File Name")) {
-                
-        HStack{
-            TextField("File name", text: $fileName)
-                        .onChange(of: fileName) { _, newValue in
-                            // Strip any forbidden characters immediately as typed or pasted
-                            let cleaned = newValue.components(separatedBy: invalidFileNameCharacters).joined()
-                            if cleaned != newValue {
-                                fileName = cleaned
-                            }
-                        }
-            Text(".conll").foregroundStyle(.secondary)
+        
+        // Rule 2: Check custom output filename is typed
+        if fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            missing.append("Output Filename")
         }
         
-//        }
-    }
-    func getFullURL(in folderURL: URL) -> URL {
-        // 1. Fallback to a default name if user left it blank
-        let cleanName = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let finalName = cleanName.isEmpty ? "Untitled" : cleanName
+        // Rule 3: Check target folder (or destination setting)
+        if targetFolderURL == nil {
+            missing.append("Export Directory")
+        }
         
-        // 2. Append the extension (e.g., .json or .txt)
-        return folderURL
-            .appendingPathComponent(finalName)
-            .appendingPathExtension("json")
+        return missing
     }
 
-}
+    // 2. Boolean check for the .disabled() modifier
+    var isPipelineReady: Bool {
+        return missingRequirements.isEmpty
+    }
 
-struct ExportConfigView: View {
-    @State private var isSelectingFolder: Bool = false
-    @State private var isProcessing: Bool = false
-    
-    @Binding var fileName: String
-    @Binding var targetFolderURL: URL?
-    @Binding var selectedOutputPlaform: OutputTarget
-
-    var body: some View {
-//        Form {
-            Section("Export Configuration") {
-                // 1. User types the filename
-                SanitizedFileNameInputView(fileName: $fileName)
-                
-                
-                // 2. User chooses the target folder
-                HStack {
-                    Text("Destination:")
-                    Spacer()
-                    Text(targetFolderURL?.lastPathComponent ?? "Not Selected")
-                        .foregroundColor(.secondary)
-                    Button("Choose...") {
-                        isSelectingFolder = true
-                    }
-                }
-                Picker("Output for…", selection: $selectedOutputPlaform) {
-                    ForEach(OutputTarget.allCases) { outputTarget in
-                        Text(outputTarget.rawValue)
-                    }
-                }
-            }
-
-            Section {
-                // 3. User hits 'Go'
-                Button{
-                    print("Go") }
-                label: {
-                    if isProcessing {
-                        ProgressView()
-                    } else {
-                        Text("Go")
-                            .font(.headline)
-                    }
-                }
-                .disabled(targetFolderURL == nil || fileName.isEmpty || isProcessing)
-            }
-//        }
-        // Folder Selection System Sheet
-        .fileImporter(
-            isPresented: $isSelectingFolder,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    // Gain security access to folder
-                    if url.startAccessingSecurityScopedResource() {
-                        self.targetFolderURL = url
-                    }
-                }
-            case .failure(let error):
-                print("Folder selection error: \(error.localizedDescription)")
-            }
+    // 3. User-friendly warning message
+    var missingRequirementsMessage: String {
+        guard !missingRequirements.isEmpty else { return "" }
+        
+        if missingRequirements.count == 1 {
+            return "Please set: \(missingRequirements[0])"
+        } else {
+            // Lists items cleanly: "Missing required settings: Input File, Output Filename, Export Directory"
+            return "Missing required settings: \(missingRequirements.joined(separator: ", "))"
         }
     }
-
-//    private func runPipelineAndSave() {
-//        guard let folderURL = targetFolderURL else { return }
-//        isProcessing = true
-//
-//        DispatchQueue.global(qos: .userInitiated).async {
-//            // A. Perform background work / file generation
-//            let generatedData = "Sample exported content".data(using: .utf8)!
-//
-//            // B. Resolve destination path
-//            let destinationURL = folderURL.appendingPathComponent(self.fileName)
-//
-//            do {
-//                // C. Automatically save file without prompting again
-//                try generatedData.write(to: destinationURL)
-//                print("Successfully saved to \(destinationURL.path)")
-//            } catch {
-//                print("Failed to save file: \(error.localizedDescription)")
-//            }
-//
-//            DispatchQueue.main.async {
-//                self.isProcessing = false
-//            }
-//        }
-//    }
 }
