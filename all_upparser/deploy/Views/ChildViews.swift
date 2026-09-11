@@ -15,12 +15,20 @@ struct ExportConfigViewSection: View {
     @Binding var fileName: String
     @Binding var targetFolderURL: URL?
     @Binding var selectedOutputPlaform: OutputTarget
-    
+    @Binding var selectedExportFormat: ExportFormat
+
     var body: some View {
         //        Form {
         Section("Export Configuration") {
+            //0 set format
+            Picker("Export (sub)type", selection: $selectedExportFormat){
+                ForEach(ExportFormat.allCases){ formatOption in
+                    Text(formatOption.rawValue)
+                    
+                }
+            }
             // 1. User types the filename
-            FileNameInputView(fileName: $fileName)
+            FileNameInputView(fileName: $fileName, selectedExportFormat: selectedExportFormat)
             
             // 2. User chooses the target folder
             HStack {
@@ -71,10 +79,20 @@ struct ChooseInputFileViewSection: View {
                 Text("Source:")
                 Spacer()
                 Text(selectedInputFile?.lastPathComponent ?? "Not Selected")
-                    .foregroundColor(.secondary)
-                Button("Choose...") {
-                    isSelectingFile = true
-                }
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    
+                    Button {
+                        isSelectingFile = true
+                    } label: {
+                        Image(systemName: selectedInputFile == nil ? "folder" : "arrow.triangle.2.circlepath")
+                    }
+                //                Text(selectedInputFile?.lastPathComponent ?? "Not Selected")
+//                    .foregroundColor(.secondary)
+//                Button("Choose...") {
+//                    isSelectingFile = true
+//                }
             }
 
         // Folder Selection System Sheet
@@ -105,6 +123,8 @@ struct ChooseInputFileViewSection: View {
 struct FileNameInputView: View {
     // for adding outout file name
     @Binding var fileName: String
+    @FocusState private var isFocused: Bool
+    let selectedExportFormat: ExportFormat
     
     // Set of characters prohibited in file names across major file systems
     
@@ -113,14 +133,19 @@ struct FileNameInputView: View {
             TextField("File name", text: $fileName)
                 .textInputAutocapitalization(TextInputAutocapitalization.never)
                 .autocorrectionDisabled()
-                        .onChange(of: fileName) { _, newValue in
-                            // Strip any forbidden characters immediately as typed or pasted
-                            let cleaned = fileName.sanitizedFileName
-                            if cleaned != newValue {
-                                fileName = cleaned
-                            }
-                        }
-            Text(".conll").foregroundStyle(.secondary)
+                .onChange(of: fileName) { _, newValue in
+                    // Strip any forbidden characters immediately as typed or pasted
+                    let cleaned = fileName.sanitizedFileName
+                    if cleaned != newValue {
+                        fileName = cleaned
+                    }
+                }
+                .focused($isFocused)
+                .submitLabel(.done)
+                .onSubmit {
+                    isFocused = false
+                }
+            Text(selectedExportFormat.fileExtension).foregroundStyle(.secondary)
         }
         
     }

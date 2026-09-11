@@ -19,8 +19,6 @@ enum LanguageCode: String, CaseIterable, Identifiable {
     case EN
 }
 
-
-
 struct UDToken : Identifiable {
     var id = UUID()
     let tokid: Int
@@ -33,7 +31,7 @@ struct UDToken : Identifiable {
     let deprel: String
     let col8: String
     let col9: String
-    /// Tab-separated, in CoNLL-U column order (ID FORM LEMMA UPOS XPOS FEATS HEAD DEPREL).
+    
     var conlluLine: String {
         [String(tokid), form, lemma, upos, xpos, feats, head, deprel].joined(separator: "\t")
     }
@@ -41,8 +39,13 @@ struct UDToken : Identifiable {
     var conllRaw: String{
         [String(tokid), form, lemma, upos, xpos, feats, head, deprel, "_","_"].joined(separator: "\t") //+ "\n"
     }
+    
+    var asXML: String{
+                """
+                <w tokID=\"\(tokid)\"  form=\"\(form.xmlEscaped)\" lemma=\"\(lemma.xmlEscaped)\" upos=\"\(upos.xmlEscaped)\" xpos=\"\(xpos.xmlEscaped)\" feats=\"\(feats.xmlEscaped)\" head=\"\(head.xmlEscaped)\" deprel=\"\(deprel.xmlEscaped)\">\(form.xmlEscaped)</w>
+                """
+    }
 }
-
 
 struct ConllSent : Identifiable {
     var id = UUID()
@@ -63,7 +66,6 @@ struct ConllSent : Identifiable {
 //            addConllMetaHeader = true
 //            cHeader = "# sent_id = "
 //        }
-//        
 //        //if starts with s lb, no add
 //        currentSentID = "\(lbreaks)\(cHeader)\(sentID)"
 //        currentSentID = currentSentID.replacing(#/\n{3,}/#, with: "\n\n")
@@ -72,10 +74,8 @@ struct ConllSent : Identifiable {
     var sentIdAsMeta: String {
         // 1. Trim ONLY leading and trailing newlines (\n, \r), preserving spaces in "foo bar"
         var content = sentID.trimmingCharacters(in: .newlines)
-        
         // 2. Remove existing header variants if already present
         let pattern = #"^\s*#\s*sent_id\s*=\s*"#
-            
             if let range = content.range(of: pattern, options: .regularExpression) {
                 content.removeSubrange(range)
             }
@@ -86,12 +86,31 @@ struct ConllSent : Identifiable {
     }
     
     //TODO: add var to send to XML
-    
-    
-    
-    
-    
-    
+    //get list of w chunks for each token, put open efore,
+    func makeXMLsent(xmlOutputType: XMLOutputType) -> String {
+        
+        var xmlTokenElements: [String] = []
+        let sentHeader = """
+        <s id=\"\(sentID)\">
+        """
+        let sentFooter = """
+            </s>
+            """
+
+        xmlTokenElements.append(sentHeader)
+        switch xmlOutputType{
+        case .xml:
+            xmlTokenElements.append(conllData.makeSentenceXML())
+        case .xmlConll:
+            xmlTokenElements.append(conllData.makeSentenceXMLconll())
+        }
+        
+        xmlTokenElements.append(sentFooter)
+        
+        return xmlTokenElements.joined(separator: "\n")
+        
+    }
+
     var conllSentRaw: String {
         // get raw conll for printing
         var internalLineList: [String] = []
@@ -109,8 +128,6 @@ struct ConllSent : Identifiable {
         }
         return internalLineList.joined(separator: "\n")
     }
-        
-
 
     var sentAsTokenisedSentence: TokenisedSentence{
         //convert to TokenisedSentence for parsing
@@ -120,7 +137,6 @@ struct ConllSent : Identifiable {
         }
         return TokenisedSentence(id: sentID, tokens: internalTokList)
     }
-    
     
     func formatRaw() -> [String]{
         
@@ -136,15 +152,12 @@ struct ConllSent : Identifiable {
         result.insert("\n\(sentID)", at: 0)
 
         return result
-        
     }
 
     /// Use string count to column-align rows of each sent  independently
     func formatTidy() -> [String] {
         //get lines, add blank for end
         var lines: [OutputLine] = conllData.map { .row($0) }
-        //lines.append(.blank)
-
         var result: [String] = []
         result.append(sentIdAsMeta)
         var currentRows: [[String]] = []
@@ -228,7 +241,6 @@ func printFromConllSents(outsents: [ConllSent]) throws -> URL{
     for sent in mySents {
         myLines.append(sent.conllSentTidy)
     }
-
     
     let content = myLines.joined(separator: "")
     try content.write(to: newUrl, atomically: true, encoding: .utf8)
@@ -236,5 +248,15 @@ func printFromConllSents(outsents: [ConllSent]) throws -> URL{
 
     return newUrl
         
-        
+}
+extension String {
+    var xmlEscaped: String {
+        var result = self
+        result = result.replacingOccurrences(of: "&", with: "&amp;")   // must be first
+        result = result.replacingOccurrences(of: "<", with: "&lt;")
+        result = result.replacingOccurrences(of: ">", with: "&gt;")
+        result = result.replacingOccurrences(of: "\"", with: "&quot;")
+        result = result.replacingOccurrences(of: "'", with: "&apos;")
+        return result
+    }
 }

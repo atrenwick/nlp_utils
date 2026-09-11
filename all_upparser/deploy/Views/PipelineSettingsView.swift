@@ -17,15 +17,28 @@ struct PipelineSettingsView: View {
     
     @State var fileContainerModel = SourceFileContainerModel()
     
-    @State var fileName: String = ""
+    @State var fileName: String = "asdkf"
     @State var targetFolderURL: URL? = nil
     @State var selectedOutputPlaform: OutputTarget = .ViewOnly
-    @State var selectedLanguage: Language = .EN
-    @State var selectedTreebank: Language.Treebank = .enTB1
-    @State var maxPipelineStep: PipelineStep = .step1
+    @State var selectedLanguage: Language = .FR
+    @State var selectedTreebank: Language.Treebank = .frTB1
+    @State var maxPipelineStep: PipelineStep = .step4
     @State var inputFileType: InputFileType = .conll
     @State var selectedTokenisationMethod: TokenisationMethod = .conll
+    @State var selectedXMLoutputType: XMLOutputType = .xml
+    @State var selectedExportFormat: ExportFormat = .xml
+    @State var xmlAuthorName: String = "author"
+    @State var xmlTitle: String = "title"
 
+    //progressbars::
+    @State private var progressBarStyle: ProgressBarStyle = .apple
+    @State private var startTime: Date?
+    @State private var processedCount = 0
+    @State private var totalCount = 0
+    @State private var appleProgress = Progress(totalUnitCount: 1)
+    @State private var hasStarted = false
+
+    @State private var topLevelOutputList: [RunOutput] = []
     @State var outputString: String = "not yet run"
     @State var taggingInProgress: Bool = false
     
@@ -39,16 +52,11 @@ struct PipelineSettingsView: View {
     @State private var conllRawLines: [String] = []
     @State private var conllSentsOut: [ConllSent] = []
 
-    @State private var processedCount = 0
-    @State private var totalCount = 0
-    @State private var startTime: Date?
-    @State private var appleProgress = Progress(totalUnitCount: 1)
-    @State private var hasStarted = false
     
     @State private var isSelectingFolder = false
     @State private var exportStatusMessage: String?
     
-    let runExplicit = false // hardcoded bool for testing verbosity, display of test elements
+    let runExplicit = false //true // hardcoded bool for testing verbosity, display of test elements
 
     
     var body: some View {
@@ -84,83 +92,99 @@ struct PipelineSettingsView: View {
                     NavigationLink("Select processor steps"){
                         ProcessorStepConfigViewSection(maxActiveStep: $maxPipelineStep, inputFileType: $inputFileType, selectedTokenisationMethod: $selectedTokenisationMethod)
                     }
+                }//end section
+                ExportConfigViewSection(fileName: $fileName, targetFolderURL: $targetFolderURL, selectedOutputPlaform: $selectedOutputPlaform, selectedExportFormat: $selectedExportFormat)
+                if runExplicit {
+                    HStack{
+                        Button {
+                            outputString = testInstantiatePipeline(
+                                languageCode: selectedLanguage.rawValue,
+                                treebank: selectedTreebank.short
+                            )
+                            
+                        } label: {
+                            Text("Test load")
+                        }
+                        .tint(.orange)
+                        .buttonStyle(.borderedProminent)
+                        
+                        Button {
+                            outputString = "reset"
+                        } label: {
+                            Text("reset")
+                        }
+                        .tint(.blue)
+                        .buttonStyle(.borderedProminent)
+                        
+                        Text("Use \(selectedLanguage.displayName) \(selectedTreebank.short)")
+                        Text(outputString)
+                    }
                 }
-                ExportConfigViewSection(fileName: $fileName, targetFolderURL: $targetFolderURL, selectedOutputPlaform: $selectedOutputPlaform)
-                
+                Section {
+                    // 3. User hits 'Go'
+                    
+                    if !isPipelineReady {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                            Text(missingRequirementsMessage)
+                        }
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
+                    Button(
+                        action:{
+                            runTagging(
+                                tokType: selectedTokenisationMethod,
+                                maxPipelineStep: maxPipelineStep,
+                                taggingInProgress: $taggingInProgress) }){
+                                    ZStack {
+                                        HStack {
+                                            Image(systemName: "play.fill")
+                                            
+                                            Text("Run")
+                                                .fontWeight(.semibold)
+                                        }
+                                        .opacity(taggingInProgress ? 0 : 1)
+                                        
+                                    }
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.large)
+                                .disabled(taggingInProgress || !isPipelineReady)
+                                .animation(.easeInOut(duration: 0.2), value: isPipelineReady)
+                                .padding()
+                    
+                    if hasStarted {
+                        PipelineProgressView(
+                            style: progressBarStyle,
+                            processed: processedCount,
+                            total: totalCount,
+                            startTime: startTime,
+                            appleProgress: appleProgress
+                        )
+                    }
+                }
+            }.toolbar{
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        RunOutputView(runs: topLevelOutputList, xmlTitle: $xmlTitle, selectedLanguage: $selectedLanguage, xmlAuthor: $xmlAuthorName)
+                    } label: {
+                        Image(systemName: "book.pages.fill")
+                    }
+                }
             }
         }
         //
-        if runExplicit {
-            HStack{
-                Button { // pretokSentsOut = tokenisedInputToSents(input: testSentences)
-                    outputString = testInstantiatePipeline(
-                        languageCode: selectedLanguage.rawValue,
-                        treebank: selectedTreebank.short
-                    )
-                    
-                } label: {
-                    Text("Test load")
-                }
-                .tint(.orange)
-                .buttonStyle(.borderedProminent)
-                
-                Button {
-                    outputString = "reset"
-                } label: {
-                    Text("reset")
-                }
-                .tint(.blue)
-                .buttonStyle(.borderedProminent)
-                
-                Text("Use \(selectedLanguage.displayName) \(selectedTreebank.short)")
-                Text(outputString)
-            }
-        }
-        Section {
-            // 3. User hits 'Go'
-            
-            if !isPipelineReady {
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                    Text(missingRequirementsMessage)
-                }
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.orange)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-            Button(
-                action:{
-                    runTagging(
-                        tokType: selectedTokenisationMethod,
-                        maxPipelineStep: maxPipelineStep,
-                        taggingInProgress: $taggingInProgress) }){
-                            ZStack {
-                                HStack {
-                                    Image(systemName: "play.fill")
-                                    Text("Run")
-                                        .fontWeight(.semibold)
-                                }
-                                .opacity(taggingInProgress ? 0 : 1)
-                                HStack{
-                                    ProgressView()
-                                        .opacity(taggingInProgress ? 1 : 0)
-                                }
-                            }
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(taggingInProgress || !isPipelineReady)
-                        .animation(.easeInOut(duration: 0.2), value: isPipelineReady)
-                        .padding()
-        }
     }
     
+    #if DEBUG
     func testInstantiatePipeline(languageCode: String, treebank: String)   -> String {
         // test instantiation of pipeline class based on params chosen
         outputString = ""
@@ -179,7 +203,7 @@ struct PipelineSettingsView: View {
         }
         return outputString
     }
-    
+    #endif
     private func runTagging(
         tokType: TokenisationMethod,
         maxPipelineStep: PipelineStep,
@@ -222,7 +246,7 @@ struct PipelineSettingsView: View {
                     guard  allSentences.count > 1 else { fatalError("No sentences in conll, baling out")}
                     print("Mysents count = \(allSentences.count)")
 //
-                    print(allSentences[0])
+                    //print(allSentences[0])
 
                     
                     // this works, but builds toksent from source
@@ -251,13 +275,15 @@ struct PipelineSettingsView: View {
                 var outSents: [ConllSent] = []
                 // MARK: Step 2: process sentences
                 // process one detected sentence at a time
-// >>>>>>>>Limiter here
+
+#if DEBUG
                 let runfive = false
                 if runfive {
                 allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
-                
+#endif
+
                 for sentence in allSentences {
-                    let tokens = try pipeline.runOnSentence(sentence, level: 5) //TODO: use state var here for level
+                    let tokens = try pipeline.runOnSentence(sentence, level: maxPipelineStep.rawValue)
                     
                     let mySent: ConllSent = ConllSent(
                         sentID: sentence.id,
@@ -290,13 +316,28 @@ struct PipelineSettingsView: View {
                     //let conllfileuriltest = try printFromConllSents(outsents: outSents)
                     print("Main actor done, running function 277")
                 }
-                saveFileToChosenLocation(items: outSents, saveName: fileName, targetFolderURL: targetFolderURL)
+                // run serialise,
+                let exportContent = makeExportContent(sentences: outSents, exportFormat: selectedExportFormat, lang: selectedLanguage, xmlTitle: xmlTitle, xmlAuthorName: xmlAuthorName)
 
+                saveFileToChosenLocation(exportContent: exportContent, saveName: fileName, targetFolderURL: targetFolderURL, exportFormat: selectedExportFormat)
+                
+                let xmldumpstring = sentListToXML(
+                    sentences: outSents,
+                    selectedLanguage: selectedLanguage,
+                    selectedXMLoutputType: selectedXMLoutputType,
+                    xmlTitle: xmlTitle,
+                    xmlAuthorName: xmlAuthorName)
+                    
+                    
+                print(xmldumpstring)
                 await MainActor.run {
                     outputLines.append(contentsOf: lines)
                     conllRawLines.append(contentsOf: rawLines)
                     conllSentsOut.append(contentsOf: outSents)
                     taggingInProgress.wrappedValue = false
+                    let currentRunOutput = RunOutput(sents: conllSentsOut, sourceFileName: inputFile! , lang: selectedLanguage.rawValue, treebank: selectedTreebank.short)
+                    topLevelOutputList.append(currentRunOutput)
+                    print("topLevelOutputList length == \(topLevelOutputList.count)")
                 }
             } catch {
                 print(error.localizedDescription)
@@ -308,7 +349,7 @@ struct PipelineSettingsView: View {
         }
     }
 
-    private func saveFileToChosenLocation(items: [ConllSent], saveName: String, targetFolderURL: URL?) {
+    func saveFileToChosenLocation(exportContent: String, saveName: String, targetFolderURL: URL?, exportFormat: ExportFormat) {
         guard let folderURL = targetFolderURL else {
             if runExplicit {
                 print("Guard 292 fail")
@@ -320,9 +361,10 @@ struct PipelineSettingsView: View {
         }
         do {
             let savedURL = try ExporterService.exportDataToFile(
-                items: items,
+                exportContent: exportContent,
                 customName: saveName,
-                targetFolderURL: folderURL
+                targetFolderURL: folderURL,
+                exportFormat: selectedExportFormat
             )
             exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
             if runExplicit {   print(exportStatusMessage)}
@@ -331,6 +373,32 @@ struct PipelineSettingsView: View {
             if runExplicit {print(exportStatusMessage)}
         }
     }
+    
+}
+func makeExportContent(sentences: [ConllSent], exportFormat: ExportFormat, lang: Language, xmlTitle: String?, xmlAuthorName: String?) -> String{
+    var returnString: String = ""
+    switch exportFormat {
+    case .conll, .conllTxt:
+        returnString = sentences.generateExportText()
+    case .conllTidy:
+        returnString = sentences.generateExportTextTidy()
+    case .xml:
+        returnString = sentListToXML(
+            sentences: sentences,
+            selectedLanguage: lang,
+            selectedXMLoutputType: .xml,
+            xmlTitle: xmlTitle ?? "no_title",
+            xmlAuthorName: xmlAuthorName ?? "no_name")
+    case .xmlConll:
+        //make xml conll
+        returnString = sentListToXML(
+            sentences: sentences,
+            selectedLanguage: lang,
+            selectedXMLoutputType: .xmlConll,
+            xmlTitle: xmlTitle ?? "no_title",
+            xmlAuthorName: xmlAuthorName ?? "no_name")
+    }
+    return returnString
 }
 
 #Preview {
@@ -380,4 +448,63 @@ extension PipelineSettingsView {
             return "Missing required settings: \(missingRequirements.joined(separator: ", "))"
         }
     }
+}
+
+func sentListToXML(
+    sentences: [ConllSent],
+    selectedLanguage: Language,
+    selectedXMLoutputType: XMLOutputType,
+    xmlTitle: String,
+    xmlAuthorName: String,
+
+) -> String {
+    let xmlSafeLang = selectedLanguage.displayName.lowercased()
+    let xmlSafeXMLTitle = xmlTitle.xmlEscaped != "" ? xmlTitle.xmlEscaped : "title"
+    let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
+    
+    
+    let xmlHeader = """
+        <?xml version="1.0" encoding="utf-8"?>
+          <TEI.2>
+          <teiHeader>
+            <fileDesc>
+            <titleStmt>
+            <title>\(xmlSafeXMLTitle)</title>
+            <author>\(xmlSafeXMLAuthor))</author>
+            </titleStmt>
+            <publicationStmt>
+            <publisher />
+            <date />
+            <pubDate />
+            </publicationStmt>
+                <sourceDesc details="">
+                <p />
+                </sourceDesc>
+            </fileDesc>
+            <profileDesc>
+                <langUsage>
+                <language ident="\(xmlSafeLang)" />
+                </langUsage>
+            <textDesc thema=\"\" type="review" sub_genre=\"\" />
+            </profileDesc>
+        </teiHeader>
+        <text>
+        <body>
+        <p>        
+        """
+    let xmlFooter = """
+        </p>
+        </body>
+        </text>
+        </TEI.2>
+        """
+    var outputStore: [String] = []
+    outputStore.append(xmlHeader)
+    for sentence in sentences {
+        outputStore.append(sentence.makeXMLsent(xmlOutputType: selectedXMLoutputType))
+    }
+    outputStore.append(xmlFooter)
+    
+    return outputStore.joined(separator: "\n")
+    
 }
