@@ -76,6 +76,7 @@ enum UDPipelineError: Error, LocalizedError {
 }
 
 
+
 // MARK: - Pipeline
 
 final class UDPipeline {
@@ -107,7 +108,7 @@ final class UDPipeline {
         featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
         deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
 //        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab\(treebank)")
-        self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode)
+        self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
     }
     
 

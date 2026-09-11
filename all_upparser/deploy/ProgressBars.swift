@@ -8,11 +8,6 @@
 import Foundation
 import SwiftUI
 
-//  A picker-selectable choice between the two progress-reporting styles
-//  explored in ProgressBarComparisonView, plus reusable views for each so
-//  they can be dropped into any view (like a button label) and switched
-//  live via the enum.
-//
 
 // enum to define names of progress bar style
 enum ProgressBarStyle: String, CaseIterable, Identifiable {

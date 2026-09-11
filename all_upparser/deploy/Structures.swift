@@ -11,6 +11,7 @@ enum Language: String, CaseIterable, Identifiable {
     case EN
     case FR
     case DE
+    case ANG
     
     var id: Self { self }
     
@@ -20,6 +21,7 @@ enum Language: String, CaseIterable, Identifiable {
         case .EN: return "en"
         case .FR: return "fr"
         case .DE: return "de"
+        case .ANG: return "ang"
         }
     }
     
@@ -27,10 +29,13 @@ enum Language: String, CaseIterable, Identifiable {
     enum Treebank: String, CaseIterable, Identifiable {
         case enTB1 = "en_ewt"
         case enTB2 = "en_gum"
+        case enTB3 = "en_lines"
         case frTB1 = "fr_gsd"
         case frTB2 = "fr_sequoia"
+        case frTB3 = "fr_rhapsodie"
         case deTB1 = "de_gsd"
         case deTB2 = "de_hdt"
+        case angTB1 = "ang_oedt"
         
         var id: String { rawValue }
         
@@ -38,10 +43,14 @@ enum Language: String, CaseIterable, Identifiable {
             switch self {
             case .enTB1: return "ewt"
             case .enTB2: return "gum"
+            case .enTB3: return "lines"
             case .frTB1: return "gsd"
             case .frTB2: return "sequoia"
+            case .frTB3: return "rhapsodie"
             case .deTB1: return "gsd"
             case .deTB2: return "hdt"
+            case .angTB1: return "oedt"
+
             }
         }
     }
@@ -49,19 +58,12 @@ enum Language: String, CaseIterable, Identifiable {
     // Returns ONLY the models valid for this language
     var availableTBs: [Treebank] {
         switch self {
-        case .EN: return [.enTB1, .enTB2]
-        case .FR:  return [.frTB1, .frTB2]
+        case .EN: return [.enTB1, .enTB2, .enTB3]
+        case .FR:  return [.frTB1, .frTB2, .frTB3]
         case .DE:  return [.deTB1, .deTB2]
+        case.ANG: return [.angTB1]
         }
     }
-}
-
-
-// choose languages supported ::: LanguageCode enum
-enum OutputTarget: String, CaseIterable, Identifiable{
-    var id: Self {self}
-    case Export
-    case ViewOnly
 }
 
 enum InputFileType: String, Identifiable, CaseIterable {
@@ -81,20 +83,55 @@ enum InputFileType: String, Identifiable, CaseIterable {
 }
 
 
+// choose languages supported ::: LanguageCode enum
+enum OutputTarget: String, CaseIterable, Identifiable{
+    var id: Self {self}
+    case Export
+    case ViewOnly
+}
+
+
+
+enum XMLOutputType:  String, CaseIterable, Identifiable {
+    var id: Self {self}
+    case xml
+    case xmlConll
+}
+
+
+enum ExportFormat: String, CaseIterable, Identifiable{
+    var id: Self {self}
+    case xml
+    case xmlConll
+    case conll
+    case conllTidy
+    case conllTxt
+    
+    var fileExtension: String{
+        switch self{
+        case .xml: "xml"
+        case .xmlConll : "xml"
+        case .conll: "conll"
+        case .conllTidy: "conll"
+        case .conllTxt: "txt"
+        }
+    }
+}
 
 struct ExporterService {
-    
+    //TODO: make this take an arg for export format
     /// Writes processing output string directly to a user-selected folder URL
     static func exportDataToFile(
-        items: [ConllSent],
+        exportContent: String,
         customName: String,
-        targetFolderURL: URL//,
+        targetFolderURL: URL,
+        exportFormat: ExportFormat
         
     ) throws -> URL {
-        let fileExtension: String = "conll"
-        print("exporter called")
-        // 1. Prepare export text string
-        let exportContent = items.generateExportText()
+        let fileExtension = exportFormat.fileExtension
+      
+        
+        
         print("step1 success")
         // 2. Format sanitized filename
         var safeName = customName.sanitizedFileName
@@ -140,6 +177,41 @@ extension Sequence where Element == ConllSent {
     func generateExportText() -> String {
         return self.map { $0.conllSentRaw }.joined(separator: "\n")
     }
+    func generateExportTextTidy() -> String {
+        return self.map { $0.conllSentTidy }.joined(separator: "\n")
+    }
 }
 
+extension Sequence where Element == UDToken {
+    /// Combines calculated properties across all structures
+    func makeSentenceXML() -> String {
+        return self.map { $0.asXML }.joined(separator: "\n")
+    }
+}
 
+extension Sequence where Element == UDToken {
+    /// Combines calculated properties across all structures
+    func makeSentenceXMLconll() -> String {
+        return self.map { $0.conllRaw }.joined(separator: "\n")
+    }
+}
+
+struct RunOutput: Identifiable {
+    var id = UUID()
+    let sents: [ConllSent]
+    let sourceFileName: URL
+    let lang: String
+    let treebank : String
+    
+//    var tokCount: Int {
+//        var total: Int = 0
+//        for sent in sents{
+//            total += sent.conllData.count
+//        }
+//        return total
+//    }
+    var tokCount: Int {
+        // reduce collection to single element : start at 0, add iteratively over elements
+        sents.reduce(0) { $0 + $1.conllData.count }
+    }
+}

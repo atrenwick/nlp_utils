@@ -16,13 +16,23 @@ struct ImportFileViewSection: View {
     var body: some View {
         HStack(spacing: 16) {
             if let localURL = fileContainerModel.localSandboxFileURL {
-                Text("Selected: \(localURL.lastPathComponent)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                HStack{
+                    Text(localURL.lastPathComponent)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer()
             }
 
-            Button("Select Input File") {
+            Button {
                 isSelectingFile = true
+            } label: {
+                if fileContainerModel.localSandboxFileURL == nil {
+                    Text("Select Input File")
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
             }
             .fileImporter(
                 isPresented: $isSelectingFile,

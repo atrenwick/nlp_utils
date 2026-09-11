@@ -43,14 +43,14 @@ final class LemmatizerRunner {
     private let maxLemmaLen = 32    // Must match MAX_SRC_LEN in convert_lemmatizer.py :: 32 for FR, 40 for EN
     private let maxSrcLen = 32 // :: 32 for FR, 40 for EN
 
-    init(languageCode: String) throws {
-        guard let encoderURL = Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerEncoder", withExtension: "mlmodelc")
-                ?? Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerEncoder", withExtension: "mlpackage") else {
-            throw LemmatizerError.resourceMissing("\(languageCode)_neuralLemmatizerEncoder")
+    init(languageCode: String, treebank: String) throws {
+        guard let encoderURL = Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerEncoder_\(treebank)", withExtension: "mlmodelc")
+                ?? Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerEncoder_\(treebank)", withExtension: "mlpackage") else {
+            throw LemmatizerError.resourceMissing("\(languageCode)_neuralLemmatizerEncoder_\(treebank)")
         }
-        guard let decoderURL = Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerDecoderStep", withExtension: "mlmodelc")
-                ?? Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerDecoderStep", withExtension: "mlpackage") else {
-            throw LemmatizerError.resourceMissing("\(languageCode)_neuralLemmatizerDecoderStep")
+        guard let decoderURL = Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerDecoderStep_\(treebank)", withExtension: "mlmodelc")
+                ?? Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerDecoderStep_\(treebank)", withExtension: "mlpackage") else {
+            throw LemmatizerError.resourceMissing("\(languageCode)_neuralLemmatizerDecoderStep_\(treebank)")
         }
 
         do {
@@ -61,8 +61,8 @@ final class LemmatizerRunner {
         }
 
         // --- Load vocabularies -------------------------------------------------
-        guard let vocabsURL = Bundle.main.url(forResource: "\(languageCode)_neurallemma_vocabs", withExtension: "json") else {
-            throw LemmatizerError.resourceMissing("\(languageCode)_neurallemma_vocabs.json")
+        guard let vocabsURL = Bundle.main.url(forResource: "\(languageCode)_neurallemma_vocabs_\(treebank)", withExtension: "json") else {
+            throw LemmatizerError.resourceMissing("\(languageCode)_neurallemma_vocabs_\(treebank).json")
         }
         let vocabsData = try Data(contentsOf: vocabsURL)
         let vocabs = try JSONDecoder().decode(LemmaVocabs.self, from: vocabsData)
@@ -82,8 +82,8 @@ final class LemmatizerRunner {
         self.eosId = cs["<eos>"] ?? 3
 
         // --- Load the frequency dictionary --------------------------------------
-        guard let dictURL = Bundle.main.url(forResource: "\(languageCode)_neurallemma_dict", withExtension: "json") else {
-            throw LemmatizerError.resourceMissing("\(languageCode)_neurallemma_dict.json")
+        guard let dictURL = Bundle.main.url(forResource: "\(languageCode)_neurallemma_dict_\(treebank)", withExtension: "json") else {
+            throw LemmatizerError.resourceMissing("\(languageCode)_neurallemma_dict_\(treebank).json")
         }
         let dictData = try Data(contentsOf: dictURL)
         self.lemmaDict = try JSONDecoder().decode([String: String].self, from: dictData)
