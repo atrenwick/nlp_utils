@@ -28,7 +28,7 @@ struct ExportConfigViewSection: View {
                 }
             }
             // 1. User types the filename
-            FileNameInputView(fileName: $fileName, selectedExportFormat: selectedExportFormat)
+            FileNameInputViewSection(fileName: $fileName, selectedExportFormat: selectedExportFormat)
             
             // 2. User chooses the target folder
             HStack {
@@ -120,7 +120,7 @@ struct ChooseInputFileViewSection: View {
 }
 
 
-struct FileNameInputView: View {
+struct FileNameInputViewSection: View {
     // for adding outout file name
     @Binding var fileName: String
     @FocusState private var isFocused: Bool
@@ -147,7 +147,6 @@ struct FileNameInputView: View {
                 }
             Text(selectedExportFormat.fileExtension).foregroundStyle(.secondary)
         }
-        
     }
     func getFullURL(in folderURL: URL) -> URL {
         // 1. Fallback to a default name if user left it blank
@@ -159,7 +158,6 @@ struct FileNameInputView: View {
             .appendingPathComponent(finalName)
             .appendingPathExtension("json")
     }
-
 }
 
 

@@ -8,17 +8,21 @@
 import SwiftUI
 
 struct RunOutputDetailView: View{
-    let run: RunOutput
-    @State var additionalExportContent: String = ""
+
+    @Binding var run: RunOutput
+    @State var exportContent: String = ""
     @Binding var xmlTitle: String
     @Binding var xmlAuthor: String
     @Binding var selectedLanguage: Language
+    @Binding var targetFolderURL: URL?
+    @Binding var fileName: String
     @State var exportStatusMessage: String = ""
     @State var additionalExportFormat: ExportFormat = .conll
     let runExplicit = true
     var body: some View {
         Form{
-            Text("Source file processed : \(run.sourceFileName.path())")
+            Text("Input file : \(run.sourceFileName.lastPathComponent)")
+            Text("Output file : \(run.outputFileName.lastPathComponent)")
             Text("Sentence count : \(run.sents.count)")
             Text("Tok count : \(run.tokCount)")
             Text("Language : \(run.lang)")
@@ -30,54 +34,74 @@ struct RunOutputDetailView: View{
                 Text(format.rawValue)
             }
         }
-
+        
         
         Button {
-            additionalExportContent = makeExportContent(sentences: run.sents, exportFormat: additionalExportFormat, lang: selectedLanguage, xmlTitle: xmlTitle, xmlAuthorName: xmlAuthor)
             
+            exportContent = makeExportContent(sentences: run.sents, exportFormat: additionalExportFormat, lang: selectedLanguage, xmlTitle: xmlTitle, xmlAuthorName: xmlAuthor)
+            print("run.sents.count: \(run.sents.count)")
+            print("chosenformat: \(additionalExportFormat.fileExtension)")
+            print("lang: \(selectedLanguage.rawValue)")
+            print("xmltitlte: \(xmlTitle)")
+            print("xmlauthor: \(xmlAuthor)")
+            print(exportContent)
+            
+            let saveReport = saveFileToChosenLocation(
+                exportContent: exportContent,
+                saveName: fileName,
+                targetFolderURL: targetFolderURL,
+                exportFormat: additionalExportFormat
+            )
+            exportStatusMessage = saveReport.message
             
         } label: {
-            Text("Export CoNLL")
+            Text(additionalExportFormat.fileExtension)
         }
         .tint(.orange)
         .buttonStyle(.borderedProminent)
-    }
-
-
-    func saveFileToChosenLocation(additionalExportContent: String, saveName: String, targetFolderURL: URL?, selectedExportFormat: ExportFormat) {
-        
-        guard let folderURL = targetFolderURL else {
-            if runExplicit {
-                print("Guard 31 fail")
-            }
-            return
-        }
-        if runExplicit {
-            print("Guard 31 passed")
-        }
-        do {
-            let savedURL = try ExporterService.exportDataToFile(
-                exportContent: additionalExportContent,
-                customName: saveName,
-                targetFolderURL: folderURL,
-                exportFormat: selectedExportFormat
-            )
-            exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
-            if runExplicit {   print(exportStatusMessage)}
-        } catch {
-            exportStatusMessage = "Export failed: \(error.localizedDescription)"
-            if runExplicit {print(exportStatusMessage)}
+        .onAppear {
+            run.unread = false
         }
     }
+    
+    
+
+
+//    func saveFileToChosenLocation(exportContent: String, saveName: String, targetFolderURL: URL?, exportFormat: ExportFormat) {
+//        guard let folderURL = targetFolderURL else {
+//            if runExplicit {
+//                print("Guard 31 fail")
+//            }
+//            return
+//        }
+//        if runExplicit {
+//            print("Guard 31 passed")
+//        }
+//        do {
+//            let savedURL = try ExporterService.exportDataToFile(
+//                exportContent: additionalExportContent,
+//                customName: "\(saveName)_\(exportFormat.rawValue)",
+//                targetFolderURL: folderURL,
+//                exportFormat: exportFormat
+//            )
+//            exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
+//            if runExplicit {   print(exportStatusMessage)}
+//        } catch {
+//            exportStatusMessage = "Export failed: \(error.localizedDescription)"
+//            if runExplicit {print(exportStatusMessage)}
+//        }
+//    }
     
 }
 
 struct RunOutputView: View {
-    let runs: [RunOutput]
+    @Binding var runs: [RunOutput]
     let runExplicit = true
     @Binding var xmlTitle: String
     @Binding var selectedLanguage: Language
     @Binding var xmlAuthor: String
+    @Binding var targetFolderURL: URL?
+    @Binding var fileName: String
     @State var exportStatusMessage: String = ""
     var body: some View {
         if runs.count == 0{
@@ -86,14 +110,11 @@ struct RunOutputView: View {
         else {
             NavigationStack{
                 List{
-                    
-                    //                    ForEach(Array(sortedEVAS.enumerated()), id:\.offset){num, evaKey in
-                    
                     ForEach(runs.enumerated(), id:\.offset){num,run in
                         NavigationLink {
-                            RunOutputDetailView(run: run, xmlTitle: $xmlTitle, xmlAuthor: $xmlAuthor, selectedLanguage: $selectedLanguage)
+                            RunOutputDetailView(run: bindingFor(run), xmlTitle: $xmlTitle, xmlAuthor: $xmlAuthor, selectedLanguage: $selectedLanguage, targetFolderURL: $targetFolderURL, fileName: $fileName )
                         } label: {
-                            Text("Run \(num + 1)")
+                            Text("Run \(num + 1): \(run.sourceFileName.deletingPathExtension().lastPathComponent) | \(run.lang) | \(run.treebank) | \(run.exportFormat)")
                         }
                         
                     }
@@ -101,7 +122,13 @@ struct RunOutputView: View {
             }
         }
     }
-    
+    // func to get binding for specific el to pass as write-accessible
+    private func bindingFor(_ run: RunOutput) -> Binding<RunOutput> {
+            guard let index = runs.firstIndex(where: { $0.id == run.id }) else {
+                fatalError("RunOutput not found — shouldn't happen")
+            }
+            return $runs[index]
+        }
     
 }
 
