@@ -17,7 +17,7 @@ struct PipelineSettingsView: View {
     
     @State var fileContainerModel = SourceFileContainerModel()
     
-    @State var fileName: String = "asdkf"
+    @State var fileName: String = "test1"
     @State var targetFolderURL: URL? = nil
     @State var selectedOutputPlaform: OutputTarget = .ViewOnly
     @State var selectedLanguage: Language = .FR
@@ -51,14 +51,16 @@ struct PipelineSettingsView: View {
     @State private var outputLines: [String] = []
     @State private var conllRawLines: [String] = []
     @State private var conllSentsOut: [ConllSent] = []
-
+    @State private var saveReport: SaveReport?
     
     @State private var isSelectingFolder = false
     @State private var exportStatusMessage: String?
     
     let runExplicit = false //true // hardcoded bool for testing verbosity, display of test elements
 
-    
+    var unreadCount: Int {
+        topLevelOutputList.reduce(0) { $1.unread ? $0 + 1 : $0 }
+    }
     var body: some View {
         
         NavigationStack{
@@ -174,15 +176,26 @@ struct PipelineSettingsView: View {
             }.toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        RunOutputView(runs: topLevelOutputList, xmlTitle: $xmlTitle, selectedLanguage: $selectedLanguage, xmlAuthor: $xmlAuthorName)
+                        RunOutputView(runs: $topLevelOutputList, xmlTitle: $xmlTitle, selectedLanguage: $selectedLanguage, xmlAuthor: $xmlAuthorName, targetFolderURL: $targetFolderURL,  fileName: $fileName)
                     } label: {
                         Image(systemName: "book.pages.fill")
+                            .overlay(alignment: .topTrailing) {
+                                if unreadCount > 0 {
+                                    Text(String(unreadCount))
+                                        .font(.caption2)
+                                        .foregroundStyle(.white)
+                                        .padding(4)
+                                        .background(Circle().fill(.red))
+                                        .offset(x: 8, y: -8)
+                                }
+                            }
                     }
                 }
             }
         }
         //
     }
+
     
     #if DEBUG
     func testInstantiatePipeline(languageCode: String, treebank: String)   -> String {
@@ -319,7 +332,7 @@ struct PipelineSettingsView: View {
                 // run serialise,
                 let exportContent = makeExportContent(sentences: outSents, exportFormat: selectedExportFormat, lang: selectedLanguage, xmlTitle: xmlTitle, xmlAuthorName: xmlAuthorName)
 
-                saveFileToChosenLocation(exportContent: exportContent, saveName: fileName, targetFolderURL: targetFolderURL, exportFormat: selectedExportFormat)
+                saveReport = saveFileToChosenLocation(exportContent: exportContent, saveName: fileName, targetFolderURL: targetFolderURL, exportFormat: selectedExportFormat)
                 
                 let xmldumpstring = sentListToXML(
                     sentences: outSents,
@@ -335,8 +348,13 @@ struct PipelineSettingsView: View {
                     conllRawLines.append(contentsOf: rawLines)
                     conllSentsOut.append(contentsOf: outSents)
                     taggingInProgress.wrappedValue = false
-                    let currentRunOutput = RunOutput(sents: conllSentsOut, sourceFileName: inputFile! , lang: selectedLanguage.rawValue, treebank: selectedTreebank.short)
-                    topLevelOutputList.append(currentRunOutput)
+                    
+                    guard let saveReport else { return }
+                    if let savedURL = saveReport.savedURL{
+                        
+                        let currentRunOutput = RunOutput(sents: conllSentsOut, sourceFileName: inputFile! , outputFileName: savedURL, lang: selectedLanguage.rawValue, treebank: selectedTreebank.short, exportFormat: selectedExportFormat)
+                        topLevelOutputList.append(currentRunOutput)
+                    }
                     print("topLevelOutputList length == \(topLevelOutputList.count)")
                 }
             } catch {
@@ -349,32 +367,45 @@ struct PipelineSettingsView: View {
         }
     }
 
-    func saveFileToChosenLocation(exportContent: String, saveName: String, targetFolderURL: URL?, exportFormat: ExportFormat) {
-        guard let folderURL = targetFolderURL else {
-            if runExplicit {
-                print("Guard 292 fail")
-            }
-            return
-        }
-        if runExplicit {
-            print("Guard 292 passed")
-        }
-        do {
-            let savedURL = try ExporterService.exportDataToFile(
-                exportContent: exportContent,
-                customName: saveName,
-                targetFolderURL: folderURL,
-                exportFormat: selectedExportFormat
-            )
-            exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
-            if runExplicit {   print(exportStatusMessage)}
-        } catch {
-            exportStatusMessage = "Export failed: \(error.localizedDescription)"
-            if runExplicit {print(exportStatusMessage)}
-        }
-    }
+    
     
 }
+
+struct SaveReport {
+    let savedURL: URL?
+    let message: String
+}
+
+func saveFileToChosenLocation(exportContent: String, saveName: String, targetFolderURL: URL?, exportFormat: ExportFormat, runExplicit: Bool = false) -> SaveReport {
+    var savedURL: URL
+    var exportStatusMessage: String
+    guard let folderURL = targetFolderURL else {
+        if runExplicit {
+            print("Guard 292 fail")
+        }
+        return SaveReport(savedURL: nil, message: "Guard failure")
+    }
+    if runExplicit {
+        print("Guard 292 passed")
+    }
+    do {
+        savedURL = try ExporterService.exportDataToFile(
+            exportContent: exportContent,
+            customName: "\(saveName)_\(exportFormat.rawValue)",
+            targetFolderURL: folderURL,
+            exportFormat: exportFormat
+        )
+        exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
+        if runExplicit { print(exportStatusMessage) }
+        return SaveReport(savedURL: savedURL, message: exportStatusMessage)
+    } catch {
+        exportStatusMessage = "Export failed: \(error.localizedDescription)"
+        if runExplicit { print(exportStatusMessage) }
+        return SaveReport(savedURL: nil, message: exportStatusMessage)
+
+    }
+}
+
 func makeExportContent(sentences: [ConllSent], exportFormat: ExportFormat, lang: Language, xmlTitle: String?, xmlAuthorName: String?) -> String{
     var returnString: String = ""
     switch exportFormat {

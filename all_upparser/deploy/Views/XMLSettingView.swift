@@ -11,6 +11,7 @@ struct XMLSettingView: View {
     @Binding var selectedXMLoutputType: XMLOutputType
     @Binding var xmlAuthorName: String
     @Binding var xmlTitle: String
+    @FocusState var isFocused
     var body: some View {
         Form{
             TextField("XML Author", text: $xmlAuthorName)
@@ -19,7 +20,11 @@ struct XMLSettingView: View {
             TextField("Title", text: $xmlTitle)
                 .textInputAutocapitalization(TextInputAutocapitalization.never)
                 .autocorrectionDisabled()
-            
+                .focused($isFocused)
+                .submitLabel(.done)
+                .onSubmit {
+                    isFocused = false
+                }
             HStack {
                 Text("Output type")
                 Spacer()
