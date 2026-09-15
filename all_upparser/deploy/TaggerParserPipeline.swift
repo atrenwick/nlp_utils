@@ -124,7 +124,7 @@ final class UDPipeline {
 
     /// Runs raw text through the tokenizer model and returns one
     /// `TokenisedSentence` per detected sentence, numbered from "1".
-    func tokenize(_ text: String) throws -> [TokenisedSentence] {
+    func tokenize(_ text: String) throws -> [HashableSentence] {
         let chars = Array(text)
         guard !chars.isEmpty else { return [] }
 
@@ -143,7 +143,7 @@ final class UDPipeline {
         var currentWord = ""
 
         for (i, ch) in chars.enumerated() {
-            let label = argmax(logits, prefix: [0, i], dimSize: 4)
+            let label = parserArgmax(logits, prefix: [0, i], dimSize: 4)
             switch label {
             case 0: // inside token
                 currentWord.append(ch)
@@ -165,7 +165,7 @@ final class UDPipeline {
         if !currentSentence.isEmpty { tokenLists.append(currentSentence) }
 
         return tokenLists.enumerated().map { i, tokens in
-            TokenisedSentence(id: String(i + 1), tokens: tokens)
+            HashableSentence(id: String(i + 1), tokens: tokens)
         }
     }
 
@@ -174,7 +174,7 @@ final class UDPipeline {
     /// Holds the raw tensors from 1 tagger_parser model call for 1 sent
     ///`seqLen` includes the synthetic ROOT index 0, so real words are indices 1,2....<seqLen.
     private struct TaggerRawOutput {
-        let sentence: TokenisedSentence
+        let sentence: HashableSentence
         let seqLen: Int
         let uposLogits: MLMultiArray
         let xposLogits: MLMultiArray
@@ -185,7 +185,7 @@ final class UDPipeline {
         let labelLogits: MLMultiArray
     }
 
-    private func runTaggerParserModel(on sentence: TokenisedSentence) throws -> TaggerRawOutput {
+    private func runTaggerParserModel(on sentence: HashableSentence) throws -> TaggerRawOutput {
         let tokens = sentence.tokens
         let seqLen = tokens.count + 1 // +1 for the synthetic ROOT at index 0
 
@@ -252,14 +252,14 @@ final class UDPipeline {
     private func decodeUPOSInternal(_ uposLogits: MLMultiArray) -> [String] {
         let seqLen = uposLogits.shape[1].intValue  // shape: [1, seqLen, vocabSize]
         return (1..<seqLen).map { t in
-            let id = argmax(uposLogits, prefix: [0, t], dimSize: uposVocab.itos.count)
+            let id = parserArgmax(uposLogits, prefix: [0, t], dimSize: uposVocab.itos.count)
             return uposVocab.decode(id)
         }
     }
     /// One UPOS tag string per real word (indices 1..<seqLen), in order.
     private func decodeUPOS(_ raw: TaggerRawOutput) -> [String] {
         (1..<raw.seqLen).map { t in
-            let id = argmax(raw.uposLogits, prefix: [0, t], dimSize: uposVocab.itos.count)
+            let id = parserArgmax(raw.uposLogits, prefix: [0, t], dimSize: uposVocab.itos.count)
             return uposVocab.decode(id)
         }
     }
@@ -267,7 +267,7 @@ final class UDPipeline {
     // MARK: XPOS (not used at present, but here to make future mods easier if it's needed)
 //    private func decodeXPOS(_ raw: TaggerRawOutput) -> [String] {
 //        (1..<raw.seqLen).map { t in
-//            let id = argmax(raw.xposLogits, prefix: [0, t], dimSize: xposVocab.itos.count)
+//            let id = parserArgmax(raw.xposLogits, prefix: [0, t], dimSize: xposVocab.itos.count)
 //            return xposVocab.decode(id)
 //        }
 //    }
@@ -279,7 +279,7 @@ final class UDPipeline {
     /// predicted edit-script rule to that word's surface form.
 //    private func decodeLemmas(_ raw: TaggerRawOutput) -> [String] {
 //        zip(1..<raw.seqLen, raw.sentence.tokens).map { t, form in
-//            let id = argmax(raw.lemmaLogits, prefix: [0, t], dimSize: lemmaRuleVocab.itos.count)
+//            let id = parserArgmax(raw.lemmaLogits, prefix: [0, t], dimSize: lemmaRuleVocab.itos.count)
 //            return applyLemmaRule(form: form, rule: lemmaRuleVocab.decode(id))
 //        }
 //    }
@@ -301,7 +301,7 @@ final class UDPipeline {
     // MARK: Step 4 (decode) -- morphological features
     private func decodeFeats(_ raw: TaggerRawOutput) -> [String] {
         (1..<raw.seqLen).map { t in
-            let id = argmax(raw.featsLogits, prefix: [0, t], dimSize: featsVocab.itos.count)
+            let id = parserArgmax(raw.featsLogits, prefix: [0, t], dimSize: featsVocab.itos.count)
             return featsVocab.decode(id)
         }
     }
@@ -311,7 +311,7 @@ final class UDPipeline {
     /// One (head, deprel) pair per real word, decoded via Chu-Liu-Edmonds
     /// (maximum spanning arborescence, rooted at node 0), which guarantees
     /// a valid, cycle-free dependency tree with a single root -- unlike a
-    /// per-word greedy argmax, which can produce cycles or multiple roots.
+    /// per-word greedy parserArgmax, which can produce cycles or multiple roots.
     private func decodeDependencies(_ raw: TaggerRawOutput) -> [(head: Int, deprel: String)] {
         let n = raw.seqLen
 
@@ -449,10 +449,6 @@ final class UDPipeline {
         return result
     }
 
-    /// Finds one cycle among `bestParent`'s pointers, if any exists, by
-    /// following each node's chain of parents and watching for a repeat.
-    /// Returns the cycle as a list of the original node ids involved, or
-    /// nil if the current bestParent pointers already form a valid tree.
     private func findCycle(bestParent: [Int: Int], activeNodes: [Int]) -> [Int]? {
         var visitedGlobally = Set<Int>()
 
@@ -477,40 +473,11 @@ final class UDPipeline {
         }
         return nil
     }
-    // MARK: end of new implementation of step5
-  
 
-
-    
-    /*
-     greedy,per-word argmax implementation : whole function in multiline quote
-    // MARK: Step 5 (decode) -- dependency parsing  greedy implementation: One (head, deprel) pair per real word.
-    /// NOTE : this is a placeholder algorithm, used to test whether this pipeline works :  no guarantee the tree is licit, correct
-    ///
-    private func decodeDependencies(_ raw: TaggerRawOutput) -> [(head: Int, deprel: String)] {
-        (1..<raw.seqLen).map { t in
-            var bestHead = 0
-            var bestScore = -Double.infinity
-            for h in 0..<raw.seqLen where h != t {
-                let v = raw.arcLogits[[0, t, h] as [NSNumber]].doubleValue
-                if v > bestScore { bestScore = v; bestHead = h }
-            }
-
-            var bestDeprelId = 0
-            var bestDeprelScore = -Double.infinity
-            for c in 0..<deprelVocab.itos.count {
-                let v = raw.labelLogits[[0, c, t, bestHead] as [NSNumber]].doubleValue
-                if v > bestDeprelScore { bestDeprelScore = v; bestDeprelId = c }
-            }
-            return (head: bestHead, deprel: deprelVocab.decode(bestDeprelId))
-        }
-    }
-   */
-     
     // MARK: Per-sentence processing: for progress-reporting callers
     /// Runs the same field-decoding logic as `run(text:level:mode:)`, but takes
-    /// 1 tokenised sentence at a time, returning decoded `UDToken`
-    func runOnSentence(_ sentence: TokenisedSentence, level: Int) throws -> [UDToken] {
+    /// 1 tokenised sentence at a time, returning decoded `Token`
+    func runOnSentence(_ sentence: HashableSentence, level: Int) throws -> [Token] {
         guard (1...5).contains(level) else {
             throw UDPipelineError.invalidLevel(level)
         }
@@ -540,7 +507,7 @@ final class UDPipeline {
         }
 
         return (0..<n).map { i in
-            UDToken(
+            Token(
                 tokid: i + 1, form: sentence.tokens[i], lemma: lemmas[i],
                 upos: uposTags[i], xpos: "_", feats: featsTags[i],
                 head: heads[i], deprel: deprels[i], col8: "_", col9: "_"
@@ -550,8 +517,8 @@ final class UDPipeline {
 
     /// Formats tokens of one tagged sentence using the same `mode`
     /// rules as `run(text:level:mode:)`for `runOnSentence`
-    func formatSentence(_ tokens: [UDToken], mode: String) throws -> [String] {
-        var lines: [OutputLine] = tokens.map { .row($0) }
+    func formatSentence(_ tokens: [Token], mode: String) throws -> [String] {
+        var lines: [ConllLineContent] = tokens.map { .row($0) }
         lines.append(.blank)
 
         switch mode {
@@ -593,7 +560,7 @@ final class UDPipeline {
         }
 
         let sentences = try tokenize(text)
-        var allLines: [OutputLine] = []
+        var allLines: [ConllLineContent] = []
 
         for sentence in sentences {
             let tokens = try runOnSentence(sentence, level: level)
@@ -616,9 +583,7 @@ final class UDPipeline {
     }
 
     // MARK: - Output formatting
-
-
-    private func formatRaw(_ lines: [OutputLine]) -> [String] {
+    private func formatRaw(_ lines: [ConllLineContent]) -> [String] {
         lines.map { line in
             switch line {
             case .row(let tok): return tok.conllRaw
@@ -628,7 +593,7 @@ final class UDPipeline {
     }
 
     /// Use string count to column-align rows of each sent  independently
-    private func formatTidy(_ lines: [OutputLine]) -> [String] {
+    private func formatTidy(_ lines: [ConllLineContent]) -> [String] {
         var result: [String] = []
         var currentRows: [[String]] = []
 
@@ -687,19 +652,42 @@ final class UDPipeline {
         }
         return result
     }
+    func makeIntArray(_ values: [Int32], shape: [NSNumber]) throws -> MLMultiArray {
+        let arr = try MLMultiArray(shape: shape, dataType: .int32)
+        for (i, v) in values.enumerated() {
+            arr[i] = NSNumber(value: v)
+        }
+        return arr
+    }
+
+    func makeCharIdArray(_ charIdLists: [[Int32]], maxWordLen: Int) throws -> MLMultiArray {
+        let t = charIdLists.count
+        let arr = try MLMultiArray(
+            shape: [1, NSNumber(value: t), NSNumber(value: maxWordLen)], dataType: .int32
+        )
+        for i in 0..<arr.count { arr[i] = 0 } // pad_id is always 0 by Vocab convention
+        for (wi, ids) in charIdLists.enumerated() {
+            for (ci, cid) in ids.enumerated() {
+                arr[[0, wi, ci] as [NSNumber]] = NSNumber(value: cid)
+            }
+        }
+        return arr
+    }
     
-    /// One line of pipeline output, before formatting so  `formatTidy` can measure col widths
-//    private enum OutputLine {
-//        case row(UDToken)
-//        case blank
-//    }
+    func parserArgmax(_ arr: MLMultiArray, prefix: [Int], dimSize: Int) -> Int {
+        var best = 0
+        var bestVal = -Double.infinity
+        for c in 0..<dimSize {
+            let idx = (prefix + [c]).map { NSNumber(value: $0) }
+            let v = arr[idx].doubleValue
+            if v > bestVal {
+                bestVal = v
+                best = c
+            }
+        }
+        return best
+    }
+
+
 
 }
-
-
-enum OutputLine {
-    case row(UDToken)
-    case blank
-}
-
-

@@ -5,12 +5,12 @@
 //  Created by Adam on 08/09/2026.
 //
 //TODO: A-B choices for tokenisation method, source type, sourcelang
-//TODO: output conll : change to std, grid ; std needs to have \t
-//TODO: parse from file rather than bundle
-//TODO: export, share parsed output
+
+//TODO: view output files
 
 import SwiftUI
 internal import UniformTypeIdentifiers
+
 
 
 struct PipelineSettingsView: View {
@@ -19,16 +19,17 @@ struct PipelineSettingsView: View {
     
     @State var fileName: String = "test1"
     @State var targetFolderURL: URL? = nil
-    @State var selectedOutputPlaform: OutputTarget = .ViewOnly
     @State var selectedLanguage: Language = .FR
     @State var selectedTreebank: Language.Treebank = .frTB1
     @State var maxPipelineStep: PipelineStep = .step4
     @State var inputFileType: InputFileType = .conll
-    @State var selectedTokenisationMethod: TokenisationMethod = .conll
-    @State var selectedXMLoutputType: XMLOutputType = .xml
     @State var selectedExportFormat: ExportFormat = .xml
-    @State var xmlAuthorName: String = "author"
-    @State var xmlTitle: String = "title"
+    @State var xmlAuthorName: String = "XML Author"
+    @State var xmlTitle: String = "XML Title"
+
+    
+    // not actually expoloited yet
+    @State var selectedTokenisationMethod: TokenisationMethod = .conll
 
     //progressbars::
     @State private var progressBarStyle: ProgressBarStyle = .apple
@@ -50,7 +51,7 @@ struct PipelineSettingsView: View {
     @State private var errorMessage: String?
     @State private var outputLines: [String] = []
     @State private var conllRawLines: [String] = []
-    @State private var conllSentsOut: [ConllSent] = []
+    @State private var sentsOut: [Sentence] = []
     @State private var saveReport: SaveReport?
     
     @State private var isSelectingFolder = false
@@ -60,6 +61,35 @@ struct PipelineSettingsView: View {
 
     var unreadCount: Int {
         topLevelOutputList.reduce(0) { $1.unread ? $0 + 1 : $0 }
+    }
+    
+    var safeHeaderAttribs: XmlHeaderAttribs {
+        
+        let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
+        let xmlSafeXMLTitle = xmlTitle.xmlEscaped != "" ? xmlTitle.xmlEscaped : "title"
+        let xmlSafeLang = selectedLanguage.displayName.lowercased()
+        let xmlsafeTreebank = selectedTreebank.short.xmlEscaped
+        
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = "y-MM-dd HH:mm"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        let dateString = formatter.string(from:Date())
+        let xmlsafeDate = dateString.xmlEscaped
+
+        let xmlsafeSourceFile = fileContainerModel.localSandboxFileURL?.path().xmlEscaped ?? "unk"
+        let runID = UUID().uuidString
+
+        let outputStruct = XmlHeaderAttribs(
+            xmlTitle: xmlSafeXMLTitle,
+            xmlAuthorName: xmlSafeXMLAuthor,
+            lang: xmlSafeLang,
+            treebank: xmlsafeTreebank,
+            taggingDate: xmlsafeDate,
+            sourceFile: xmlsafeSourceFile,
+            runID: runID,
+        )
+        return outputStruct
     }
     var body: some View {
         
@@ -95,7 +125,7 @@ struct PipelineSettingsView: View {
                         ProcessorStepConfigViewSection(maxActiveStep: $maxPipelineStep, inputFileType: $inputFileType, selectedTokenisationMethod: $selectedTokenisationMethod)
                     }
                 }//end section
-                ExportConfigViewSection(fileName: $fileName, targetFolderURL: $targetFolderURL, selectedOutputPlaform: $selectedOutputPlaform, selectedExportFormat: $selectedExportFormat)
+                ExportConfigViewSection(fileName: $fileName, targetFolderURL: $targetFolderURL,  selectedExportFormat: $selectedExportFormat, xmlAuthorName: $xmlAuthorName, xmlTitle: $xmlTitle)
                 if runExplicit {
                     HStack{
                         Button {
@@ -176,7 +206,9 @@ struct PipelineSettingsView: View {
             }.toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        RunOutputView(runs: $topLevelOutputList, xmlTitle: $xmlTitle, selectedLanguage: $selectedLanguage, xmlAuthor: $xmlAuthorName, targetFolderURL: $targetFolderURL,  fileName: $fileName)
+                        RunOutputView(runs: $topLevelOutputList, xmlTitle: $xmlTitle, selectedLanguage: $selectedLanguage, xmlAuthor: $xmlAuthorName, targetFolderURL: $targetFolderURL,  fileName: $fileName,
+                                      selectedTreebank : $selectedTreebank,
+                                      safeHeaderAttribs: safeHeaderAttribs)
                     } label: {
                         Image(systemName: "book.pages.fill")
                             .overlay(alignment: .topTrailing) {
@@ -193,7 +225,6 @@ struct PipelineSettingsView: View {
                 }
             }
         }
-        //
     }
 
     
@@ -231,7 +262,7 @@ struct PipelineSettingsView: View {
         
         outputLines = []
         conllRawLines = []
-        conllSentsOut = []
+        sentsOut = []
 
         processedCount = 0
         totalCount = 0
@@ -242,33 +273,19 @@ struct PipelineSettingsView: View {
             do {
                 
                 let pipeline = try UDPipeline(languageCode: selectedLanguage.rawValue, treebank: selectedTreebank.short)
-                var allSentences: [TokenisedSentence] = []
+                var allSentences: [HashableSentence] = []
 
                 
                 //MARK: TOKENISATION and Sentencisation
                 switch tokType {
                 case .conll:
-                    let testlist1: [[String]] = makeConllLinesFromURL(inputURL: inputFile)
-                    let intermedSents: [ConllSent] = makeConllSent(conllLines: testlist1)
-//                    var mySents: [TokenisedSentence] = []
+                    // get hashable token list from file
+                    allSentences = conllFileToHashableSentForPipeline(inputURL: inputFile)
                     
-                    for sent in intermedSents{
-                        let TokSentVers = sent.sentAsTokenisedSentence
-                        allSentences.append(TokSentVers)
-                    }
                     guard  allSentences.count > 1 else { fatalError("No sentences in conll, baling out")}
                     print("Mysents count = \(allSentences.count)")
-//
-                    //print(allSentences[0])
 
                     
-                    // this works, but builds toksent from source
-//                    intermedTokSents  = getSentsForPipelineFromPretokConll(inputFile: inputFile)
-//                    for sentence in intermedTokSents{
-//                        allSentences.append(sentence)
-//                    }
-//                    print(allSentences[0])
-//                    print("allSentences count = \(allSentences.count)")
                 case .retokenise:
                     // Step 1: tokenize everything with model
                     for sentence in testSentences {
@@ -285,7 +302,7 @@ struct PipelineSettingsView: View {
 
                 var lines: [String] = []
                 var rawLines: [String] = []
-                var outSents: [ConllSent] = []
+                var outSents: [Sentence] = []
                 // MARK: Step 2: process sentences
                 // process one detected sentence at a time
 
@@ -296,14 +313,14 @@ struct PipelineSettingsView: View {
 #endif
 
                 for sentence in allSentences {
-                    let tokens = try pipeline.runOnSentence(sentence, level: maxPipelineStep.rawValue)
+                    let parsedTokens = try pipeline.runOnSentence(sentence, level: maxPipelineStep.rawValue)
                     
-                    let mySent: ConllSent = ConllSent(
+                    let mySent: Sentence = Sentence(
                         sentID: sentence.id,
-                        conllData: tokens)
+                        conllData: parsedTokens)
                     outSents.append(mySent)
-                    lines.append(contentsOf: try pipeline.formatSentence(tokens, mode: "tidy"))
-                    rawLines.append(contentsOf: try pipeline.formatSentence(tokens, mode: "raw"))
+//                    lines.append(contentsOf: try pipeline.formatSentence(parsedTokens, mode: "tidy"))
+//                    rawLines.append(contentsOf: try pipeline.formatSentence(parsedTokens, mode: "raw"))
 
                     await MainActor.run {
                         processedCount += 1
@@ -313,7 +330,7 @@ struct PipelineSettingsView: View {
                 if runExplicit{
                 print("Printing conllRaw")
                     for sentence in outSents {
-                        print(sentence.conllSentRaw)
+                        print(sentence.conll)
                     }
                     let seqOutput = outSents.generateExportText()
                     print(seqOutput)
@@ -330,29 +347,31 @@ struct PipelineSettingsView: View {
                     print("Main actor done, running function 277")
                 }
                 // run serialise,
-                let exportContent = makeExportContent(sentences: outSents, exportFormat: selectedExportFormat, lang: selectedLanguage, xmlTitle: xmlTitle, xmlAuthorName: xmlAuthorName)
+//                safeHeaderAttribs = makeSafeXmlHeaderAttribs(xmlTitle: xmlTitle, xmlAuthorName: xmlAuthorName, selectedLanguage: selectedLanguage, selectedTreebank: selectedTreebank, sourceFile: inputFile!)
 
-                saveReport = saveFileToChosenLocation(exportContent: exportContent, saveName: fileName, targetFolderURL: targetFolderURL, exportFormat: selectedExportFormat)
+                let exportContent = makeExportContent(sentences: outSents, exportFormat: selectedExportFormat, safeHeaderAttribs: safeHeaderAttribs)
+
+                saveReport = saveFileToChosenLocation(exportContent: exportContent, saveName: fileName, targetFolderURL: targetFolderURL, exportFormat: selectedExportFormat, treebank: selectedTreebank)
+                
                 
                 let xmldumpstring = sentListToXML(
                     sentences: outSents,
-                    selectedLanguage: selectedLanguage,
-                    selectedXMLoutputType: selectedXMLoutputType,
-                    xmlTitle: xmlTitle,
-                    xmlAuthorName: xmlAuthorName)
+                    selectedExportFormat: selectedExportFormat,
+                    safeHeaderAttribs:  safeHeaderAttribs
+                    )
                     
                     
                 print(xmldumpstring)
                 await MainActor.run {
-                    outputLines.append(contentsOf: lines)
-                    conllRawLines.append(contentsOf: rawLines)
-                    conllSentsOut.append(contentsOf: outSents)
+//                    outputLines.append(contentsOf: lines)
+//                    conllRawLines.append(contentsOf: rawLines)
+                    sentsOut.append(contentsOf: outSents)
                     taggingInProgress.wrappedValue = false
                     
                     guard let saveReport else { return }
                     if let savedURL = saveReport.savedURL{
                         
-                        let currentRunOutput = RunOutput(sents: conllSentsOut, sourceFileName: inputFile! , outputFileName: savedURL, lang: selectedLanguage.rawValue, treebank: selectedTreebank.short, exportFormat: selectedExportFormat)
+                        let currentRunOutput = RunOutput(sents: sentsOut, sourceFileName: inputFile! , outputFileName: savedURL, lang: selectedLanguage.rawValue, treebank: selectedTreebank.short, exportFormat: selectedExportFormat)
                         topLevelOutputList.append(currentRunOutput)
                     }
                     print("topLevelOutputList length == \(topLevelOutputList.count)")
@@ -371,171 +390,10 @@ struct PipelineSettingsView: View {
     
 }
 
-struct SaveReport {
-    let savedURL: URL?
-    let message: String
-}
-
-func saveFileToChosenLocation(exportContent: String, saveName: String, targetFolderURL: URL?, exportFormat: ExportFormat, runExplicit: Bool = false) -> SaveReport {
-    var savedURL: URL
-    var exportStatusMessage: String
-    guard let folderURL = targetFolderURL else {
-        if runExplicit {
-            print("Guard 292 fail")
-        }
-        return SaveReport(savedURL: nil, message: "Guard failure")
-    }
-    if runExplicit {
-        print("Guard 292 passed")
-    }
-    do {
-        savedURL = try ExporterService.exportDataToFile(
-            exportContent: exportContent,
-            customName: "\(saveName)_\(exportFormat.rawValue)",
-            targetFolderURL: folderURL,
-            exportFormat: exportFormat
-        )
-        exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
-        if runExplicit { print(exportStatusMessage) }
-        return SaveReport(savedURL: savedURL, message: exportStatusMessage)
-    } catch {
-        exportStatusMessage = "Export failed: \(error.localizedDescription)"
-        if runExplicit { print(exportStatusMessage) }
-        return SaveReport(savedURL: nil, message: exportStatusMessage)
-
-    }
-}
-
-func makeExportContent(sentences: [ConllSent], exportFormat: ExportFormat, lang: Language, xmlTitle: String?, xmlAuthorName: String?) -> String{
-    var returnString: String = ""
-    switch exportFormat {
-    case .conll, .conllTxt:
-        returnString = sentences.generateExportText()
-    case .conllTidy:
-        returnString = sentences.generateExportTextTidy()
-    case .xml:
-        returnString = sentListToXML(
-            sentences: sentences,
-            selectedLanguage: lang,
-            selectedXMLoutputType: .xml,
-            xmlTitle: xmlTitle ?? "no_title",
-            xmlAuthorName: xmlAuthorName ?? "no_name")
-    case .xmlConll:
-        //make xml conll
-        returnString = sentListToXML(
-            sentences: sentences,
-            selectedLanguage: lang,
-            selectedXMLoutputType: .xmlConll,
-            xmlTitle: xmlTitle ?? "no_title",
-            xmlAuthorName: xmlAuthorName ?? "no_name")
-    }
-    return returnString
-}
-
 #Preview {
     PipelineSettingsView()
 }
 
 
 
-extension PipelineSettingsView {
-    // 1. Array of missing configuration items
-    var missingRequirements: [String] {
-        var missing: [String] = []
-        
-        // Rule 1: Check input file exists in sandbox
-        if fileContainerModel.localSandboxFileURL == nil {
-            missing.append("Input File")
-        }
-        // TODO: add rule for input type when adding option for non-conll import
 
-        
-        // Rule 2: Check custom output filename is typed
-        if fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            missing.append("Output Filename")
-        }
-        
-        // Rule 3: Check target folder (or destination setting)
-        if targetFolderURL == nil {
-            missing.append("Export Directory")
-        }
-        
-        return missing
-    }
-
-    // 2. Boolean check for the .disabled() modifier
-    var isPipelineReady: Bool {
-        return missingRequirements.isEmpty
-    }
-
-    // 3. User-friendly warning message
-    var missingRequirementsMessage: String {
-        guard !missingRequirements.isEmpty else { return "" }
-        
-        if missingRequirements.count == 1 {
-            return "Please set: \(missingRequirements[0])"
-        } else {
-            // Lists items cleanly: "Missing required settings: Input File, Output Filename, Export Directory"
-            return "Missing required settings: \(missingRequirements.joined(separator: ", "))"
-        }
-    }
-}
-
-func sentListToXML(
-    sentences: [ConllSent],
-    selectedLanguage: Language,
-    selectedXMLoutputType: XMLOutputType,
-    xmlTitle: String,
-    xmlAuthorName: String,
-
-) -> String {
-    let xmlSafeLang = selectedLanguage.displayName.lowercased()
-    let xmlSafeXMLTitle = xmlTitle.xmlEscaped != "" ? xmlTitle.xmlEscaped : "title"
-    let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
-    
-    
-    let xmlHeader = """
-        <?xml version="1.0" encoding="utf-8"?>
-          <TEI.2>
-          <teiHeader>
-            <fileDesc>
-            <titleStmt>
-            <title>\(xmlSafeXMLTitle)</title>
-            <author>\(xmlSafeXMLAuthor))</author>
-            </titleStmt>
-            <publicationStmt>
-            <publisher />
-            <date />
-            <pubDate />
-            </publicationStmt>
-                <sourceDesc details="">
-                <p />
-                </sourceDesc>
-            </fileDesc>
-            <profileDesc>
-                <langUsage>
-                <language ident="\(xmlSafeLang)" />
-                </langUsage>
-            <textDesc thema=\"\" type="review" sub_genre=\"\" />
-            </profileDesc>
-        </teiHeader>
-        <text>
-        <body>
-        <p>        
-        """
-    let xmlFooter = """
-        </p>
-        </body>
-        </text>
-        </TEI.2>
-        """
-    var outputStore: [String] = []
-    outputStore.append(xmlHeader)
-    for sentence in sentences {
-        outputStore.append(sentence.makeXMLsent(xmlOutputType: selectedXMLoutputType))
-    }
-    outputStore.append(xmlFooter)
-    
-    return outputStore.joined(separator: "\n")
-    
-}

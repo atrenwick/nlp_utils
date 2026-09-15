@@ -11,17 +11,6 @@
 //
 import SwiftUI
 
-//TODO: A-B choices for tokenisation method, source type, sourcelang
-//TODO: output conll : change to std, grid ; std needs to have \t
-//TODO: parse from file rather than bundle
-//TODO: export, share parsed output
-
-enum TokenisationMethod: String, CaseIterable, Identifiable {
-    var id: Self {self}
-    case conll
-//    case naive
-    case retokenise
-}
 
 struct UDPipelineTestView: View {
     //2 hardcoded sents for testing
@@ -33,7 +22,7 @@ struct UDPipelineTestView: View {
     @State private var newSentence: String = ""
 
     //MARK: settings changed via UI
-    @State private var selectedLanguage: LanguageCode = .FR
+    @State private var selectedLanguage: Language = .FR
     @State private var currentTokenisationType: TokenisationMethod = .conll
     @State private var selectedTreebank: Language.Treebank = .enTB1
 
@@ -52,11 +41,11 @@ struct UDPipelineTestView: View {
     //MARK: vars for intermediate states and outputs
     @State private var outputLines: [String] = []
     @State private var conllRawLines: [String] = []
-    @State private var conllSentsOut: [ConllSent] = []
+    @State private var sentsOut: [Sentence] = []
     
     //TODO: what's the diff between these first 2
-    @State private var pretokSentsOut: [TokenisedSentence] = []// input for PretokenisedSentViewSect
-    @State private var intermedTokSents: [TokenisedSentence] = []
+    @State private var pretokSentsOut: [HashableSentence] = []// input for PretokenisedSentViewSect
+    @State private var intermedTokSents: [HashableSentence] = []
 
     private var visibleSents: [String] {
         Array(testSentences.prefix(5))
@@ -138,9 +127,10 @@ struct UDPipelineTestView: View {
             }
 
             //MARK: pickers for language, tokenisation method, view
+            
             HStack{
                 Picker("Language", selection: $selectedLanguage) {
-                    ForEach(LanguageCode.allCases) { mode in
+                    ForEach(Language.allCases) { mode in
                         Text(mode.rawValue).tag(mode)
                     }
                 }
@@ -186,7 +176,7 @@ struct UDPipelineTestView: View {
         errorMessage = nil
         outputLines = []
         conllRawLines = []
-        conllSentsOut = []
+        sentsOut = []
 
         processedCount = 0
         totalCount = 0
@@ -198,18 +188,18 @@ struct UDPipelineTestView: View {
             do {
                 
                 let pipeline = try UDPipeline(languageCode: selectedLanguage.rawValue, treebank: selectedTreebank.short)
-                var allSentences: [TokenisedSentence] = []
+                var allSentences: [HashableSentence] = []
 
                 
                 //MARK: TOKENISATION and Sentencisation
                 switch tokType {
                 case .conll:
                     let testlist1: [[String]] = makeConllLinesFromFile(inputFile: inputFile)
-                    let intermedSents: [ConllSent] = makeConllSent(conllLines: testlist1)
+                    let intermedSents: [Sentence] = conllLinesToSents(conllLines: testlist1)
 //                    var mySents: [TokenisedSentence] = []
                     
                     for sent in intermedSents{
-                        let TokSentVers = sent.sentAsTokenisedSentence
+                        let TokSentVers = sent.hashableSentence
                         allSentences.append(TokSentVers)
                     }
                     print("Mysents count = \(allSentences.count)")
@@ -240,7 +230,7 @@ struct UDPipelineTestView: View {
 
                 var lines: [String] = []
                 var rawLines: [String] = []
-                var outSents: [ConllSent] = []
+                var outSents: [Sentence] = []
                 // MARK: Step 2: process sentences
                 // process one detected sentence at a time
 // >>>>>>>>Limiter here
@@ -251,7 +241,7 @@ struct UDPipelineTestView: View {
                     //rawLines.append("# sent_id = \(sentence.id)\n") // add meta for print
                     let tokens = try pipeline.runOnSentence(sentence, level: 5)
                     
-                    let mySent: ConllSent = ConllSent(
+                    let mySent: Sentence = Sentence(
                         sentID: sentence.id,
                         conllData: tokens)
                     outSents.append(mySent)
@@ -271,7 +261,7 @@ struct UDPipelineTestView: View {
                 await MainActor.run {
                     outputLines.append(contentsOf: lines)
                     conllRawLines.append(contentsOf: rawLines)
-                    conllSentsOut.append(contentsOf: outSents)
+                    sentsOut.append(contentsOf: outSents)
                     isRunning.wrappedValue = false
                 }
             } catch {

@@ -23,7 +23,7 @@ struct LemmaVocabs: Codable {
 
 
 //MARK: lemmatizer runner :
-//TODO: change hardcoded paths >>>> forResource <<<< when EN model trained
+
 final class LemmatizerRunner {
 
     private let encoder: MLModel
@@ -40,8 +40,8 @@ final class LemmatizerRunner {
 
     private let lemmaDict: [String: String]
 
-    private let maxLemmaLen = 32    // Must match MAX_SRC_LEN in convert_lemmatizer.py :: 32 for FR, 40 for EN
-    private let maxSrcLen = 32 // :: 32 for FR, 40 for EN
+    private let maxLemmaLen = 40    // Must match MAX_SRC_LEN in convert_lemmatizer.py :: 32 for FR, 40 for EN
+    private let maxSrcLen = 40 // :: 32 for FR, 40 for EN
 
     init(languageCode: String, treebank: String) throws {
         guard let encoderURL = Bundle.main.url(forResource: "\(languageCode)_neuralLemmatizerEncoder_\(treebank)", withExtension: "mlmodelc")
@@ -172,7 +172,7 @@ final class LemmatizerRunner {
                 throw LemmatizerError.modelLoadFailed("decoder step output missing expected fields see func neuralLemmatize")
             }
 
-            let nextId = argmax(logits)
+            let nextId = lemmatizerArgmax(logits)
             if nextId == eosId { break }
             if nextId != padId && nextId != bosId && nextId != unkId {
                 outputChars.append(charItos.indices.contains(nextId) ? charItos[nextId] : "")
@@ -191,7 +191,7 @@ final class LemmatizerRunner {
 //        return lemma.isEmpty ? form : "\(lemma)zz" //add zz to lemmas to test provenance
     }
 
-    private func argmax(_ array: MLMultiArray) -> Int {
+    private func lemmatizerArgmax(_ array: MLMultiArray) -> Int {
         let count = array.count
         var bestIdx = 0
         var bestVal = -Float.greatestFiniteMagnitude
