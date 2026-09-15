@@ -8,8 +8,6 @@
 import Foundation
 import libxml2
 
-
-// this extension does the same as the one down the bottom, but uses generics :: T replaces Type of thing, and we specify conformity needed, but note that in the view where the func is called, swift will protest that generic param T could not be inferred, IF let declaration didn't specify type
 //
 extension Bundle {
     
@@ -52,7 +50,6 @@ extension Bundle {
         do {
             let localData = Data(data)
             return try decoder.decode(T.self, from: localData)
-//            return try decoder.decode(T.self, from: data )
             
         } catch DecodingError.keyNotFound(let key, let context){
             fatalError("Failed to decode \(file) from bundle due to missing key : \(key.stringValue)) - \(context.debugDescription)")
@@ -74,7 +71,6 @@ extension Bundle {
                 printJSONError(error)
             }
             
-            /////
         } catch DecodingError.valueNotFound(let type, let context){
             fatalError("Failed to decode file \(file) due to missing \(type )value : - \(context.debugDescription)")
             do {
@@ -108,17 +104,3 @@ extension Bundle {
 
 }
 
-func printJSONError(_ error: Error) {
-    let nsError = error as NSError
-
-    print("Domain:", nsError.domain)
-    print("Code:", nsError.code)
-
-    if let debug = nsError.userInfo["NSDebugDescription"] {
-        print("Debug:", debug)
-    }
-
-    if let path = nsError.userInfo["NSJSONSerializationErrorIndex"] {
-        print("Index:", path)
-    }
-}

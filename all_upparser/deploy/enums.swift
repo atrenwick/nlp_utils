@@ -7,7 +7,53 @@
 
 import Foundation
 
+
+enum ConllLineContent {
+    case row(Token)
+    case blank
+}
+
+
+enum ExportFormat: String, CaseIterable, Identifiable{
+    var id: Self {self}
+    case xml
+    case xmlConll
+    case conll
+    case conllTidy
+    case conllTxt
+    
+    var fileExtension: String{
+        switch self{
+        case .xml: "xml"
+        case .xmlConll : "xml"
+        case .conll: "conll"
+        case .conllTidy: "conll"
+        case .conllTxt: "txt"
+        }
+    }
+}
+
+
+enum InputFileType: String, Identifiable, CaseIterable {
+    case conll
+    case txt
+    case xml
+    
+    var id: Self { self }
+
+    var isTokenised: Bool {
+        switch self {
+        case .conll: return true
+        case .txt: return false
+        case .xml: return true
+        }
+    }
+}
+
+
+
 enum Language: String, CaseIterable, Identifiable {
+    // uppercase lang code as used in file paths
     case EN
     case FR
     case DE
@@ -40,6 +86,7 @@ enum Language: String, CaseIterable, Identifiable {
         var id: String { rawValue }
         
         var short: String {
+            // RHS of model files and Picker strings
             switch self {
             case .enTB1: return "ewt"
             case .enTB2: return "gum"
@@ -66,152 +113,13 @@ enum Language: String, CaseIterable, Identifiable {
     }
 }
 
-enum InputFileType: String, Identifiable, CaseIterable {
+
+enum TokenisationMethod: String, CaseIterable, Identifiable {
+    var id: Self {self}
     case conll
-    case txt
-    case xml
-    
-    var id: Self { self }
-
-    var isTokenised: Bool {
-        switch self {
-        case .conll: return true
-        case .txt: return false
-        case .xml: return true
-        }
-    }
-}
-
-
-// choose languages supported ::: LanguageCode enum
-enum OutputTarget: String, CaseIterable, Identifiable{
-    var id: Self {self}
-    case Export
-    case ViewOnly
+//    case naive
+    case retokenise
 }
 
 
 
-enum XMLOutputType:  String, CaseIterable, Identifiable {
-    var id: Self {self}
-    case xml
-    case xmlConll
-}
-
-
-enum ExportFormat: String, CaseIterable, Identifiable{
-    var id: Self {self}
-    case xml
-    case xmlConll
-    case conll
-    case conllTidy
-    case conllTxt
-    
-    var fileExtension: String{
-        switch self{
-        case .xml: "xml"
-        case .xmlConll : "xml"
-        case .conll: "conll"
-        case .conllTidy: "conll"
-        case .conllTxt: "txt"
-        }
-    }
-}
-
-struct ExporterService {
-    //TODO: make this take an arg for export format
-    /// Writes processing output string directly to a user-selected folder URL
-    static func exportDataToFile(
-        exportContent: String,
-        customName: String,
-        targetFolderURL: URL,
-        exportFormat: ExportFormat
-        
-    ) throws -> URL {
-        let fileExtension = exportFormat.fileExtension
-      
-        
-        
-        print("step1 success")
-        // 2. Format sanitized filename
-        var safeName = customName.sanitizedFileName
-        if !safeName.hasSuffix(".\(fileExtension)") {
-                    safeName += ".\(fileExtension)"
-                }
-        print("step2 success")
-        // 3. Construct destination path inside the chosen directory
-        let destinationFileURL = targetFolderURL.appendingPathComponent(safeName)
-        print("step3 success")
-        // 4. Elevate security permissions for external directory write
-        let gotAccess = targetFolderURL.startAccessingSecurityScopedResource()
-        defer {
-            if gotAccess {
-                targetFolderURL.stopAccessingSecurityScopedResource()
-                print("step4 success")
-            }
-        }
-        
-        // 5. Write
-        try exportContent.write(to: destinationFileURL, atomically: true, encoding: .utf8)
-        print("step5 success URL == \(destinationFileURL.path())")
-        
-        return destinationFileURL
-    }
-}
-
-
-
-extension String {
-    var sanitizedFileName: String {
-        let invalidCharacters = CharacterSet(charactersIn: "/\\?%*|\":<>")
-            .union(.newlines)
-            .union(.controlCharacters)
-        let cleaned = self.components(separatedBy: invalidCharacters).joined(separator: "_")
-        let trimmed = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Export_Output" : trimmed
-    }
-}
-
-extension Sequence where Element == ConllSent {
-    /// Combines calculated properties across all structures
-    func generateExportText() -> String {
-        return self.map { $0.conllSentRaw }.joined(separator: "\n")
-    }
-    func generateExportTextTidy() -> String {
-        return self.map { $0.conllSentTidy }.joined(separator: "\n")
-    }
-}
-
-extension Sequence where Element == UDToken {
-    /// Combines calculated properties across all structures
-    func makeSentenceXML() -> String {
-        return self.map { $0.asXML }.joined(separator: "\n")
-    }
-}
-
-extension Sequence where Element == UDToken {
-    /// Combines calculated properties across all structures
-    func makeSentenceXMLconll() -> String {
-        return self.map { $0.conllRaw }.joined(separator: "\n")
-    }
-}
-
-struct RunOutput: Identifiable {
-    var id = UUID()
-    let sents: [ConllSent]
-    let sourceFileName: URL
-    let lang: String
-    let treebank : String
-    
-//    var tokCount: Int {
-//        var total: Int = 0
-//        for sent in sents{
-//            total += sent.conllData.count
-//        }
-//        return total
-//    }
-    var tokCount: Int {
-        // reduce collection to single element : start at 0, add iteratively over elements
-        sents.reduce(0) { $0 + $1.conllData.count }
-    }
-}
