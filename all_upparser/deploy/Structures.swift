@@ -8,18 +8,10 @@
 import Foundation
 
 // MARK: - Tokenizer output
-struct TokenisedSentence: Hashable {
-    let id: String
-    let tokens: [String]
-}
 
-enum LanguageCode: String, CaseIterable, Identifiable {
-    var id: Self {self}
-    case FR
-    case EN
-}
 
-struct UDToken : Identifiable {
+
+struct Token : Identifiable {
     var id = UUID()
     let tokid: Int
     let form: String
@@ -47,81 +39,63 @@ struct UDToken : Identifiable {
     }
 }
 
-struct ConllSent : Identifiable {
+struct Sentence : Identifiable {
     var id = UUID()
     let sentID: String
-    let conllData: [UDToken]
-    
-//    var sentIdaAsMeta: String{
-//        var addLBs: Bool = false
-//        var lbreaks: String = ""
-//        var addConllMetaHeader: Bool = false
-//        var cHeader: String = ""
-//        var currentSentID: String = sentID
-//        if currentSentID.hasPrefix("\n\n") != true{
-//            addLBs = true
-//            lbreaks = "\n\n"
-//        }
-//        if currentSentID.contains("# sent_id = ") != true {
-//            addConllMetaHeader = true
-//            cHeader = "# sent_id = "
-//        }
-//        //if starts with s lb, no add
-//        currentSentID = "\(lbreaks)\(cHeader)\(sentID)"
-//        currentSentID = currentSentID.replacing(#/\n{3,}/#, with: "\n\n")
-//        return currentSentID
-//    }
-    var sentIdAsMeta: String {
-        // 1. Trim ONLY leading and trailing newlines (\n, \r), preserving spaces in "foo bar"
+    let conllData: [Token]
+
+    var runSentIdRegexes: String{
         var content = sentID.trimmingCharacters(in: .newlines)
-        // 2. Remove existing header variants if already present
+        // 2. Remove existing header if any
         let pattern = #"^\s*#\s*sent_id\s*=\s*"#
             if let range = content.range(of: pattern, options: .regularExpression) {
                 content.removeSubrange(range)
             }
         // 3. Re-trim ONLY newlines from the payload before applying header
         content = content.trimmingCharacters(in: .newlines)
-        // 4. Prepend exact required header
-        return "\n\n# sent_id = \(content)"
+        return content
+        
     }
     
-    //TODO: add var to send to XML
-    //get list of w chunks for each token, put open efore,
-    func makeXMLsent(xmlOutputType: XMLOutputType) -> String {
-        
+    var sentIdAsMeta: String {
+        // 1. Trim  leading and trailing  (\n, \r) with .newlines
+        // 4. Prepend exact required header
+        return "\n\n# sent_id = \(runSentIdRegexes)"
+    }
+    
+    func makeXMLsent(exportFormat: ExportFormat) -> String {
         var xmlTokenElements: [String] = []
         let sentHeader = """
-        <s id=\"\(sentID)\">
+        <s id=\"\(runSentIdRegexes)\">
         """
         let sentFooter = """
             </s>
             """
-
+        
         xmlTokenElements.append(sentHeader)
-        switch xmlOutputType{
+        switch exportFormat{
         case .xml:
             xmlTokenElements.append(conllData.makeSentenceXML())
         case .xmlConll:
             xmlTokenElements.append(conllData.makeSentenceXMLconll())
+        default:
+            return ""
         }
-        
         xmlTokenElements.append(sentFooter)
-        
         return xmlTokenElements.joined(separator: "\n")
         
     }
 
-    var conllSentRaw: String {
-        // get raw conll for printing
+    var conll: String {
         var internalLineList: [String] = []
         internalLineList.append(sentIdAsMeta)
-        for udToken in conllData{
-            internalLineList.append(udToken.conllRaw)
+        for token in conllData{
+            internalLineList.append(token.conllRaw)
         }
         return internalLineList.joined(separator: "\n")
     }
     
-    var conllSentTidy: String {
+    var conllTidy: String {
         var internalLineList: [String] = []
         for item in formatTidy(){
             internalLineList.append(item)
@@ -129,18 +103,18 @@ struct ConllSent : Identifiable {
         return internalLineList.joined(separator: "\n")
     }
 
-    var sentAsTokenisedSentence: TokenisedSentence{
+    var hashableSentence: HashableSentence{
         //convert to TokenisedSentence for parsing
         var internalTokList: [String] = []
         for token in conllData{
             internalTokList.append(token.form)
         }
-        return TokenisedSentence(id: sentID, tokens: internalTokList)
+        return HashableSentence(id: sentID, tokens: internalTokList)
     }
     
     func formatRaw() -> [String]{
         
-        var lines: [OutputLine] = conllData.map { .row($0) }
+        var lines: [ConllLineContent] = conllData.map { .row($0) }
         lines.append(.blank)
         var result = lines.map { line in
             switch line {
@@ -157,7 +131,7 @@ struct ConllSent : Identifiable {
     /// Use string count to column-align rows of each sent  independently
     func formatTidy() -> [String] {
         //get lines, add blank for end
-        var lines: [OutputLine] = conllData.map { .row($0) }
+        var lines: [ConllLineContent] = conllData.map { .row($0) }
         var result: [String] = []
         result.append(sentIdAsMeta)
         var currentRows: [[String]] = []
@@ -199,15 +173,20 @@ struct ConllSent : Identifiable {
 }
 
 
-struct CoNLLDoc {
-    //this if output date re calculated properties, methods
+struct HashableSentence: Hashable {
+    // sentence as id + list of strings as input for parser
+    let id: String
+    let tokens: [String]
+}
+
+struct Document {
     var id = UUID()
-    let sentences:[ConllSent]
+    let sentences:[Sentence]
     
     var docAsRaw: String{
         var internalList: [String] = []
         for sentence in sentences {
-            internalList.append(sentence.conllSentRaw)
+            internalList.append(sentence.conll)
             internalList.append("\n")
         }
         
@@ -215,48 +194,76 @@ struct CoNLLDoc {
     }
 }
 
-func printFromConllSents(outsents: [ConllSent]) throws -> URL{
-    
-    let mySents: [ConllSent] = outsents
-    let fileName = "string_dump_\(Int(Date().timeIntervalSince1970 * 1_000_000_000))_special.conllu"
-    let newUrl: URL = URL(fileURLWithPath: "/Volumes/Kappa/Xcode/parses/\(fileName)")
-    
-    var myLines: [String] = []
-    var atStart: Bool = true
-    for sent in mySents {
-        if atStart {
-            atStart = false
-            let pattern =  #"^\n{2}"#
-            var firstSent = sent.conllSentRaw
-            print(firstSent.count)
-                if let range = firstSent.range(of: pattern, options: .regularExpression) {
-                    firstSent.removeSubrange(range)
-                }
-            myLines.append(firstSent)
-            print("Appended length = \(firstSent.count)")
-        } else {
-            myLines.append(sent.conllSentRaw)
-        }
-    }
-    for sent in mySents {
-        myLines.append(sent.conllSentTidy)
-    }
-    
-    let content = myLines.joined(separator: "")
-    try content.write(to: newUrl, atomically: true, encoding: .utf8)
-    print("Saved CoNLL dump to: \(newUrl.path)")
 
-    return newUrl
-        
+
+struct XmlHeaderAttribs{
+    let xmlTitle: String
+    let xmlAuthorName: String
+    let lang: String
+    let treebank: String
+    let taggingDate: String
+    let sourceFile: String
+    let runID: String
 }
-extension String {
-    var xmlEscaped: String {
-        var result = self
-        result = result.replacingOccurrences(of: "&", with: "&amp;")   // must be first
-        result = result.replacingOccurrences(of: "<", with: "&lt;")
-        result = result.replacingOccurrences(of: ">", with: "&gt;")
-        result = result.replacingOccurrences(of: "\"", with: "&quot;")
-        result = result.replacingOccurrences(of: "'", with: "&apos;")
-        return result
+
+
+struct RunOutput: Identifiable {
+    var id = UUID()
+    let sents: [Sentence]
+    let sourceFileName: URL
+    let outputFileName: URL
+    let lang: String
+    let treebank : String
+    let exportFormat: ExportFormat
+    var unread: Bool = true
+    
+    var tokCount: Int {
+        // reduce collection to single element : start at 0, add iteratively over elements
+        sents.reduce(0) { $0 + $1.conllData.count }
+    }
+}
+
+
+
+struct SaveReport {
+    let savedURL: URL?
+    let message: String
+}
+
+struct ExporterService {
+    /// Writes processing output string directly to a user-selected folder URL
+    static func exportDataToFile(
+        exportContent: String,
+        customName: String,
+        targetFolderURL: URL,
+        exportFormat: ExportFormat
+        
+    ) throws -> URL {
+        let fileExtension = exportFormat.fileExtension
+      
+        print("step1 success")
+        // 2. Format sanitized filename
+        var safeName = customName.sanitizedFileName
+        if !safeName.hasSuffix(".\(fileExtension)") {
+                    safeName += ".\(fileExtension)"
+                }
+        print("step2 success")
+        // 3. Construct destination path inside the chosen directory
+        let destinationFileURL = targetFolderURL.appendingPathComponent(safeName)
+        print("step3 success")
+        // 4. Elevate security permissions for external directory write
+        let gotAccess = targetFolderURL.startAccessingSecurityScopedResource()
+        defer {
+            if gotAccess {
+                targetFolderURL.stopAccessingSecurityScopedResource()
+                print("step4 success")
+            }
+        }
+        
+        // 5. Write
+        try exportContent.write(to: destinationFileURL, atomically: true, encoding: .utf8)
+        print("step5 success URL == \(destinationFileURL.path())")
+        
+        return destinationFileURL
     }
 }
