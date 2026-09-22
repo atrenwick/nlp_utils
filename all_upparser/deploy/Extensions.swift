@@ -60,11 +60,18 @@ extension PipelineSettingsView {
         var missing: [String] = []
         
         // Rule 1: Check input file exists in sandbox
-        if fileContainerModel.localSandboxFileURL == nil {
+        if fileContainerModel.localSandboxFileURL == nil && inputFileType != .manual{
             missing.append("Input File")
         }
         // TODO: add rule for input type when adding option for non-conll import
-
+        let ext = fileContainerModel.localSandboxFileURL?.pathExtension ?? "nil"
+        if  inputFileType.allowedReadExt.contains(ext) == false  && inputFileType != .manual {
+            missing.append("extension-InputType Mismatch")
+        }
+        
+        if inputFileType == .manual && builtSents.count == 0 {
+            missing.append("No built sents found")
+        }
         
         // Rule 2: Check custom output filename is typed
         if fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

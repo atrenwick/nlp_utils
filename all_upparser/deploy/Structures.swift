@@ -31,6 +31,9 @@ struct Token : Identifiable {
     var conllRaw: String{
         [String(tokid), form, lemma, upos, xpos, feats, head, deprel, "_","_"].joined(separator: "\t") //+ "\n"
     }
+    var conllRawMultitag: String{
+        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8,col9].joined(separator: "\t") //+ "\n"
+    } // this includes NL parser outputs for col8,9, but the funct to make the ExportString doesn't call this prop.
     
     var asXML: String{
                 """
@@ -210,7 +213,7 @@ struct XmlHeaderAttribs{
 struct RunOutput: Identifiable {
     var id = UUID()
     let sents: [Sentence]
-    let sourceFileName: URL
+    let sourceFileName: String
     let outputFileName: URL
     let lang: String
     let treebank : String
@@ -266,4 +269,17 @@ struct ExporterService {
         
         return destinationFileURL
     }
+}
+/* dealing with XMLconll docs as input */
+struct XMLConllElement {
+    let id: String  // send_id extracted with xmlparsing
+    let blob: String // content of s.text == conll lines with sent id line added in by parser
+}
+
+//autoselect input type extension
+
+struct TestToken: Identifiable, Hashable {
+    let id: Int
+    var form: String
+    
 }

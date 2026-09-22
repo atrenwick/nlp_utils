@@ -8,43 +8,61 @@
 import SwiftUI
 
 struct XMLSettingView: View {
-    @Binding var selectedXMLoutputType: XMLOutputType
+    @Binding var selectedExportFormat: ExportFormat
     @Binding var xmlAuthorName: String
     @Binding var xmlTitle: String
     @FocusState var isFocused
     var body: some View {
-        Form{
-            TextField("XML Author", text: $xmlAuthorName)
-                .textInputAutocapitalization(TextInputAutocapitalization.never)
-                .autocorrectionDisabled()
-            TextField("Title", text: $xmlTitle)
-                .textInputAutocapitalization(TextInputAutocapitalization.never)
-                .autocorrectionDisabled()
-                .focused($isFocused)
-                .submitLabel(.done)
-                .onSubmit {
-                    isFocused = false
-                }
-            HStack {
-                Text("Output type")
-                Spacer()
-                Picker("Output type", selection: $selectedXMLoutputType) {
-                    ForEach(XMLOutputType.allCases) { outputType in
-                        Text(outputType.rawValue) // Displays "EN", "FR"
+        switch selectedExportFormat {
+        case .xml, .xmlConll:
+        
+            Form{
+                TextField("XML Author", text: $xmlAuthorName)
+                    .textInputAutocapitalization(TextInputAutocapitalization.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: xmlAuthorName) { _, newValue in
+                        // Strip any forbidden characters immediately as typed or pasted
+                        let cleaned = xmlAuthorName.xmlEscaped
+                        if cleaned != newValue {
+                            xmlAuthorName = cleaned
+                        }
                     }
-                }                .pickerStyle(.segmented)
-            }
+                    .focused($isFocused)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        isFocused = false
+                    }
 
+                TextField("XML Title", text: $xmlTitle)
+                    .textInputAutocapitalization(TextInputAutocapitalization.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: xmlTitle) { _, newValue in
+                        // Strip any forbidden characters immediately as typed or pasted
+                        let cleaned = xmlTitle.xmlEscaped
+                        if cleaned != newValue {
+                            xmlTitle = cleaned
+                        }
+                    }
+                    .focused($isFocused)
+                    .submitLabel(.go)
+                    .onSubmit {
+                        isFocused = false
+                    }
+            }
+        
+        case .conll, .conllTidy, .conllTxt:
+            Text("XML settings not relevant")
         }
+
     }
 }
 
 #Preview {
-    @Previewable @State var selectedXMLoutputType: XMLOutputType = .xml
+    @Previewable @State var selectedExportFormat: ExportFormat = .xml
     @Previewable @State var xmlAuthorName: String = ""
     @Previewable @State var xmlTitle: String = ""
     XMLSettingView(
-        selectedXMLoutputType: $selectedXMLoutputType,
+        selectedExportFormat: $selectedExportFormat,
         xmlAuthorName: $xmlAuthorName,
         xmlTitle: $xmlTitle
     )

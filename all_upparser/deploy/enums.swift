@@ -35,21 +35,39 @@ enum ExportFormat: String, CaseIterable, Identifiable{
 
 
 enum InputFileType: String, Identifiable, CaseIterable {
+    var id: Self { self }
+    
     case conll
     case txt
     case xml
+    case xmlConll
+    case manual
     
-    var id: Self { self }
-
     var isTokenised: Bool {
         switch self {
-        case .conll: return true
         case .txt: return false
-        case .xml: return true
+        case .conll, .xml, .xmlConll, .manual: return true
+        
         }
     }
+    var fileExtension: String{
+        //extensionto use when writing
+        switch self{
+        case .conll: "conll"
+        case .txt: "txt"
+        case .xml, .xmlConll: "xml"
+        case .manual : "_"
+        }
+    }
+    var allowedReadExt: [String]{
+        switch self{
+        case .txt: return ["txt","TXT"]
+        case .conll: return ["conll", "conllu", "txt"]
+        case .xml, .xmlConll, .manual: return ["xml", "XML"]
+        }
+    }
+    
 }
-
 
 
 enum Language: String, CaseIterable, Identifiable {
@@ -69,6 +87,16 @@ enum Language: String, CaseIterable, Identifiable {
         case .DE: return "de"
         case .ANG: return "ang"
         }
+    }
+    
+    var defaultTB: Treebank {
+        switch self {
+        case .EN: return .enTB1
+        case .ANG: return .angTB1
+        case .FR: return .frTB1
+        case .DE: return .deTB1
+        }
+        
     }
     
     // Nested enum for all available models
@@ -108,18 +136,43 @@ enum Language: String, CaseIterable, Identifiable {
         case .EN: return [.enTB1, .enTB2, .enTB3]
         case .FR:  return [.frTB1, .frTB2, .frTB3]
         case .DE:  return [.deTB1, .deTB2]
-        case.ANG: return [.angTB1]
+        case .ANG: return [.angTB1]
         }
     }
 }
 
+enum PipelineStep: Int, CaseIterable, Identifiable, Comparable {
+    // RawValue type (Int) links each case to an integer (1, 2, 3, 4).
+    // Comparable conformance allows using <, >, <=, >= on enum cases.
+    // step1 is tokenisation, and is handled with diff pipe
+    case step2 = 2
+    case step3 = 3
+    case step4 = 4
+    case step5 = 5
+    
+    // raw value = id, to conform to Identifiable
+    var id: Int { rawValue }
+    
+    // Computed property: evaluates 'self' on demand and returns the matching  string
+    var title: String {
+        switch self {
+        case .step2: return "2. POS tagging"
+        case .step3: return "3. Lemmatisation"
+        case .step4: return "4. Feats"
+        case .step5: return "5. DepParse"
+        }
+    }
+    // required for Comparable : Swift expects this to build other comparison operattions
+    static func < (lhs: PipelineStep, rhs: PipelineStep) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
 
 enum TokenisationMethod: String, CaseIterable, Identifiable {
     var id: Self {self}
     case conll
 //    case naive
     case retokenise
+    case xml
 }
-
-
 
