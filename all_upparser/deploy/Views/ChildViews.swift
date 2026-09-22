@@ -11,12 +11,21 @@ internal import UniformTypeIdentifiers
 struct ExportConfigViewSection: View {
     @State private var isSelectingFolder: Bool = false
     @State private var isProcessing: Bool = false
-    
     @Binding var fileName: String
     @Binding var targetFolderURL: URL?
-    @Binding var selectedOutputPlaform: OutputTarget
     @Binding var selectedExportFormat: ExportFormat
+    @Binding var xmlAuthorName: String
+    @Binding var xmlTitle: String
 
+    var xmlSettingDisplayText: String{
+        if selectedExportFormat == .xml || selectedExportFormat == .xmlConll{
+        return "XML settings"}
+        else {
+            return "No XML settings"
+        }
+    }
+
+    
     var body: some View {
         //        Form {
         Section("Export Configuration") {
@@ -40,11 +49,14 @@ struct ExportConfigViewSection: View {
                     isSelectingFolder = true
                 }
             }
-            Picker("Output for…", selection: $selectedOutputPlaform) {
-                ForEach(OutputTarget.allCases) { outputTarget in
-                    Text(outputTarget.rawValue)
-                }
+            NavigationLink {
+                XMLSettingView(selectedExportFormat: $selectedExportFormat, xmlAuthorName: $xmlAuthorName, xmlTitle: $xmlTitle)
+            } label: {
+                Text( xmlSettingDisplayText)
             }
+
+            
+            
         }
         // Folder Selection System Sheet
         .fileImporter(
@@ -121,7 +133,7 @@ struct ChooseInputFileViewSection: View {
 
 
 struct FileNameInputViewSection: View {
-    // for adding outout file name
+    // contains TextField for entering name of file to export
     @Binding var fileName: String
     @FocusState private var isFocused: Bool
     let selectedExportFormat: ExportFormat
@@ -186,15 +198,14 @@ struct OutputLinesViewSection: View {
 
 
 struct PretokenisedSentViewSection : View {
-    let pretokSentsOut: [TokenisedSentence]
+    let pretokSentsOut: [HashableSentence]
     var body: some View{
         ScrollView{
             ForEach(pretokSentsOut, id:\.self){instance in
-                Text("moo")
+                Text("foo")
                 ForEach(instance.tokens, id:\.self){tok in
                 Text(tok)}
             }
         }
     }
 }
-

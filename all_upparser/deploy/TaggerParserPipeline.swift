@@ -1,7 +1,7 @@
 
 import CoreML
 import Foundation
-
+import NaturalLanguage
 
 // MARK: - Vocabulary
 //structure to decode the vocab data JSON file
@@ -314,7 +314,7 @@ final class UDPipeline {
     /// per-word greedy parserArgmax, which can produce cycles or multiple roots.
     private func decodeDependencies(_ raw: TaggerRawOutput) -> [(head: Int, deprel: String)] {
         let n = raw.seqLen
-
+        print("Decoding deps:: raw seq len == \(n)")
         // Dense head-score matrix: scoreMatrix[h][d] = score of dependent d
         // attaching to head h. d == 0 (root can't be a dependent) and
         // h == d (a word can't be its own head) are left at -infinity and
@@ -325,9 +325,9 @@ final class UDPipeline {
                 scoreMatrix[h][d] = raw.arcLogits[[0, d, h] as [NSNumber]].doubleValue
             }
         }
-
+		//print("scoreMatrix == \(scoreMatrix)")
         let heads = solveArborescence(activeNodes: Array(0..<n), scoreMatrix: scoreMatrix)
-
+		//print("heads == \(heads)")
         return (1..<n).map { t in
             // Every non-root node is guaranteed a parent by
             // solveArborescence; the `?? 0` fallback is defensive only.
@@ -339,6 +339,8 @@ final class UDPipeline {
                 let v = raw.labelLogits[[0, c, t, head] as [NSNumber]].doubleValue
                 if v > bestDeprelScore { bestDeprelScore = v; bestDeprelId = c }
             }
+            //print("Decode deps::\n head ==\(head); deprel===\(deprelVocab.decode(bestDeprelId))")
+
             return (head: head, deprel: deprelVocab.decode(bestDeprelId))
         }
     }
@@ -488,21 +490,57 @@ final class UDPipeline {
         var featsTags = Array(repeating: "_", count: n)
         var heads = Array(repeating: "_", count: n)
         var deprels = Array(repeating: "_", count: n)
+        
+        var nlLemmas: [String] = [] //Array(repeating: "_", count: n)
+        var nlPos: [String] = []//Array(repeating: "_", count: n)
+        
+        let nlTagger = NLTagger(tagSchemes: [ .lemma, .lexicalClass])
+        let nlOptions: NLTagger.Options = [ .omitWhitespace]
+        let nlInputText = sentence.tokens.joined(separator: " ")
+        nlTagger.string = nlInputText
+        nlTagger.enumerateTags(in: nlInputText.startIndex..<nlInputText.endIndex, unit: .word, scheme: .lexicalClass, options: nlOptions) { tag,_  in
+            if let tag = tag {
+                nlPos.append( tag.rawValue)
+            }
+            else {
+                nlPos.append("Z")
+            }
+            return true // signal to enumerator to keep going with enumeration
+        }
+        nlTagger.enumerateTags(in: nlInputText.startIndex..<nlInputText.endIndex, unit: .word, scheme: .lemma, options: nlOptions) { tag,_  in
+            if let tag = tag {
+                nlLemmas.append( tag.rawValue)
+            }
+            else {
+                nlLemmas.append("X")
+            }
+            return true // signal to enumerator to keep going with enumeration
+        }
 
+        print("level = \(level)")
         if level >= 2 {
             let raw = try runTaggerParserModel(on: sentence)
             uposTags = decodeUPOS(raw)
-
+            print("POS decoded, moving to lemmas")
             if level >= 3 {
                 lemmas = getLemmas(raw)
+                print("lemmas decoded, moving to feats")
             }
             if level >= 4 {
                 featsTags = decodeFeats(raw)
+                print("Feats decoded, moving to deps")
             }
             if level >= 5 {
+                print("line 507")
                 let deps = decodeDependencies(raw)
+                print("line 509")
+                for item in deps{
+                    print("DepItem == \(item)")
+                }
                 heads = deps.map { String($0.head) }
+                print("line 514")
                 deprels = deps.map { $0.deprel }
+                print("line 516")
             }
         }
 
@@ -510,7 +548,7 @@ final class UDPipeline {
             Token(
                 tokid: i + 1, form: sentence.tokens[i], lemma: lemmas[i],
                 upos: uposTags[i], xpos: "_", feats: featsTags[i],
-                head: heads[i], deprel: deprels[i], col8: "_", col9: "_"
+                head: heads[i], deprel: deprels[i], col8: nlLemmas[i], col9: nlPos[i]
             )
         }
     }

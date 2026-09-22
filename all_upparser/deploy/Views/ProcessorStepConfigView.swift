@@ -13,7 +13,6 @@ struct ProcessorStepConfigViewSection: View {
     // Single source of truth from parent view (nil means all steps off)
     @Binding var maxActiveStep: PipelineStep
     @Binding var inputFileType: InputFileType
-    @Binding var selectedTokenisationMethod: TokenisationMethod
     var body: some View {
         Section(header: Text("Pipeline Execution Steps")) {
             Form{
@@ -28,11 +27,12 @@ struct ProcessorStepConfigViewSection: View {
                 }
             }
         }
-        Section("Tokenisation"){
+        Section("Retokenisation"){
             Form{
-                ForEach(TokenisationMethod.allCases){tokMethod in
-                    Text(tokMethod.rawValue)
+                ForEach(InputFileType.allCases){inputFileType in
+                    Text(inputFileType.rawValue)
                 }
+                Text("retokenisation not yet coded")
                 //.onChange(of: useConllTokens) $useConllTokens=true
             }
         }
@@ -61,7 +61,7 @@ struct ProcessorStepConfigViewSection: View {
                     if let previousStep = PipelineStep(rawValue: step.rawValue - 1) {
                         maxActiveStep = previousStep
                     } else {
-                        maxActiveStep = .step1
+                        maxActiveStep = .step2
                     }
                 }
             }
@@ -72,32 +72,6 @@ struct ProcessorStepConfigViewSection: View {
 #Preview {
     @Previewable @State var maxActiveStep: PipelineStep = .step2
     @Previewable @State var inputFileType: InputFileType = .conll
-    @Previewable @State var selectedTokenisationMethod: TokenisationMethod = .conll
-    ProcessorStepConfigViewSection(maxActiveStep: $maxActiveStep, inputFileType: $inputFileType, selectedTokenisationMethod: $selectedTokenisationMethod)
+    ProcessorStepConfigViewSection(maxActiveStep: $maxActiveStep, inputFileType: $inputFileType)
 }
 
-enum PipelineStep: Int, CaseIterable, Identifiable, Comparable {
-    // RawValue type (Int) links each case to an integer (1, 2, 3, 4).
-    // Comparable conformance allows using <, >, <=, >= on enum cases.
-    case step1 = 1
-    case step2 = 2
-    case step3 = 3
-    case step4 = 4
-    
-    // raw value = id, to conform to Identifiable
-    var id: Int { rawValue }
-    
-    // Computed property: evaluates 'self' on demand and returns the matching  string
-    var title: String {
-        switch self {
-        case .step1: return "1. POS tagging"
-        case .step2: return "2. Lemmatisation"
-        case .step3: return "3. Feats"
-        case .step4: return "4. DepParse"
-        }
-    }
-    // required for Comparable : Swift expects this to build other comparison operattions
-    static func < (lhs: PipelineStep, rhs: PipelineStep) -> Bool {
-        lhs.rawValue < rhs.rawValue
-    }
-}
