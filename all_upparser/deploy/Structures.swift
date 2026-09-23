@@ -7,39 +7,88 @@
 
 import Foundation
 
-// MARK: - Tokenizer output
-
-
-
-struct Token : Identifiable {
+//TODO: update calculated property to use Extension method
+struct Document {
     var id = UUID()
-    let tokid: Int
-    let form: String
-    let lemma: String
-    let upos: String
-    let xpos: String
-    let feats: String
-    let head: String
-    let deprel: String
-    let col8: String
-    let col9: String
+    let sentences:[Sentence]
     
-    var conlluLine: String {
-        [String(tokid), form, lemma, upos, xpos, feats, head, deprel].joined(separator: "\t")
+    var docAsRaw: String{
+        var internalList: [String] = []
+        for sentence in sentences {
+            internalList.append(sentence.conll)
+            internalList.append("\n")
+        }
+        return internalList.joined(separator: "\n")
     }
+}
+
+struct ExporterService {
+    /// Writes processing output string directly to a user-selected folder URL
+    static func exportDataToFile(
+        exportContent: String,
+        customName: String,
+        targetFolderURL: URL,
+        exportFormat: ExportFormat
+        
+    ) throws -> URL {
+        let fileExtension = exportFormat.fileExtension
+      
+        print("step1 success")
+        // 2. Format sanitized filename
+        var safeName = customName.sanitizedFileName
+        if !safeName.hasSuffix(".\(fileExtension)") {
+                    safeName += ".\(fileExtension)"
+                }
+        print("step2 success")
+        // 3. Construct destination path inside the chosen directory
+        let destinationFileURL = targetFolderURL.appendingPathComponent(safeName)
+        print("step3 success")
+        // 4. Elevate security permissions for external directory write
+        let gotAccess = targetFolderURL.startAccessingSecurityScopedResource()
+        defer {
+            if gotAccess {
+                targetFolderURL.stopAccessingSecurityScopedResource()
+                print("step4 success")
+            }
+        }
+        
+        // 5. Write
+        try exportContent.write(to: destinationFileURL, atomically: true, encoding: .utf8)
+        print("step5 success URL == \(destinationFileURL.path())")
+        
+        return destinationFileURL
+    }
+}
+
+struct HashableSentence: Hashable {
+    // sentence as id + list of strings as input for parser
+    let id: String
+    let tokens: [String]
     
-    var conllRaw: String{
-        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, "_","_"].joined(separator: "\t") //+ "\n"
+    var detokenised: String {
+        tokens.joined(separator: " ")
     }
-    var conllRawMultitag: String{
-        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8,col9].joined(separator: "\t") //+ "\n"
-    } // this includes NL parser outputs for col8,9, but the funct to make the ExportString doesn't call this prop.
+}
+
+struct RunOutput: Identifiable {
+    var id = UUID()
+    let sents: [Sentence]
+    let sourceFileName: String
+    let outputFileName: URL
+    let lang: String
+    let treebank : String
+    let exportFormat: ExportFormat
+    var unread: Bool = true
     
-    var asXML: String{
-                """
-                <w tokID=\"\(tokid)\"  form=\"\(form.xmlEscaped)\" lemma=\"\(lemma.xmlEscaped)\" upos=\"\(upos.xmlEscaped)\" xpos=\"\(xpos.xmlEscaped)\" feats=\"\(feats.xmlEscaped)\" head=\"\(head.xmlEscaped)\" deprel=\"\(deprel.xmlEscaped)\">\(form.xmlEscaped)</w>
-                """
+    var tokCount: Int {
+        // reduce collection to single element : start at 0, add iteratively over elements
+        sents.reduce(0) { $0 + $1.conllData.count }
     }
+}
+
+struct SaveReport {
+    let savedURL: URL?
+    let message: String
 }
 
 struct Sentence : Identifiable {
@@ -57,12 +106,9 @@ struct Sentence : Identifiable {
         // 3. Re-trim ONLY newlines from the payload before applying header
         content = content.trimmingCharacters(in: .newlines)
         return content
-        
     }
     
     var sentIdAsMeta: String {
-        // 1. Trim  leading and trailing  (\n, \r) with .newlines
-        // 4. Prepend exact required header
         return "\n\n# sent_id = \(runSentIdRegexes)"
     }
     
@@ -76,6 +122,7 @@ struct Sentence : Identifiable {
             """
         
         xmlTokenElements.append(sentHeader)
+
         switch exportFormat{
         case .xml:
             xmlTokenElements.append(conllData.makeSentenceXML())
@@ -86,7 +133,6 @@ struct Sentence : Identifiable {
         }
         xmlTokenElements.append(sentFooter)
         return xmlTokenElements.joined(separator: "\n")
-        
     }
 
     var conll: String {
@@ -125,9 +171,7 @@ struct Sentence : Identifiable {
             case .blank: return ""
             }
         }
-        
         result.insert("\n\(sentID)", at: 0)
-
         return result
     }
 
@@ -175,29 +219,50 @@ struct Sentence : Identifiable {
     }
 }
 
-
-struct HashableSentence: Hashable {
-    // sentence as id + list of strings as input for parser
-    let id: String
-    let tokens: [String]
+// struct for manually tokenised, modified inputs, before conversion to Token
+struct TempToken: Identifiable, Hashable {
+    let id: Int
+    var form: String
+    
 }
 
-struct Document {
+
+struct Token : Identifiable {
     var id = UUID()
-    let sentences:[Sentence]
+    let tokid: Int
+    let form: String
+    let lemma: String
+    let upos: String
+    let xpos: String
+    let feats: String
+    let head: String
+    let deprel: String
+    let col8: String
+    let col9: String
     
-    var docAsRaw: String{
-        var internalList: [String] = []
-        for sentence in sentences {
-            internalList.append(sentence.conll)
-            internalList.append("\n")
-        }
-        
-        return internalList.joined(separator: "\n")
+    var conlluLine: String {
+        [String(tokid), form, lemma, upos, xpos, feats, head, deprel].joined(separator: "\t")
+    }
+    
+    var conllRaw: String{
+        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, "_","_"].joined(separator: "\t") //+ "\n"
+    }
+    var conllRawMultitag: String{
+        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8,col9].joined(separator: "\t") //+ "\n"
+    } // this includes NL parser outputs for col8,9, but the funct to make the ExportString doesn't call this prop.
+    
+    var asXML: String{
+                """
+                <w tokID=\"\(tokid)\"  form=\"\(form.xmlEscaped)\" lemma=\"\(lemma.xmlEscaped)\" upos=\"\(upos.xmlEscaped)\" xpos=\"\(xpos.xmlEscaped)\" feats=\"\(feats.xmlEscaped)\" head=\"\(head.xmlEscaped)\" deprel=\"\(deprel.xmlEscaped)\">\(form.xmlEscaped)</w>
+                """
     }
 }
 
-
+/* dealing with XMLconll docs as input */
+struct XMLConllElement {
+    let id: String  // send_id extracted with xmlparsing
+    let blob: String // content of s.text == conll lines with sent id line added in by parser
+}
 
 struct XmlHeaderAttribs{
     let xmlTitle: String
@@ -209,77 +274,3 @@ struct XmlHeaderAttribs{
     let runID: String
 }
 
-
-struct RunOutput: Identifiable {
-    var id = UUID()
-    let sents: [Sentence]
-    let sourceFileName: String
-    let outputFileName: URL
-    let lang: String
-    let treebank : String
-    let exportFormat: ExportFormat
-    var unread: Bool = true
-    
-    var tokCount: Int {
-        // reduce collection to single element : start at 0, add iteratively over elements
-        sents.reduce(0) { $0 + $1.conllData.count }
-    }
-}
-
-
-
-struct SaveReport {
-    let savedURL: URL?
-    let message: String
-}
-
-struct ExporterService {
-    /// Writes processing output string directly to a user-selected folder URL
-    static func exportDataToFile(
-        exportContent: String,
-        customName: String,
-        targetFolderURL: URL,
-        exportFormat: ExportFormat
-        
-    ) throws -> URL {
-        let fileExtension = exportFormat.fileExtension
-      
-        print("step1 success")
-        // 2. Format sanitized filename
-        var safeName = customName.sanitizedFileName
-        if !safeName.hasSuffix(".\(fileExtension)") {
-                    safeName += ".\(fileExtension)"
-                }
-        print("step2 success")
-        // 3. Construct destination path inside the chosen directory
-        let destinationFileURL = targetFolderURL.appendingPathComponent(safeName)
-        print("step3 success")
-        // 4. Elevate security permissions for external directory write
-        let gotAccess = targetFolderURL.startAccessingSecurityScopedResource()
-        defer {
-            if gotAccess {
-                targetFolderURL.stopAccessingSecurityScopedResource()
-                print("step4 success")
-            }
-        }
-        
-        // 5. Write
-        try exportContent.write(to: destinationFileURL, atomically: true, encoding: .utf8)
-        print("step5 success URL == \(destinationFileURL.path())")
-        
-        return destinationFileURL
-    }
-}
-/* dealing with XMLconll docs as input */
-struct XMLConllElement {
-    let id: String  // send_id extracted with xmlparsing
-    let blob: String // content of s.text == conll lines with sent id line added in by parser
-}
-
-//autoselect input type extension
-
-struct TestToken: Identifiable, Hashable {
-    let id: Int
-    var form: String
-    
-}

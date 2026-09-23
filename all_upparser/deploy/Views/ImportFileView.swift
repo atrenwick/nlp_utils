@@ -8,7 +8,6 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
-
 struct ImportFileViewSection: View {
     @Bindable var fileContainerModel: SourceFileContainerModel
     @State private var isSelectingFile = false
@@ -24,7 +23,7 @@ struct ImportFileViewSection: View {
                 }
                 Spacer()
             }
-
+            
             Button {
                 isSelectingFile = true
             } label: {
@@ -51,7 +50,7 @@ struct ImportFileViewSection: View {
                         }
                     }
                     
-                    // 2. Immediately copy to local sandbox & store the sandbox URL
+                    // copy to local sandbox, store sandbox URL
                     do {
                         let localURL = try SandboxImporter.importToSandbox(from: externalURL)
                         

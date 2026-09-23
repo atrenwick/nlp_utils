@@ -8,11 +8,13 @@
 import SwiftUI
 
 
-
 struct ProcessorStepConfigViewSection: View {
     // Single source of truth from parent view (nil means all steps off)
     @Binding var maxActiveStep: PipelineStep
     @Binding var inputFileType: InputFileType
+    @Binding var runRetokeniser: Bool
+    @Binding var selectedRetokenisationType: RetokenisationType
+    
     var body: some View {
         Section(header: Text("Pipeline Execution Steps")) {
             Form{
@@ -29,20 +31,22 @@ struct ProcessorStepConfigViewSection: View {
         }
         Section("Retokenisation"){
             Form{
-                ForEach(InputFileType.allCases){inputFileType in
-                    Text(inputFileType.rawValue)
+                Toggle("Run retokenisation", isOn:  $runRetokeniser)
+                
+                if runRetokeniser{
+                    Picker("Retokenisation method", selection: $selectedRetokenisationType){
+                        ForEach(RetokenisationType.allCases){retokType in
+                            Text(retokType.rawValue)}
+                    }
                 }
-                Text("retokenisation not yet coded")
                 //.onChange(of: useConllTokens) $useConllTokens=true
             }
         }
     }
     // Helper to check if a specific step is currently active
     private func isStepActive(_ step: PipelineStep) -> Bool {
-         let maxStep = maxActiveStep
-        if maxStep >= step {
-            return true
-        }
+        let maxStep = maxActiveStep
+        if maxStep >= step { return true }
         return false
     }
 
@@ -71,7 +75,14 @@ struct ProcessorStepConfigViewSection: View {
 
 #Preview {
     @Previewable @State var maxActiveStep: PipelineStep = .step2
+    @Previewable @State var selectedRetokenisationType: RetokenisationType = .predict
     @Previewable @State var inputFileType: InputFileType = .conll
-    ProcessorStepConfigViewSection(maxActiveStep: $maxActiveStep, inputFileType: $inputFileType)
+    @Previewable @State var runRetokeniser: Bool = true
+    ProcessorStepConfigViewSection(
+        maxActiveStep: $maxActiveStep,
+        inputFileType: $inputFileType,
+        runRetokeniser: $runRetokeniser,
+        selectedRetokenisationType: $selectedRetokenisationType
+    )
 }
 

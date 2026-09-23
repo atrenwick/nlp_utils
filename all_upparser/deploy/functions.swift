@@ -18,87 +18,21 @@ func dumpScalars(_ text: String, maxChars: Int = 50) {
     }
 }
 
+// MARK: - CoNLL Parsing
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                              CoNLL parsing functions
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//  Main functions:: Bundle loads file -> String == 1 blob
+//  1. conllBlobToChunks turns blob into 1 chunk per sentence
+//  2. conllChunksToLines takes chunks and gives 1 line per token + metas
+//  3. conllLinesToSents takes tokens + metas as lines -> Sentence object with [Tokens]
+//  4. makeConllLinesFromURL runs  functions 1-2, in sequence, input== URL
+//  5. makeConllLinesFromFile runs the same functions, 1-2, input == String
+//  6. Make ConllLines runs 1-2-3, from URL, returning HashableSents to pass to Pipeline
 
-//MARK: loading + parsing conll
-    
-//MARK: conlltools:: this is good for inspecting the tokenisation, and parsing if any, but it's not the seq of toks that the parser needs
-//TODO: func that returns a list of tokenised sentences
-func makeConllLinesFromURL(inputURL: URL?) -> [[String]]{
-//    var pretokenisedSentences: [[String]] = []
-    // load source file as a string
-//    let normalizedText: String = Bundle.main.loadText(inputFile, format: "conllu")
-    guard let inputFile = inputURL else {
-        print("guardlet failed")
-        return []
-    }
-    print("guardlet passed")
-    do {
-        // Reads raw text directly from your sandbox URL :: step0
-        let normalizedText = try String(contentsOf: inputFile, encoding: .utf8)
-        print("normalizedText passed")
-        // split the string into sentence chunks : step1
-        let sentenceChunks: [String] = conllBlobToChunks(conllBlob: normalizedText)
-        print("chunked")
-        // split each chunk == sentence into its lines :: step2
-        let hashableTokenLists: [[String]] = conllChunksToLines(conllChunks: sentenceChunks)
-        print("Got file from conll")
-        return hashableTokenLists
-        
-    } catch {
-        print("Failed to read text from sandbox file: \(error)")
-    }
-    return []
-}
-
-
-func makeConllLinesFromFile(inputFile: String) -> [[String]]{
-    
-    // load source file as a string from bundle:: step0
-    let normalizedText: String = Bundle.main.loadText(inputFile, format: "conllu")
-    // split the string into sentence chunks :: step1
-    let sentenceChunks: [String] = conllBlobToChunks(conllBlob: normalizedText)
-    
-    // split each chunk == sentence into its lines step2
-    let pretokenisedSentences: [[String]] = conllChunksToLines(conllChunks: sentenceChunks)
-    return pretokenisedSentences
-}
-
-//this removes emptysents made bt makeConllLinesFromFile
-func makeTokenisedSentsFromFile(inputSents: [[String]]) -> [HashableSentence]{
-    // ge tinput from getPretokenised
-    var outputTokSents: [HashableSentence] = []
-    var currentSentId: String = ""
-    for inputSent in inputSents {
-        var currentToks: [String] = []
-        for inputLine in inputSent {
-            if inputLine.hasPrefix("#") {
-                currentSentId = inputLine
-            } else {
-                let fields = inputLine.split(separator: "\t")
-                guard fields.count > 1 else {
-                    // Blank/malformed row --> end of sentence
-                    if !currentToks.isEmpty {
-                        outputTokSents.append(HashableSentence(id: currentSentId, tokens: currentToks))
-                        currentToks = []
-                        currentSentId = ""
-                    }
-                    continue
-                }
-                currentToks.append(String(fields[1]))
-            }
-        }
-        // Catch a final sentence that wasn't followed by a trailing blank line.
-        if !currentToks.isEmpty {
-            outputTokSents.append(HashableSentence(id: currentSentId, tokens: currentToks))
-        }
-    }
-    return outputTokSents
-}
-
-
-// MARK:  functions to parse existing .conll documents
-/// step1 is in Bundle.main
-/// step2 :: get sentences
+//1.
 func conllBlobToChunks(conllBlob: String) -> [String] {
     // iterate over chars to find boundaries between sents in rawConll : find \n# seq
     // return  : 1 string = 1 sentence, in a list
@@ -122,9 +56,7 @@ func conllBlobToChunks(conllBlob: String) -> [String] {
     }
     return conllSentenceChunks
 }
-
-/// step3:
-//// split sentence chunk into lines
+//2.
 func conllChunksToLines(conllChunks: [String]) -> [[String]]{
     var allSents: [[String]] = []
     for conllChunk in conllChunks{
@@ -133,9 +65,7 @@ func conllChunksToLines(conllChunks: [String]) -> [[String]]{
     }
     return allSents
 }
-
-//// step4 :
-// make [ConllSent] from [[String]]
+//3.
 func conllLinesToSents(conllLines: [[String]]) -> [Sentence]{
     
     var outputSentences: [Sentence] = []
@@ -191,9 +121,169 @@ func conllLinesToSents(conllLines: [[String]]) -> [Sentence]{
     }
     return outputSentences
 }
+//4.
+func makeConllLinesFromURL(inputURL: URL?) -> [[String]]{
+//    var pretokenisedSentences: [[String]] = []
+    // load source file as a string
+//    let normalizedText: String = Bundle.main.loadText(inputFile, format: "conllu")
+    guard let inputFile = inputURL else {
+        print("guardlet failed")
+        return []
+    }
+    print("guardlet passed")
+    do {
+        // Reads raw text directly from your sandbox URL :: step0
+        let normalizedText = try String(contentsOf: inputFile, encoding: .utf8)
+        print("normalizedText passed")
+        // split the string into sentence chunks : step1
+        let sentenceChunks: [String] = conllBlobToChunks(conllBlob: normalizedText)
+        print("chunked")
+        // split each chunk == sentence into its lines :: step2
+        let hashableTokenLists: [[String]] = conllChunksToLines(conllChunks: sentenceChunks)
+        print("Got file from conll")
+        return hashableTokenLists
+        
+    } catch {
+        print("Failed to read text from sandbox file: \(error)")
+    }
+    return []
+}
+//5.
+func makeConllLinesFromFile(inputFile: String) -> [[String]]{
+    
+    // load source file as a string from bundle:: step0
+    let normalizedText: String = Bundle.main.loadText(inputFile, format: "conllu")
+    // split the string into sentence chunks :: step1
+    let sentenceChunks: [String] = conllBlobToChunks(conllBlob: normalizedText)
+    
+    // split each chunk == sentence into its lines step2
+    let pretokenisedSentences: [[String]] = conllChunksToLines(conllChunks: sentenceChunks)
+    return pretokenisedSentences
+}
+//6.
+func conllFileToHashableSentForPipeline(inputURL: URL?)  -> [HashableSentence]{
+    guard let inputFile = inputURL else {
+        print("guardlet failed")
+        return []
+    }
+    var allSentences: [HashableSentence] = []
+    let hashableTokenList: [[String]] = makeConllLinesFromURL(inputURL: inputFile)
+    let intermedSents: [Sentence] = conllLinesToSents(conllLines: hashableTokenList)
+    for sent in intermedSents{
+        let TokSentVers = sent.hashableSentence
+        allSentences.append(TokSentVers)
+    }
+    return allSentences
+}
+// MARK: - XML-conll parsing
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                              XML-conll parsing functions
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
 
-//MARK: making XML
-//make xml from ConllSents - part1
+// parse XMLconllu with XML parser, including making instance of class
+//1. parse xml-conll to get conll blob-pairs identical to CoNLL parsing
+func xmlConllToIdBlobPairs(from url: URL?) -> [XMLConllElement] {
+    guard let url = url else {
+        print("xmlParsingFunc: no URL provided")
+        return []
+    }
+
+    var results: [XMLConllElement] = []
+
+    guard let parser = XMLParser(contentsOf: url) else {
+        print("xmlParsingFunc: couldn't create XMLParser for \(url)")
+        return results
+    }
+
+    let delegate = SParser()
+    parser.delegate = delegate
+
+    if parser.parse() {
+        results = delegate.results
+    } else {
+        print("xmlParsingFunc: parse failed for \(url) — \(parser.parserError?.localizedDescription ?? "unknown error")")
+    }
+
+    return results
+}
+//2. call 1. then apply CoNLL parsing functions
+func xmlConllFileToHashableSentForPipeline(inputURL: URL?)  -> [HashableSentence]{
+    guard let inputFile = inputURL else {
+        print("guardlet failed")
+        return []
+    }
+
+    var allSentences: [HashableSentence] = []
+    let conllBlobs: [XMLConllElement] = xmlConllToIdBlobPairs(from: inputURL)
+    let linesFromBlobs:[[String]] = conllChunksToLines(conllChunks:conllBlobs.map { ($0.blob) })
+    let intermedSents:[Sentence] = conllLinesToSents(conllLines: linesFromBlobs)
+    for sent in intermedSents{
+        let TokSentVers = sent.hashableSentence
+        allSentences.append(TokSentVers)
+    }
+
+    return allSentences
+}
+// MARK: - XML parsing
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  XML parsing functions
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//  1. xmlToHashableSents: does the XML parsing
+//  2. xmlToHashableSentForPipeline : wrapper for 1.
+
+//1. parse full XML to id:toklist ->> all sentences
+func xmlToHashableSents(from url: URL?) -> [HashableSentence] {
+    guard let url = url else {
+        print("xmlParsingFunc: no URL provided")
+        return []
+    }
+
+    var results: [HashableSentence] = []
+
+    guard let parser = XMLParser(contentsOf: url) else {
+        print("xmlParsingFunc: couldn't create XMLParser for \(url)")
+        return results
+    }
+    
+    let delegate = SWParser()
+    parser.delegate = delegate
+
+    if parser.parse() {
+        results = delegate.results
+    } else {
+        print("xmlParsingFunc: parse failed for \(url) — \(parser.parserError?.localizedDescription ?? "unknown error")")
+    }
+
+    return results
+}
+//2. safe wrapper which calls xmlToHashableSents
+func xmlToHashableSentForPipeline(inputURL: URL?)  -> [HashableSentence]{
+    guard let inputFile = inputURL else {
+        print("guardlet failed")
+        return []
+    }
+    
+    return  xmlToHashableSents(from: inputFile)
+}
+
+
+// MARK: - XML making
+
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  XML-making functions
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+
+//1. make xml from ConllSents - part1
+//2. make safe header attributes
+//3. Make XML string from list of sentences with output of 1, 2
+
+//1.
 func makeExportContent(sentences: [Sentence], exportFormat: ExportFormat, safeHeaderAttribs: XmlHeaderAttribs) -> String{
     var returnString: String = ""
     switch exportFormat {
@@ -218,7 +308,7 @@ func makeExportContent(sentences: [Sentence], exportFormat: ExportFormat, safeHe
     return returnString
 }
 
-//make xml from ConllSents- get xml safe values for attribs
+//2.
 func makeSafeXmlHeaderAttribs(
     xmlTitle: String,
     xmlAuthorName: String,
@@ -253,6 +343,7 @@ func makeSafeXmlHeaderAttribs(
     return outputStruct
 }
 
+//3.
 func sentListToXML(
     sentences: [Sentence],
     selectedExportFormat: ExportFormat,
@@ -304,8 +395,17 @@ func sentListToXML(
     return outputStore.joined(separator: "\n")
     
 }
+// MARK: - Writing
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  Writing to file functions
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+// 1. Write stirng to location : as used in main version.
+//  2. Run write coordinator :: run 3  with diff outputs then 4. No longer used
+// 3. write string dump :: write string to named files on macOS AND iOS device ; No longer used
+// 4. writtoFile ; No longer used
 
-//MARK: writing to file
 // write string to location
 func saveFileToChosenLocation(exportContent: String, saveName: String, targetFolderURL: URL?, exportFormat: ExportFormat, treebank: Language.Treebank, runExplicit: Bool = false) -> SaveReport {
     // function called via UI to run main dump to file
@@ -338,7 +438,6 @@ func saveFileToChosenLocation(exportContent: String, saveName: String, targetFol
     }
 }
 
-
 func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
     try writeStringDump(lines)
     try writeStringDump(rawLines)
@@ -347,7 +446,6 @@ func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
     let outputPath = docsDir.appendingPathComponent("output.conllu").path
     try writeToFile(rawLines.joined(separator: "\n"), outputPath)
 }
-
 
 func writeStringDump(_ lines: [String]) throws -> URL {
     // write 2 versions of output string, with FileManager and to specified dev folder
@@ -374,9 +472,16 @@ func writeToFile(_ content: String, _ path: String) throws {
     print("Wrote file to: \(url)")
 
 }
-//MARK: printing to console::
+// MARK: - Printing
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  Print to console : for dev
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//1. print JSON errror info to console
+// 2. Print from print to conllSents to console, specific macOS file
 
-// print info on JSON error
+//1.
 func printJSONError(_ error: Error) {
     let nsError = error as NSError
     print("Domain:", nsError.domain)
@@ -388,9 +493,7 @@ func printJSONError(_ error: Error) {
         print("Index:", path)
     }
 }
-
-
-// print to conllSents to console
+//2
 func printFromConllSents(outsents: [Sentence]) throws -> URL{
     
     let mySents: [Sentence] = outsents
@@ -426,18 +529,56 @@ func printFromConllSents(outsents: [Sentence]) throws -> URL{
     
 }
 
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  end of main functions; experimental below
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+// MARK: - Other
+struct NLReturn:  Identifiable{
+    var id = UUID()
+    let tokRange: String
+    let rawTag: String
+}
 
+struct NLParseReturn: Identifiable {
+    var id = UUID()
+    let tag: String
+    let nlReturn: [NLReturn]
+}
+
+struct NLParseResults: Identifiable{
+    var id = UUID()
+    let posReturn: NLParseReturn
+    let lemmaReturn: NLParseReturn
+}
+func getNLTags(text: String) -> NLParseResults{
+    // get POS tags with inbuilt tagset, tagger -> No diff btw SCONJ, CCONJ, no proper noun
+    var posTags: [NLReturn] = []
+    var lemmas: [NLReturn] = []
+    
+    let tagger = NLTagger(tagSchemes: [ .lemma, .lexicalClass])
+    let options: NLTagger.Options = [ .omitWhitespace]
+    tagger.string = text
+
+    tagger.enumerateTags(in: text.startIndex..<text.endIndex, unit: .word, scheme: .lexicalClass, options: options) { tag, tokenRange in
+        if let tag = tag {
+            posTags.append(NLReturn(tokRange: String(text[tokenRange]), rawTag: tag.rawValue))
+            print("Token: \(String(text[tokenRange])) : tag: \(tag.rawValue)")
+        }
+        return true // signal to enumerator to keep going with enumeration
+    }
+    tagger.enumerateTags(in: text.startIndex..<text.endIndex, unit: .word, scheme: .lemma, options: options) {tag, tokenRange in
+        if let tag = tag {
+            lemmas.append(NLReturn(tokRange: String(text[tokenRange]), rawTag: tag.rawValue))
+        }
+        return true
+    }
+    let posReturn: NLParseReturn = NLParseReturn(tag: "pos", nlReturn: posTags)
+    let lemmaReturn: NLParseReturn = NLParseReturn(tag: "lemma", nlReturn: lemmas)
+    return NLParseResults(posReturn: posReturn, lemmaReturn: lemmaReturn)
+}
 //MARK: functions not called
-//func runConllFileParserPipe(pretokenisedSentences: [[String]]) -> [ConllSent]{
-//    let conllSents: [ConllSent] = conllLinesToSents(conllLines: pretokenisedSentences)
-//    return conllSents
-//}
-//
-//func getSentsForPipelineFromPretokConll(inputFile: String) ->[TokenisedSentence]{
-//    let pretokenisedSentences = makeConllLinesFromFile(inputFile: inputFile)
-//    let outputSentences  = makeTokenisedSentsFromFile(inputSents: pretokenisedSentences)
-//    return outputSentences
-//}
 
 //MARK: sentencisation
 //func untokenisedInputToSents(text: [String], languageCode: Language) throws -> [[String]]{
@@ -502,156 +643,3 @@ func printFromConllSents(outsents: [Sentence]) throws -> URL{
 //}
 //
 
-//func xmlFileToHashableSentForPipeline(inputURL: URL?)  -> [HashableSentence]{
-//    guard let inputFile = inputURL else {
-//        print("guardlet failed")
-//        return []
-//    }
-//    var allSentences: [HashableSentence] = []
-//
-//    return allSentences
-//
-//}
-
-func conllFileToHashableSentForPipeline(inputURL: URL?)  -> [HashableSentence]{
-    guard let inputFile = inputURL else {
-        print("guardlet failed")
-        return []
-    }
-    var allSentences: [HashableSentence] = []
-    let hashableTokenList: [[String]] = makeConllLinesFromURL(inputURL: inputFile)
-    let intermedSents: [Sentence] = conllLinesToSents(conllLines: hashableTokenList)
-    for sent in intermedSents{
-        let TokSentVers = sent.hashableSentence
-        allSentences.append(TokSentVers)
-    }
-    return allSentences
-}
-
-
-// parse XMLconllu with XML parser, including making instance of class
-func xmlConllToIdBlobPairs(from url: URL?) -> [XMLConllElement] {
-    guard let url = url else {
-        print("xmlParsingFunc: no URL provided")
-        return []
-    }
-
-    var results: [XMLConllElement] = []
-
-    guard let parser = XMLParser(contentsOf: url) else {
-        print("xmlParsingFunc: couldn't create XMLParser for \(url)")
-        return results
-    }
-
-    let delegate = SParser()
-    parser.delegate = delegate
-
-    if parser.parse() {
-        results = delegate.results
-    } else {
-        print("xmlParsingFunc: parse failed for \(url) — \(parser.parserError?.localizedDescription ?? "unknown error")")
-    }
-
-    return results
-}
-
-
-//parse full XML to id:toklist ->> all sentences
-func xmlToHashableSents(from url: URL?) -> [HashableSentence] {
-    guard let url = url else {
-        print("xmlParsingFunc: no URL provided")
-        return []
-    }
-
-    var results: [HashableSentence] = []
-
-    guard let parser = XMLParser(contentsOf: url) else {
-        print("xmlParsingFunc: couldn't create XMLParser for \(url)")
-        return results
-    }
-    
-    let delegate = SWParser()
-    parser.delegate = delegate
-
-    if parser.parse() {
-        results = delegate.results
-    } else {
-        print("xmlParsingFunc: parse failed for \(url) — \(parser.parserError?.localizedDescription ?? "unknown error")")
-    }
-
-    return results
-}
-
-
-
-func xmlConllFileToHashableSentForPipeline(inputURL: URL?)  -> [HashableSentence]{
-    guard let inputFile = inputURL else {
-        print("guardlet failed")
-        return []
-    }
-
-    var allSentences: [HashableSentence] = []
-    let conllBlobs: [XMLConllElement] = xmlConllToIdBlobPairs(from: inputURL)
-    let linesFromBlobs:[[String]] = conllChunksToLines(conllChunks:conllBlobs.map { ($0.blob) })
-    let intermedSents:[Sentence] = conllLinesToSents(conllLines: linesFromBlobs)
-    for sent in intermedSents{
-        let TokSentVers = sent.hashableSentence
-        allSentences.append(TokSentVers)
-    }
-
-    return allSentences
-}
-
-func xmlToHashableSentForPipeline(inputURL: URL?)  -> [HashableSentence]{
-    guard let inputFile = inputURL else {
-        print("guardlet failed")
-        return []
-    }
-    
-    return  xmlToHashableSents(from: inputFile)
-}
-
-
-struct NLReturn:  Identifiable{
-    var id = UUID()
-    let tokRange: String
-    let rawTag: String
-}
-
-struct NLParseReturn: Identifiable {
-    var id = UUID()
-    let tag: String
-    let nlReturn: [NLReturn]
-}
-
-struct NLParseResults: Identifiable{
-    var id = UUID()
-    let posReturn: NLParseReturn
-    let lemmaReturn: NLParseReturn
-}
-func getNLTags(text: String) -> NLParseResults{
-    // get POS tags with inbuilt tagset, tagger -> No diff btw SCONJ, CCONJ, no proper noun
-    var posTags: [NLReturn] = []
-    var lemmas: [NLReturn] = []
-    
-    let tagger = NLTagger(tagSchemes: [ .lemma, .lexicalClass])
-    let options: NLTagger.Options = [ .omitWhitespace]
-    tagger.string = text
-
-    tagger.enumerateTags(in: text.startIndex..<text.endIndex, unit: .word, scheme: .lexicalClass, options: options) { tag, tokenRange in
-        if let tag = tag {
-            posTags.append(NLReturn(tokRange: String(text[tokenRange]), rawTag: tag.rawValue))
-            print("Token: \(String(text[tokenRange])) : tag: \(tag.rawValue)")
-        }
-        return true // signal to enumerator to keep going with enumeration
-    }
-    tagger.enumerateTags(in: text.startIndex..<text.endIndex, unit: .word, scheme: .lemma, options: options) {tag, tokenRange in
-        if let tag = tag {
-            lemmas.append(NLReturn(tokRange: String(text[tokenRange]), rawTag: tag.rawValue))
-        }
-        return true
-    }
-    let posReturn: NLParseReturn = NLParseReturn(tag: "pos", nlReturn: posTags)
-    let lemmaReturn: NLParseReturn = NLParseReturn(tag: "lemma", nlReturn: lemmas)
-    return NLParseResults(posReturn: posReturn, lemmaReturn: lemmaReturn)
-}

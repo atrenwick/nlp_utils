@@ -10,9 +10,9 @@ import SwiftUI
 struct ManualTokenisationView: View {
     
     @State private var language: Language = .FR
-    @State private var currentTokenisationType: TokenisationMethod = .conll
+    @State private var selectedRetokenisationType: RetokenisationType = .predict
     @FocusState var isFocused
-    @State var testTokens: [TestToken] = []
+    @State var tempTokens: [TempToken] = []
     @Binding var builtSents: [HashableSentence]
  
     
@@ -58,13 +58,13 @@ struct ManualTokenisationView: View {
                 }
                 .pickerStyle(.segmented)
                 .tint(.blue)
-                Picker("Tokenisation", selection: $currentTokenisationType) {
-                    ForEach(TokenisationMethod.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .tint(.blue)
+//                Picker("Tokenisation", selection: $currentTokenisationType) {
+//                    ForEach(RetokenisationType.allCases) { mode in
+//                        Text(mode.rawValue).tag(mode)
+//                    }
+//                }
+//                .pickerStyle(.segmented)
+//                .tint(.blue)
             }
 
             
@@ -76,7 +76,7 @@ struct ManualTokenisationView: View {
                     } else {
                         thisSentence = newSentence
                     }
-                    testTokens = applyNaiveTokenisation(language: language, myString: thisSentence
+                    tempTokens = applyNaiveTokenisation(language: language, myString: thisSentence
                     )
                 } label: {
                 Text("Tokenise")
@@ -86,12 +86,12 @@ struct ManualTokenisationView: View {
 
                 Spacer()
                 Button {
-                    if let doneSent = makeHashableSentFromTestToks(testTokens: testTokens)
+                    if let doneSent = makeHashableSentFromTestToks(tempTokens: tempTokens)
                         {
                             builtSents.append(doneSent)
                         print("Added 1 sent to builtSents")
                         }
-                    testTokens = []
+                    tempTokens = []
                     
                 } label: {
                 Text("done")
@@ -102,7 +102,7 @@ struct ManualTokenisationView: View {
             }
             
             Form{
-                ForEach($testTokens, id:\.self) { token in
+                ForEach($tempTokens, id:\.self) { token in
                     TextField("Token", text: token.form)
                         .textInputAutocapitalization(TextInputAutocapitalization.never)
                         .autocorrectionDisabled()
@@ -117,10 +117,10 @@ struct ManualTokenisationView: View {
         }
         .padding()
     }
-    func applyNaiveTokenisation(language: Language, myString: String)-> [TestToken]{
+    func applyNaiveTokenisation(language: Language, myString: String)-> [TempToken]{
         
         let input: String = myString
-        var testTokens: [TestToken] = []
+        var tempTokens: [TempToken] = []
         var step1: [Substring] = []
         if language == .FR {
             
@@ -166,17 +166,17 @@ struct ManualTokenisationView: View {
         }
 
         for (num, item) in step1.enumerated() {
-            testTokens.append(
-                TestToken(id: num, form: String(item))
+            tempTokens.append(
+                TempToken(id: num, form: String(item))
                                 )
         }
-        return testTokens
+        return tempTokens
     }
     
-    func makeHashableSentFromTestToks(testTokens: [TestToken])-> HashableSentence?{
-        guard testTokens.count > 0 else {return nil}
+    func makeHashableSentFromTestToks(tempTokens: [TempToken])-> HashableSentence?{
+        guard tempTokens.count > 0 else {return nil}
         var keepTokens: [String] = []
-        for item in testTokens{
+        for item in tempTokens{
             if item.form != ""{
                 keepTokens.append(item.form)
             }

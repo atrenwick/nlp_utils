@@ -87,7 +87,6 @@ struct RunOutputDetailView: View{
                     }
                 }
             }
-            
         }
     }
 }

@@ -12,53 +12,52 @@ import SwiftUI
 internal import UniformTypeIdentifiers
 
 
-
 struct PipelineSettingsView: View {
     
+    // input file
     @State var fileContainerModel = SourceFileContainerModel()
-    
-    @State var fileName: String = "test1"
-    @State var targetFolderURL: URL? = nil
+    @State var selectedInputFile: URL? = nil
+    @State var inputFileType: InputFileType = .conll
+
+    // import, parsing settings
     @State var selectedLanguage: Language = .FR
     @State var selectedTreebank: Language.Treebank = .frTB1
     @State var maxPipelineStep: PipelineStep = .step5
-    @State var inputFileType: InputFileType = .conll
+    @State var runRetokeniser: Bool = false
+    @State var selectedRetokenisationType: RetokenisationType = .predict
+
+    // export settings
+    @State var fileName: String = "Filename"
+    @State var targetFolderURL: URL? = nil
     @State var selectedExportFormat: ExportFormat = .xml
     @State var xmlAuthorName: String = "XML Author"
     @State var xmlTitle: String = "XML Title"
 
-    
-    // not actually expoloited yet
-    //@State var selectedTokenisationMethod: TokenisationMethod = .conll
-
     //progressbars::
+    @State private var appleProgress = Progress(totalUnitCount: 1)
     @State private var progressBarStyle: ProgressBarStyle = .apple
     @State private var startTime: Date?
     @State private var processedCount = 0
     @State private var totalCount = 0
-    @State private var appleProgress = Progress(totalUnitCount: 1)
     @State private var hasStarted = false
 
-    @State private var topLevelOutputList: [RunOutput] = []
-    @State var outputString: String = "not yet run"
-    @State var taggingInProgress: Bool = false
-    
-    @State var showImporter: Bool = false
-    @State var selectedInputFile: URL? = nil
-    
-    // for runnning func
-    @State var builtSents: [HashableSentence] = []// this needs to get from binging in ManualEntry View
-    
+    // reporting
     @State private var errorMessage: String?
-    @State private var outputLines: [String] = []
-    @State private var conllRawLines: [String] = []
-    @State private var sentsOut: [Sentence] = []
     @State private var saveReport: SaveReport?
-    
-    @State private var isSelectingFolder = false
+    @State private var topLevelOutputList: [RunOutput] = []
     @State private var exportStatusMessage: String?
+    @State var outputString: String = "not yet run"
+
+    //controlling visibility
+    @State var taggingInProgress: Bool = false
+    @State var showImporter: Bool = false
+    @State private var isSelectingFolder = false
     
     
+    // sentences ::
+    @State var builtSents: [HashableSentence] = []
+    @State var sentsOut: [Sentence] = []
+    @State var sentsToRetokenise: [String] = []
     @State private var testSentences = ["Paris est la capitale de la France.", "La capitale de l'Allemagne est Berlin, mais avant, c'était Bonn mais on trouvait que c'était pas bon.", "Paris est une grande ville française"]
     @State private var newSentence: String = ""
 
@@ -136,11 +135,16 @@ struct PipelineSettingsView: View {
                         }
                     }
                     .onChange(of: selectedLanguage) { _, newLang in
-                                    // Automatically update city to a valid default when country changes
+                                    // Automatically update selected tb to language default
                                     selectedTreebank = newLang.defaultTB
                                 }
                     NavigationLink("Select processor steps"){
-                        ProcessorStepConfigViewSection(maxActiveStep: $maxPipelineStep, inputFileType: $inputFileType)
+                        ProcessorStepConfigViewSection(
+                            maxActiveStep: $maxPipelineStep,
+                            inputFileType: $inputFileType,
+                            runRetokeniser: $runRetokeniser,
+                            selectedRetokenisationType: $selectedRetokenisationType
+                        )
                     }
                 }//end section
                 ExportConfigViewSection(fileName: $fileName, targetFolderURL: $targetFolderURL,  selectedExportFormat: $selectedExportFormat, xmlAuthorName: $xmlAuthorName, xmlTitle: $xmlTitle)
@@ -151,7 +155,6 @@ struct PipelineSettingsView: View {
                                 languageCode: selectedLanguage.rawValue,
                                 treebank: selectedTreebank.short
                             )
-                            
                         } label: {
                             Text("Test load")
                         }
@@ -189,7 +192,6 @@ struct PipelineSettingsView: View {
                         action:{
                             runTagging(
                                 inputFileType: inputFileType,
-//                                tokType: selectedTokenisationMethod,
                                 maxPipelineStep: maxPipelineStep,
                                 taggingInProgress: $taggingInProgress) }){
                                     ZStack {
@@ -200,7 +202,6 @@ struct PipelineSettingsView: View {
                                                 .fontWeight(.semibold)
                                         }
                                         .opacity(taggingInProgress ? 0 : 1)
-                                        
                                     }
                                     .font(.headline)
                                     .frame(maxWidth: .infinity)
@@ -225,9 +226,16 @@ struct PipelineSettingsView: View {
             }.toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        RunOutputView(runs: $topLevelOutputList, xmlTitle: $xmlTitle, selectedLanguage: $selectedLanguage, xmlAuthor: $xmlAuthorName, targetFolderURL: $targetFolderURL,  fileName: $fileName,
-                                      selectedTreebank : $selectedTreebank,
-                                      safeHeaderAttribs: safeHeaderAttribs)
+                        RunOutputView(
+                            runs: $topLevelOutputList,
+                            xmlTitle: $xmlTitle,
+                            selectedLanguage: $selectedLanguage,
+                            xmlAuthor: $xmlAuthorName,
+                            targetFolderURL: $targetFolderURL,
+                            fileName: $fileName,
+                            selectedTreebank : $selectedTreebank,
+                            safeHeaderAttribs: safeHeaderAttribs
+                        )
                     } label: {
                         Image(systemName: "book.pages.fill")
                             .overlay(alignment: .topTrailing) {
@@ -267,56 +275,89 @@ struct PipelineSettingsView: View {
         return outputString
     }
     #endif
+
     private func runTagging(
-//        tokType: TokenisationMethod,
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
         taggingInProgress: Binding<Bool>) {
-        taggingInProgress.wrappedValue = true
+            //MARK: parameters, initialisations for task
+            taggingInProgress.wrappedValue = true
 
-            //        let tokType: TokenisationMethod = tokType
             let inputFileType: InputFileType = inputFileType
             let inputFile = fileContainerModel.localSandboxFileURL
             let displayName: String
+            
             switch inputFileType {
             case .manual:
                 displayName = "Manual entry"
             case .conll, .xmlConll, .xml, .txt:
                 displayName = fileContainerModel.localSandboxFileURL?.lastPathComponent ?? "No file selected"
-            }
-        errorMessage = nil
-        startTime = nil
-        hasStarted = true
-        
-        outputLines = []
-        conllRawLines = []
-        sentsOut = []
-
-        processedCount = 0
-        totalCount = 0
+            } // end switch
+            errorMessage = nil
+            startTime = nil
+            hasStarted = true
+            sentsOut = []
+            processedCount = 0
+            totalCount = 0
     
-//        let inputFile = "\(selectedLanguage)_testConll.txt"
-//        print("inputFile = \(inputFile)")
+            
         Task {
+            // MARK: tagging :
             do {
-                
+                // get pipeline object
                 let pipeline = try UDPipeline(languageCode: selectedLanguage.rawValue, treebank: selectedTreebank.short)
                 var allSentences: [HashableSentence] = []
-
                 
-                //MARK: TOKENISATION and Sentencisation
+                //MARK: INGEST SENTS ::
+                // TOKENISATION and Sentencisation
+                //sents = sents from tokeniser
+                // pipeline.runOnSentence([HashableSent])-> [Sentence]
+                
                 switch inputFileType {
                 case .conll:
-                    // get hashable token list from file
                     allSentences = conllFileToHashableSentForPipeline(inputURL: inputFile)
-                
+                    
                 case .manual:
-                    // get sents from manual entry :: sent ==
                     allSentences = builtSents
+                    
                 case .xml:
                     allSentences = xmlToHashableSentForPipeline(inputURL: inputFile)
-
-
+                    
+                case .xmlConll:
+                    allSentences = xmlConllFileToHashableSentForPipeline(inputURL: inputFile)
+                    
+                case .txt:
+                    // Step 1: tokenize everything with model
+                    for sentence in testSentences {
+                        allSentences.append(contentsOf: try pipeline.tokenize(sentence))
+                    }
+                    print("Mode a: \(allSentences.count) sents ")
+                    selectedRetokenisationType = .skip
+                }
+                
+                if runRetokeniser {
+                    //actions
+                    print("Retokenising")
+                    switch selectedRetokenisationType{
+                    case .predict:
+                        let inputSents = allSentences
+                        allSentences.removeAll()
+                        for sentence in inputSents {
+                            let retokSent = try pipeline.tokenize(sentence.detokenised)
+                            allSentences.append(contentsOf: retokSent)
+                            if runExplicit {
+                                print("max requested step == \(maxPipelineStep.rawValue)")
+                            }
+                        }
+                    case .manual, .rule, .skip:
+                        print("In manual mode, usin")
+                        break
+                    }
+                }
+                
+                
+                // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
+                if runExplicit{
                     var nlInputTexts: [String] = []
                     for sent in allSentences{
                         nlInputTexts.append(sent.tokens.joined(separator: " "))
@@ -324,60 +365,48 @@ struct PipelineSettingsView: View {
                     for chunk in nlInputTexts{
                         let rnReturn = getNLTags(text: chunk)
                     }
-                    
-                    
-                case .xmlConll:
-                    //xml-conll
-                    allSentences = xmlConllFileToHashableSentForPipeline(inputURL: inputFile)
-
-                case .txt:
-                    // Step 1: tokenize everything with model
-                    for sentence in testSentences {
-                        allSentences.append(contentsOf: try pipeline.tokenize(sentence))
-                    }
-                    print("Mode a: \(allSentences.count) sents ")
                 }
+                
                 guard  allSentences.count > 0 else {
-                    print("No sentences in conll, baling out")
-                        return
+                    print("No sentences found, baling out… 🪂")
+                    return
                 }
                 print("Mysents count = \(allSentences.count)")
-
+                
                 await MainActor.run {
                     totalCount = allSentences.count
                     appleProgress = Progress(totalUnitCount: Int64(max(allSentences.count, 1)))
                     startTime = Date()
                 }
-
-                var lines: [String] = []
-                var rawLines: [String] = []
+                
                 var outSents: [Sentence] = []
                 // MARK: Step 2: process sentences
                 // process one detected sentence at a time
-
+                
 #if DEBUG
                 let runfive = false
                 if runfive {
-                allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
+                    allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
 #endif
-
+                
                 for sentence in allSentences {
                     let parsedTokens = try pipeline.runOnSentence(sentence, level: maxPipelineStep.rawValue)
-                    print("max requested step == \(maxPipelineStep.rawValue)")
+                    if runExplicit {
+                        print("max requested step == \(maxPipelineStep.rawValue)")
+                    }
                     let mySent: Sentence = Sentence(
                         sentID: sentence.id,
-                        conllData: parsedTokens)
+                        conllData: parsedTokens
+                    )
                     outSents.append(mySent)
-//                    lines.append(contentsOf: try pipeline.formatSentence(parsedTokens, mode: "tidy"))
-//                    rawLines.append(contentsOf: try pipeline.formatSentence(parsedTokens, mode: "raw"))
-
+                    
                     await MainActor.run {
                         processedCount += 1
                         appleProgress.completedUnitCount = Int64(processedCount)
                     }
                 }
                 if runExplicit{
-                print("Printing conllRaw")
+                    print("Printing conllRaw")
                     for sentence in outSents {
                         print(sentence.conll)
                     }
@@ -388,37 +417,28 @@ struct PipelineSettingsView: View {
                     } else {
                         print("Problem with print path from URL 274")
                     }
-                    
                     print("output name = \(fileName)")
                     print("Main actor done, running function 277")
                 }
-                // run serialise,
-//                safeHeaderAttribs = makeSafeXmlHeaderAttribs(xmlTitle: xmlTitle, xmlAuthorName: xmlAuthorName, selectedLanguage: selectedLanguage, selectedTreebank: selectedTreebank, sourceFile: inputFile!)
-
-                let exportContent = makeExportContent(sentences: outSents, exportFormat: selectedExportFormat, safeHeaderAttribs: safeHeaderAttribs)
-
-                saveReport = saveFileToChosenLocation(exportContent: exportContent, saveName: fileName, targetFolderURL: targetFolderURL, exportFormat: selectedExportFormat, treebank: selectedTreebank)
                 
+                let exportContent = makeExportContent(sentences: outSents, exportFormat: selectedExportFormat, safeHeaderAttribs: safeHeaderAttribs)
+                
+                saveReport = saveFileToChosenLocation(exportContent: exportContent, saveName: fileName, targetFolderURL: targetFolderURL, exportFormat: selectedExportFormat, treebank: selectedTreebank)
                 
                 let xmldumpstring = sentListToXML(
                     sentences: outSents,
                     selectedExportFormat: selectedExportFormat,
                     safeHeaderAttribs:  safeHeaderAttribs
-                    )
-                    
-                    
-                if runExplicit {
-                    print(xmldumpstring)
-                }
+                )
+                
+                if runExplicit {print(xmldumpstring) }
+                
                 await MainActor.run {
-//                    outputLines.append(contentsOf: lines)
-//                    conllRawLines.append(contentsOf: rawLines)
                     sentsOut.append(contentsOf: outSents)
                     taggingInProgress.wrappedValue = false
                     
                     guard let saveReport else { return }
                     if let savedURL = saveReport.savedURL{
-                        
                         let currentRunOutput = RunOutput(
                             sents: sentsOut,
                             sourceFileName: displayName,
@@ -442,15 +462,8 @@ struct PipelineSettingsView: View {
             }
         }
     }
-
-    
-    
 }
 
 #Preview {
     PipelineSettingsView()
 }
-
-
-
-

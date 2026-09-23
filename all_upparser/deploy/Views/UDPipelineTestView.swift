@@ -25,7 +25,7 @@ struct UDPipelineTestView: View {
         @State private var appleProgress = Progress(totalUnitCount: 1)
         @State private var hasStarted = false
     @State private var selectedLanguage: Language = .FR
-    @State private var currentTokenisationType: TokenisationMethod = .conll
+//    @State private var currentTokenisationType: TokenisationMethod = .conll
     @State private var isRunningConll = false
     @State private var isRunningRaw = false
     //MARK: vars for intermediate states and outputs
@@ -36,7 +36,7 @@ struct UDPipelineTestView: View {
     //TODO: what's the diff between these first 2
     @State private var pretokSentsOut: [HashableSentence] = []// input for PretokenisedSentViewSect
     @State private var intermedTokSents: [HashableSentence] = []
-    @State var testTokens: [TestToken] = []
+    @State var tempTokens: [TempToken] = []
     @State var builtSents: [HashableSentence] = []
  
     
@@ -146,13 +146,13 @@ struct UDPipelineTestView: View {
                 }
                 .pickerStyle(.segmented)
                 .tint(.blue)
-                Picker("Tokenisation", selection: $currentTokenisationType) {
-                    ForEach(TokenisationMethod.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .tint(.blue)
+//                Picker("Tokenisation", selection: $currentTokenisationType) {
+//                    ForEach(TokenisationMethod.allCases) { mode in
+//                        Text(mode.rawValue).tag(mode)
+//                    }
+//                }
+//                .pickerStyle(.segmented)
+//                .tint(.blue)
             }
             //ProgressBarStylePicker(selection: $progressBarStyle)
 
@@ -174,17 +174,17 @@ struct UDPipelineTestView: View {
             let thisSentence = testSentences[0]
             HStack{
                 Button {
-                    testTokens = applyNaiveTokenisation(language: selectedLanguage, myString: thisSentence
+                    tempTokens = applyNaiveTokenisation(language: selectedLanguage, myString: thisSentence
                     )
                 } label: {
                 Text("Tokenise")
                 }
                 Spacer()
                 Button {
-                    let doneSent = makeHashableSentFromTestToks(testTokens: testTokens)
+                    let doneSent = makeHashableSentFromTempToks(tempTokens: tempTokens)
                     if let doneSent{
                         builtSents.append(doneSent)}
-                    testTokens = []
+                    tempTokens = []
                     
                 } label: {
                 Text("done")
@@ -193,30 +193,22 @@ struct UDPipelineTestView: View {
             }
             
             Form{
-                ForEach($testTokens, id:\.self) { token in
+                ForEach($tempTokens, id:\.self) { token in
                     TextField("Token", text: token.form)
 //                    Text(token.form)
                         
                     }
                 }
-            
-//            Form{
-//                Text("Moo")
-//                Text("foo")
-//                Text("Bar")
-//            }
-            
-            
 //            PretokenisedSentViewSection(pretokSentsOut: pretokSentsOut)
 //            OutputLinesViewSection(outputLines: outputLines)
             Spacer()
         }
         .padding()
     }
-    func applyNaiveTokenisation(language: Language, myString: String)-> [TestToken]{
+    func applyNaiveTokenisation(language: Language, myString: String)-> [TempToken]{
         
         let input: String = myString
-        var testTokens: [TestToken] = []
+        var tempTokens: [TempToken] = []
         var step1: [Substring] = []
         if language == .FR {
             
@@ -266,17 +258,17 @@ struct UDPipelineTestView: View {
         }
 
         for (num, item) in step1.enumerated() {
-            testTokens.append(
-                TestToken(id: num, form: String(item))
+            tempTokens.append(
+                TempToken(id: num, form: String(item))
                                 )
         }
-        return testTokens
+        return tempTokens
     }
     
-    func makeHashableSentFromTestToks(testTokens: [TestToken])-> HashableSentence?{
-        guard testTokens.count > 0 else {return nil}
+    func makeHashableSentFromTempToks(tempTokens: [TempToken])-> HashableSentence?{
+        guard tempTokens.count > 0 else {return nil}
         var keepTokens: [String] = []
-        for item in testTokens{
+        for item in tempTokens{
             if item.form != ""{
                 keepTokens.append(item.form)
             }
@@ -290,9 +282,9 @@ struct UDPipelineTestView: View {
         
     
     
-    private func runTest(tokType: TokenisationMethod, isRunning: Binding<Bool>) {
+    private func runTest( isRunning: Binding<Bool>) {
         isRunning.wrappedValue = true
-        let tokType: TokenisationMethod = tokType
+//        let tokType: TokenisationMethod = tokType
         errorMessage = nil
         outputLines = []
         conllRawLines = []
@@ -312,36 +304,36 @@ struct UDPipelineTestView: View {
 
                 
                 //MARK: TOKENISATION and Sentencisation
-                switch tokType {
-                case .conll:
-                    let testlist1: [[String]] = makeConllLinesFromFile(inputFile: inputFile)
-                    let intermedSents: [Sentence] = conllLinesToSents(conllLines: testlist1)
-//                    var mySents: [TokenisedSentence] = []
-                    
-                    for sent in intermedSents{
-                        let TokSentVers = sent.hashableSentence
-                        allSentences.append(TokSentVers)
-                    }
-                    print("Mysents count = \(allSentences.count)")
-//
-                    print(allSentences[0])
-                case .xml:
-                    print("XML")
-                    
-                    // this works, but builds toksent from source
-//                    intermedTokSents  = getSentsForPipelineFromPretokConll(inputFile: inputFile)
-//                    for sentence in intermedTokSents{
-//                        allSentences.append(sentence)
+//                switch tokType {
+//                case .conll:
+//                    let testlist1: [[String]] = makeConllLinesFromFile(inputFile: inputFile)
+//                    let intermedSents: [Sentence] = conllLinesToSents(conllLines: testlist1)
+////                    var mySents: [TokenisedSentence] = []
+//                    
+//                    for sent in intermedSents{
+//                        let TokSentVers = sent.hashableSentence
+//                        allSentences.append(TokSentVers)
 //                    }
+//                    print("Mysents count = \(allSentences.count)")
+////
 //                    print(allSentences[0])
-//                    print("allSentences count = \(allSentences.count)")
-                case .retokenise:
-                    // Step 1: tokenize everything with model
-                    for sentence in testSentences {
-                        allSentences.append(contentsOf: try pipeline.tokenize(sentence))
-                    }
-                    print("Mode a: \(allSentences.count) sents ")
-                }
+//                case .xml:
+//                    print("XML")
+//                    
+//                    // this works, but builds toksent from source
+////                    intermedTokSents  = getSentsForPipelineFromPretokConll(inputFile: inputFile)
+////                    for sentence in intermedTokSents{
+////                        allSentences.append(sentence)
+////                    }
+////                    print(allSentences[0])
+////                    print("allSentences count = \(allSentences.count)")
+//                case .retokenise:
+//                    // Step 1: tokenize everything with model
+//                    for sentence in testSentences {
+//                        allSentences.append(contentsOf: try pipeline.tokenize(sentence))
+//                    }
+//                    print("Mode a: \(allSentences.count) sents ")
+//                }
                 
                 await MainActor.run {
                     totalCount = allSentences.count

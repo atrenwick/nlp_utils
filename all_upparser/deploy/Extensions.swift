@@ -96,7 +96,7 @@ extension PipelineSettingsView {
         guard !missingRequirements.isEmpty else { return "" }
         
         if missingRequirements.count == 1 {
-            return "Please set: \(missingRequirements[0])"
+            return "Set: \(missingRequirements[0])"
         } else {
             // Lists items cleanly: "Missing required settings: Input File, Output Filename, Export Directory"
             return "Missing required settings: \(missingRequirements.joined(separator: ", "))"

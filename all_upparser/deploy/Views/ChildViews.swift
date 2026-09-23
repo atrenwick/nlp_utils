@@ -25,11 +25,8 @@ struct ExportConfigViewSection: View {
         }
     }
 
-    
     var body: some View {
-        //        Form {
         Section("Export Configuration") {
-            //0 set format
             Picker("Export (sub)type", selection: $selectedExportFormat){
                 ForEach(ExportFormat.allCases){ formatOption in
                     Text(formatOption.rawValue)
@@ -54,9 +51,6 @@ struct ExportConfigViewSection: View {
             } label: {
                 Text( xmlSettingDisplayText)
             }
-
-            
-            
         }
         // Folder Selection System Sheet
         .fileImporter(
@@ -87,26 +81,19 @@ struct ChooseInputFileViewSection: View {
     var body: some View {
         
             // User chooses the target folder
-            HStack {
-                Text("Source:")
-                Spacer()
-                Text(selectedInputFile?.lastPathComponent ?? "Not Selected")
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    
-                    Button {
-                        isSelectingFile = true
-                    } label: {
-                        Image(systemName: selectedInputFile == nil ? "folder" : "arrow.triangle.2.circlepath")
-                    }
-                //                Text(selectedInputFile?.lastPathComponent ?? "Not Selected")
-//                    .foregroundColor(.secondary)
-//                Button("Choose...") {
-//                    isSelectingFile = true
-//                }
+        HStack {
+            Text("Source:")
+            Spacer()
+            Text(selectedInputFile?.lastPathComponent ?? "Not Selected")
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Button {
+                isSelectingFile = true
+            } label: {
+                Image(systemName: selectedInputFile == nil ? "folder" : "arrow.triangle.2.circlepath")
             }
-
+        }
         // Folder Selection System Sheet
         .fileImporter(
             isPresented: $isSelectingFile,
@@ -137,8 +124,6 @@ struct FileNameInputViewSection: View {
     @Binding var fileName: String
     @FocusState private var isFocused: Bool
     let selectedExportFormat: ExportFormat
-    
-    // Set of characters prohibited in file names across major file systems
     
     var body: some View {
         HStack{
