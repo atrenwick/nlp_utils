@@ -14,8 +14,10 @@ struct XMLSettingView: View {
     @FocusState var isFocused
     var body: some View {
         switch selectedExportFormat {
+        case .conll, .conllTidy, .conllTxt:
+            Text("XML settings not relevant")
+            
         case .xml, .xmlConll:
-        
             Form{
                 TextField("XML Author", text: $xmlAuthorName)
                     .textInputAutocapitalization(TextInputAutocapitalization.never)
@@ -32,7 +34,7 @@ struct XMLSettingView: View {
                     .onSubmit {
                         isFocused = false
                     }
-
+                
                 TextField("XML Title", text: $xmlTitle)
                     .textInputAutocapitalization(TextInputAutocapitalization.never)
                     .autocorrectionDisabled()
@@ -49,11 +51,7 @@ struct XMLSettingView: View {
                         isFocused = false
                     }
             }
-        
-        case .conll, .conllTidy, .conllTxt:
-            Text("XML settings not relevant")
         }
-
     }
 }
 

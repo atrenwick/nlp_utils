@@ -168,11 +168,26 @@ enum PipelineStep: Int, CaseIterable, Identifiable, Comparable {
     }
 }
 
-enum TokenisationMethod: String, CaseIterable, Identifiable {
+enum RetokenisationType: String, Identifiable, CaseIterable{
     var id: Self {self}
-    case conll
-//    case naive
-    case retokenise
-    case xml
+    case predict = "Predict"
+    case manual = "Manual"
+    case rule = "Rule"
+    case skip = "skip" // special case for txt parsed from raw file - is already Hashable, so skip by toggling value
+
+//    var displayName: String{
+//        switch self{
+//        case .predict: return "Predict"
+//        case .manual: return "Manual"
+//        case .rule: return "Rule"
+//    }
 }
 
+//enum TokenisationMethod: String, CaseIterable, Identifiable {
+//    var id: Self {self}
+//    case conll
+////    case naive
+//    case retokenise
+//    case xml
+//}
+//
