@@ -43,38 +43,36 @@ struct PipelineSettingsView: View {
 
     // reporting
     @State private var errorMessage: String?
-    @State private var saveReport: SaveReport?
     @State private var topLevelOutputList: [RunOutput] = []
     @State private var exportStatusMessage: String?
     @State var outputString: String = "not yet run"
+    @State private var runOutput: RunOutput?
 
     //controlling visibility
     @State var taggingInProgress: Bool = false
     @State var showImporter: Bool = false
     @State private var isSelectingFolder = false
     
-    
     // sentences ::
     @State var builtSents: [HashableSentence] = []
-    @State var sentsOut: [Sentence] = []
     @State var sentsToRetokenise: [String] = []
     @State private var testSentences = ["Paris est la capitale de la France.", "La capitale de l'Allemagne est Berlin, mais avant, c'était Bonn mais on trouvait que c'était pas bon.", "Paris est une grande ville française"]
     @State private var newSentence: String = ""
 
+    // outtput data
+    @State var exportContent: String = ""
     
     let runExplicit = false //true // hardcoded bool for testing verbosity, display of test elements
 
     var unreadCount: Int {
-        topLevelOutputList.reduce(0) { $1.unread ? $0 + 1 : $0 }
+        topLevelOutputList.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
     
     var safeHeaderAttribs: XmlHeaderAttribs {
-        
         let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
         let xmlSafeXMLTitle = xmlTitle.xmlEscaped != "" ? xmlTitle.xmlEscaped : "title"
         let xmlSafeLang = selectedLanguage.displayName.lowercased()
         let xmlsafeTreebank = selectedTreebank.short.xmlEscaped
-        
         
         let formatter = DateFormatter()
         formatter.dateFormat = "y-MM-dd HH:mm"
@@ -96,10 +94,8 @@ struct PipelineSettingsView: View {
         )
         return outputStruct
     }
-    
-    
-    var body: some View {
         
+    var body: some View {
         NavigationStack{
             Form {
                 if inputFileType != .manual {
@@ -173,9 +169,7 @@ struct PipelineSettingsView: View {
                         Text(outputString)
                     }
                 }
-                Section {
-                    // 3. User hits 'Go'
-                    
+                Section { // Go button
                     if !isPipelineReady {
                         HStack(spacing: 6) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -291,21 +285,34 @@ struct PipelineSettingsView: View {
             case .manual:
                 displayName = "Manual entry"
             case .conll, .xmlConll, .xml, .txt:
-                displayName = fileContainerModel.localSandboxFileURL?.lastPathComponent ?? "No file selected"
+                displayName = fileContainerModel.selectedFileName
             } // end switch
+            
+            
+            let saveInputMetas = SaveInputMetas(
+                lang: selectedLanguage,
+                displayName: displayName,
+                inputURL: inputFile,
+                saveName: fileName,
+                targetFolderURL: targetFolderURL,
+                exportFormat: selectedExportFormat,
+                treebank: selectedTreebank,
+                safeHeaderAttribs: safeHeaderAttribs
+            )
             errorMessage = nil
             startTime = nil
             hasStarted = true
-            sentsOut = []
             processedCount = 0
             totalCount = 0
-    
+            
             
         Task {
             // MARK: tagging :
             do {
                 // get pipeline object
-                let pipeline = try UDPipeline(languageCode: selectedLanguage.rawValue, treebank: selectedTreebank.short)
+                let pipeline = try UDPipeline(
+                    languageCode: saveInputMetas.lang.rawValue,
+                    treebank: saveInputMetas.treebank.short)
                 var allSentences: [HashableSentence] = []
                 
                 //MARK: INGEST SENTS ::
@@ -315,16 +322,16 @@ struct PipelineSettingsView: View {
                 
                 switch inputFileType {
                 case .conll:
-                    allSentences = conllFileToHashableSentForPipeline(inputURL: inputFile)
+                    allSentences = conllFileToHashableSentForPipeline(inputURL: saveInputMetas.inputURL)
                     
                 case .manual:
                     allSentences = builtSents
                     
                 case .xml:
-                    allSentences = xmlToHashableSentForPipeline(inputURL: inputFile)
+                    allSentences = xmlToHashableSentForPipeline(inputURL: saveInputMetas.inputURL)
                     
                 case .xmlConll:
-                    allSentences = xmlConllFileToHashableSentForPipeline(inputURL: inputFile)
+                    allSentences = xmlConllFileToHashableSentForPipeline(inputURL: saveInputMetas.inputURL)
                     
                 case .txt:
                     // Step 1: tokenize everything with model
@@ -345,16 +352,12 @@ struct PipelineSettingsView: View {
                         for sentence in inputSents {
                             let retokSent = try pipeline.tokenize(sentence.detokenised)
                             allSentences.append(contentsOf: retokSent)
-                            if runExplicit {
-                                print("max requested step == \(maxPipelineStep.rawValue)")
-                            }
                         }
                     case .manual, .rule, .skip:
                         print("In manual mode, usin")
                         break
                     }
                 }
-                
                 
                 // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
                 if runExplicit{
@@ -380,8 +383,7 @@ struct PipelineSettingsView: View {
                 }
                 
                 var outSents: [Sentence] = []
-                // MARK: Step 2: process sentences
-                // process one detected sentence at a time
+                // MARK: Step 2: iterate over sentences
                 
 #if DEBUG
                 let runfive = false
@@ -405,50 +407,27 @@ struct PipelineSettingsView: View {
                         appleProgress.completedUnitCount = Int64(processedCount)
                     }
                 }
-                if runExplicit{
-                    print("Printing conllRaw")
-                    for sentence in outSents {
-                        print(sentence.conll)
-                    }
-                    let seqOutput = outSents.generateExportText()
-                    print(seqOutput)
-                    if let printPath = targetFolderURL?.path(){
-                        print(printPath)
-                    } else {
-                        print("Problem with print path from URL 274")
-                    }
-                    print("output name = \(fileName)")
-                    print("Main actor done, running function 277")
-                }
-                
-                let exportContent = makeExportContent(sentences: outSents, exportFormat: selectedExportFormat, safeHeaderAttribs: safeHeaderAttribs)
-                
-                saveReport = saveFileToChosenLocation(exportContent: exportContent, saveName: fileName, targetFolderURL: targetFolderURL, exportFormat: selectedExportFormat, treebank: selectedTreebank)
-                
-                let xmldumpstring = sentListToXML(
-                    sentences: outSents,
-                    selectedExportFormat: selectedExportFormat,
-                    safeHeaderAttribs:  safeHeaderAttribs
+#if DEBUG
+                dumpDetailsForRunExplicit(runExplicit: runExplicit, outSents: outSents, targetFolderURL: targetFolderURL, fileName: fileName)
+#endif
+
+                runOutput = makeTidyRunOutput(
+                    outSents: outSents,
+                    saveInputMetas: saveInputMetas,
+                    safeHeaderAttribs: safeHeaderAttribs
                 )
                 
-                if runExplicit {print(xmldumpstring) }
+                if runExplicit {
+                    guard let runOutput else { return }
+                    print(runOutput.runData.sents.generateExportText())
+                }
                 
                 await MainActor.run {
-                    sentsOut.append(contentsOf: outSents)
+//                    sentsOut.append(contentsOf: outSents)
                     taggingInProgress.wrappedValue = false
                     
-                    guard let saveReport else { return }
-                    if let savedURL = saveReport.savedURL{
-                        let currentRunOutput = RunOutput(
-                            sents: sentsOut,
-                            sourceFileName: displayName,
-                            outputFileName: savedURL,
-                            lang: selectedLanguage.rawValue,
-                            treebank: selectedTreebank.short,
-                            exportFormat: selectedExportFormat
-                        )
-                        topLevelOutputList.append(currentRunOutput)
-                    }
+                    guard let runOutput else { return }
+                        topLevelOutputList.append(runOutput)
                     if runExplicit{
                         print("topLevelOutputList length == \(topLevelOutputList.count)")
                     }

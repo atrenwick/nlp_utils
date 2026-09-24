@@ -271,19 +271,14 @@ func xmlToHashableSentForPipeline(inputURL: URL?)  -> [HashableSentence]{
 }
 
 
-// MARK: - XML making
 
+// MARK: - Agnostic output making
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
-//                                                  XML-making functions
+//                                                 Agnostic output making functions
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
-
-//1. make xml from ConllSents - part1
-//2. make safe header attributes
-//3. Make XML string from list of sentences with output of 1, 2
-
-//1.
+//1. convert sent to dumpable string for selected format
 func makeExportContent(sentences: [Sentence], exportFormat: ExportFormat, safeHeaderAttribs: XmlHeaderAttribs) -> String{
     var returnString: String = ""
     switch exportFormat {
@@ -307,6 +302,15 @@ func makeExportContent(sentences: [Sentence], exportFormat: ExportFormat, safeHe
     }
     return returnString
 }
+
+// MARK: - XML making
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  XML-making functions :: called in agnostic function
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//1. make safe header attributes
+//2. Make XML string from list of sentences with output of 1, 2
 
 //2.
 func makeSafeXmlHeaderAttribs(
@@ -406,16 +410,29 @@ func sentListToXML(
 // 3. write string dump :: write string to named files on macOS AND iOS device ; No longer used
 // 4. writtoFile ; No longer used
 
+
 // write string to location
-func saveFileToChosenLocation(exportContent: String, saveName: String, targetFolderURL: URL?, exportFormat: ExportFormat, treebank: Language.Treebank, runExplicit: Bool = false) -> SaveReport {
+func saveFileToChosenLocation(exportContent: String, saveInputMetas: SaveInputMetas, runExplicit: Bool = false) -> RunMetas {
     // function called via UI to run main dump to file
     var savedURL: URL
     var exportStatusMessage: String
-    guard let folderURL = targetFolderURL else {
+    guard let folderURL = saveInputMetas.targetFolderURL else {
         if runExplicit {
             print("Guard 292 fail")
         }
-        return SaveReport(savedURL: nil, message: "Guard failure")
+        return RunMetas(
+            lang: saveInputMetas.lang.rawValue,
+            sourceFileURL: saveInputMetas.inputURL,
+            sourceFileName: saveInputMetas.displayName,
+            outputFileName: saveInputMetas.saveName,
+            treebank: saveInputMetas.treebank.short,
+            exportFormat: saveInputMetas.exportFormat,
+            unread: true,
+            savedURL: nil,
+            message: "Guard failure in save file to chosen location",
+            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs
+        )
+        
     }
     if runExplicit {
         print("Guard 292 passed")
@@ -423,17 +440,44 @@ func saveFileToChosenLocation(exportContent: String, saveName: String, targetFol
     do {
         savedURL = try ExporterService.exportDataToFile(
             exportContent: exportContent,
-            customName: "\(saveName)_\(treebank.short)_\(exportFormat.rawValue)",
+            customName: "\(saveInputMetas.saveName)_\(saveInputMetas.treebank.short)_\(saveInputMetas.exportFormat.rawValue)",
             targetFolderURL: folderURL,
-            exportFormat: exportFormat
+            exportFormat: saveInputMetas.exportFormat
         )
         exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
         if runExplicit { print(exportStatusMessage) }
-        return SaveReport(savedURL: savedURL, message: exportStatusMessage)
+        
+        return RunMetas(
+            lang: saveInputMetas.lang.rawValue,
+            sourceFileURL: saveInputMetas.inputURL,
+            sourceFileName: saveInputMetas.displayName,
+            outputFileName: saveInputMetas.saveName,
+            treebank: saveInputMetas.treebank.short,
+            exportFormat: saveInputMetas.exportFormat,
+            unread: true,
+            savedURL: savedURL,
+            message: exportStatusMessage,
+            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs
+        )
+        
+        
+        
     } catch {
         exportStatusMessage = "Export failed: \(error.localizedDescription)"
         if runExplicit { print(exportStatusMessage) }
-        return SaveReport(savedURL: nil, message: exportStatusMessage)
+        
+        return RunMetas(
+            lang: saveInputMetas.lang.rawValue,
+            sourceFileURL: saveInputMetas.inputURL,
+            sourceFileName: saveInputMetas.displayName,
+            outputFileName: saveInputMetas.saveName,
+            treebank: saveInputMetas.treebank.short,
+            exportFormat: saveInputMetas.exportFormat,
+            unread:  true,
+            savedURL: nil,
+            message: exportStatusMessage,
+            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs
+        )
 
     }
 }
@@ -480,7 +524,7 @@ func writeToFile(_ content: String, _ path: String) throws {
 //----------------------------------------------------------------------------------------------------------------------------
 //1. print JSON errror info to console
 // 2. Print from print to conllSents to console, specific macOS file
-
+// 3. print conll form of sentences on output, before calling mainActor
 //1.
 func printJSONError(_ error: Error) {
     let nsError = error as NSError
@@ -528,6 +572,61 @@ func printFromConllSents(outsents: [Sentence]) throws -> URL{
     return newUrl
     
 }
+
+//3
+func dumpDetailsForRunExplicit(runExplicit: Bool, outSents: [Sentence], targetFolderURL: URL?, fileName: String) {
+    // print conll lines to terminal
+    if runExplicit {
+        print("Printing conllRaw")
+        for sentence in outSents {
+            print(sentence.conll)
+        }
+        if let printPath = targetFolderURL?.path(){
+            print(printPath)
+        } else {
+            print("Problem with print path from URL 274")
+        }
+        print("output name = \(fileName)")
+        print("Main actor done, running function 277")
+    }
+    
+    
+    
+    //no returns
+}
+
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  encapsulation of run inputs, outputs
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+
+func makeTidyRunOutput(outSents: [Sentence], saveInputMetas: SaveInputMetas, safeHeaderAttribs: XmlHeaderAttribs) -> RunOutput {
+    
+    let exportContent = makeExportContent(
+        sentences: outSents,
+        exportFormat: saveInputMetas.exportFormat,
+        safeHeaderAttribs: saveInputMetas.safeHeaderAttribs
+    )
+    
+    let runData: RunData = RunData(
+        sents: outSents,
+        exportContent: exportContent
+    )
+    
+    let runMetas = saveFileToChosenLocation(
+        exportContent: exportContent,
+        saveInputMetas: saveInputMetas
+    )
+    
+    let runOutput = RunOutput(
+        runData: runData,
+        runMetas: runMetas
+    )
+ 
+    return runOutput
+}
+
 
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------

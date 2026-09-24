@@ -70,26 +70,52 @@ struct HashableSentence: Hashable {
     }
 }
 
-struct RunOutput: Identifiable {
+struct RunMetas: Identifiable{
     var id = UUID()
-    let sents: [Sentence]
-    let sourceFileName: String
-    let outputFileName: URL
     let lang: String
+    let sourceFileURL: URL?
+    let sourceFileName: String
+    let outputFileName: String
     let treebank : String
     let exportFormat: ExportFormat
     var unread: Bool = true
+    let savedURL: URL?
+    let message: String
+    let safeHeaderAttribs: XmlHeaderAttribs
+
     
+}
+
+struct RunData: Identifiable{
+    var id = UUID()
+    let sents: [Sentence]
+    let exportContent: String
     var tokCount: Int {
         // reduce collection to single element : start at 0, add iteratively over elements
         sents.reduce(0) { $0 + $1.conllData.count }
     }
+    
+    
+}
+struct RunOutput: Identifiable {
+    var id = UUID()
+    let runData: RunData
+    var runMetas: RunMetas
 }
 
-struct SaveReport {
-    let savedURL: URL?
-    let message: String
+struct SaveInputMetas: Identifiable{
+    var id = UUID()
+    let lang: Language
+    let displayName: String
+    let inputURL: URL?
+    let saveName: String
+    let targetFolderURL: URL?
+    let exportFormat: ExportFormat
+    let treebank: Language.Treebank
+    let safeHeaderAttribs: XmlHeaderAttribs
 }
+
+
 
 struct Sentence : Identifiable {
     var id = UUID()
