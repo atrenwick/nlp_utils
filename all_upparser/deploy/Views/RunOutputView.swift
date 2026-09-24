@@ -13,7 +13,7 @@ struct RunOutputDetailView: View{
     @State var additionalExportFormat: ExportFormat = .conll
     @State var exportContent: String = ""
     @State var exportStatusMessage: String = ""
-
+    @Binding var topLevelOutput: [RunOutput]
     @Binding var run: RunOutput
     @Binding var xmlTitle: String
     @Binding var xmlAuthor: String
@@ -31,7 +31,7 @@ struct RunOutputDetailView: View{
         
     var exportFormatShowCases: [ExportFormat]{
         ExportFormat.allCases.filter { format in
-            format != run.exportFormat
+            format != run.runMetas.exportFormat
         }
     }
     
@@ -39,14 +39,14 @@ struct RunOutputDetailView: View{
         NavigationStack{
             Form{
                 Section("Run \(shortUUID)"){
-                    Text("Input file : \(run.sourceFileName)")
-                    NavigationLink(destination: FileViewerView(fileURL: run.outputFileName)) {
-                        Text("Output : \(run.outputFileName.lastPathComponent)")
+                    Text("Input file : \(run.runMetas.sourceFileName)")
+                    NavigationLink(destination: FileViewerView(fileURL: run.runMetas.savedURL)) {
+                        Text("Output : \(run.runMetas.outputFileName)")
                     }
-                    Text("Sentence count : \(run.sents.count)")
-                    Text("Tok count : \(run.tokCount)")
-                    Text("Language : \(run.lang)")
-                    Text("Treebank : \(run.treebank)")
+                    Text("Sentence count : \(run.runData.sents.count)")
+                    Text("Tok count : \(run.runData.tokCount)")
+                    Text("Language : \(run.runMetas.lang)")
+                    Text("Treebank : \(run.runMetas.treebank)")
                 }
             }
         }
@@ -60,32 +60,42 @@ struct RunOutputDetailView: View{
                     }
                     Spacer()
                     Button {
-                        exportContent = makeExportContent(sentences: run.sents, exportFormat: additionalExportFormat, safeHeaderAttribs:safeHeaderAttribs)
-                        print("run.sents.count: \(run.sents.count)")
+                        exportContent = makeExportContent(sentences: run.runData.sents, exportFormat: additionalExportFormat, safeHeaderAttribs:run.runMetas.safeHeaderAttribs)
+                        
+                        print("run.sents.count: \(run.runData.sents.count)")
                         print("chosenformat: \(additionalExportFormat.fileExtension)")
                         print("lang: \(selectedLanguage.rawValue)")
                         print("xmltitlte: \(xmlTitle)")
                         print("xmlauthor: \(xmlAuthor)")
                         print(exportContent)
                         
-                        let saveReport = saveFileToChosenLocation(
-                            exportContent: exportContent,
-                            saveName: fileName,
-                            targetFolderURL: targetFolderURL,
-                            exportFormat: additionalExportFormat,
-                            treebank: selectedTreebank
+                        let runData = RunData(
+                            sents: run.runData.sents,
+                            exportContent: exportContent
                         )
-                        exportStatusMessage = saveReport.message
+                        let updatedInputMetas = SaveInputMetas(
+                            lang: selectedLanguage,
+                            displayName: run.runMetas.sourceFileName,
+                            inputURL: run.runMetas.sourceFileURL,
+                            saveName: fileName,
+                            targetFolderURL: run.runMetas.savedURL?.deletingLastPathComponent(),
+                            exportFormat: additionalExportFormat,
+                            treebank: selectedTreebank,
+                            safeHeaderAttribs: run.runMetas.safeHeaderAttribs
+                        )
                         
+                        let runMetas = saveFileToChosenLocation(exportContent: exportContent, saveInputMetas: updatedInputMetas)
+                        let runOutput = RunOutput(runData: runData, runMetas: runMetas)
+                        topLevelOutput.append(runOutput)
                     } label: {
                         Text("Export")
                     }
                     .tint(.green)
                     .buttonStyle(.borderedProminent)
-                    .onAppear {
-                        run.unread = false
-                    }
                 }
+                    .onAppear {
+                        run.runMetas.unread = false
+                    }
             }
         }
     }
@@ -94,7 +104,7 @@ struct RunOutputDetailView: View{
 
 struct RunOutputView: View {
     @State var exportStatusMessage: String = ""
-
+    
     @Binding var runs: [RunOutput]
     @Binding var xmlTitle: String
     @Binding var selectedLanguage: Language
@@ -114,9 +124,9 @@ struct RunOutputView: View {
                 List{
                     ForEach(runs.enumerated(), id:\.offset){num,run in
                         NavigationLink {
-                            RunOutputDetailView(run: bindingFor(run), xmlTitle: $xmlTitle, xmlAuthor: $xmlAuthor, selectedLanguage: $selectedLanguage, targetFolderURL: $targetFolderURL, fileName: $fileName, selectedTreebank: $selectedTreebank, safeHeaderAttribs: safeHeaderAttribs )
+                            RunOutputDetailView(topLevelOutput: $runs, run: bindingFor(run), xmlTitle: $xmlTitle, xmlAuthor: $xmlAuthor, selectedLanguage: $selectedLanguage, targetFolderURL: $targetFolderURL, fileName: $fileName, selectedTreebank: $selectedTreebank, safeHeaderAttribs: safeHeaderAttribs  )
                         } label: {
-                            Text("Run \(num + 1): \(run.sourceFileName) | \(run.lang) | \(run.treebank) | \(run.exportFormat)")
+                            Text("Run \(num + 1): \(run.runMetas.sourceFileName) | \(run.runMetas.lang) | \(run.runMetas.treebank) | \(run.runMetas.exportFormat)")
                         }
                     }
                 }
