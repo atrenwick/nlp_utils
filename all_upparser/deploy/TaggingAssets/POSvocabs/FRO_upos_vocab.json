@@ -1,0 +1,24 @@
+{
+  "itos": [
+    "<pad>",
+    "<unk>",
+    "<root>",
+    "VERB",
+    "NOUN",
+    "PUNCT",
+    "PRON",
+    "ADV",
+    "DET",
+    "ADP",
+    "CCONJ",
+    "AUX",
+    "SCONJ",
+    "ADJ",
+    "PROPN",
+    "NUM",
+    "INTJ",
+    "X"
+  ],
+  "pad": "<pad>",
+  "unk": "<unk>"
+}
