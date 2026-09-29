@@ -9,15 +9,28 @@ import SwiftUI
 
 
 struct ProcessorStepConfigViewSection: View {
-    // Single source of truth from parent view (nil means all steps off)
+
     @Binding var maxActiveStep: PipelineStep
     @Binding var inputFileType: InputFileType
     @Binding var runRetokeniser: Bool
-    @Binding var selectedRetokenisationType: RetokenisationType
+    @Binding var tokenizingMethod: TokenizingMethod
     
     var body: some View {
-        Section(header: Text("Pipeline Execution Steps")) {
-            Form{
+        Form{
+            Section("Retokenisation"){
+                Toggle("1. Retokenisation", isOn: $runRetokeniser)
+                
+                Group{
+                    Picker("Tokenizing method", selection: $tokenizingMethod) {
+                        ForEach(TokenizingMethod.allCases.dropLast()){tokMethod in
+                            Text(tokMethod.rawValue)
+                        }
+                    }
+                }
+                .disabled(!runRetokeniser)
+                .foregroundStyle(runRetokeniser ? .primary : .secondary)
+            }
+            Section(header: Text("Pipeline Execution Steps")) {
                 ForEach(PipelineStep.allCases) { step in
                     let isActive = isStepActive(step)
                     
@@ -27,19 +40,6 @@ struct ProcessorStepConfigViewSection: View {
                             .foregroundColor(isActive ? .primary : .secondary)
                     }
                 }
-            }
-        }
-        Section("Retokenisation"){
-            Form{
-                Toggle("Run retokenisation", isOn:  $runRetokeniser)
-                
-                if runRetokeniser{
-                    Picker("Retokenisation method", selection: $selectedRetokenisationType){
-                        ForEach(RetokenisationType.allCases){retokType in
-                            Text(retokType.rawValue)}
-                    }
-                }
-                //.onChange(of: useConllTokens) $useConllTokens=true
             }
         }
     }
@@ -75,14 +75,14 @@ struct ProcessorStepConfigViewSection: View {
 
 #Preview {
     @Previewable @State var maxActiveStep: PipelineStep = .step2
-    @Previewable @State var selectedRetokenisationType: RetokenisationType = .predict
+    @Previewable @State var tokenizingMethod: TokenizingMethod = .nltokeniser
     @Previewable @State var inputFileType: InputFileType = .conll
     @Previewable @State var runRetokeniser: Bool = true
     ProcessorStepConfigViewSection(
         maxActiveStep: $maxActiveStep,
         inputFileType: $inputFileType,
         runRetokeniser: $runRetokeniser,
-        selectedRetokenisationType: $selectedRetokenisationType
+        tokenizingMethod: $tokenizingMethod
     )
 }
 

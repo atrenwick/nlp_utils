@@ -41,6 +41,9 @@ extension Sequence where Element == Sentence {
     func generateExportTextTidy() -> String {
         return self.map { $0.conllTidy }.joined(separator: "\n")
     }
+    func generateTokCount() -> String {
+        String(self.reduce(0) {$0 + $1.tokCount})
+    }
 }
 
 extension Sequence where Element == Token {
@@ -63,7 +66,7 @@ extension PipelineSettingsView {
         if fileContainerModel.localSandboxFileURL == nil && inputFileType != .manual{
             missing.append("Input File")
         }
-        // TODO: add rule for input type when adding option for non-conll import
+
         let ext = fileContainerModel.localSandboxFileURL?.pathExtension ?? "nil"
         if  inputFileType.allowedReadExt.contains(ext) == false  && inputFileType != .manual {
             missing.append("extension-InputType Mismatch")

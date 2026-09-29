@@ -1,5 +1,5 @@
 //
-//  Structures.swift
+//  enumerations
 //  Tagger
 //
 //  Created by Adam on 10/09/2026.
@@ -76,6 +76,8 @@ enum Language: String, CaseIterable, Identifiable {
     case FR
     case DE
     case ANG
+    case FRM
+    case FRO
     
     var id: Self { self }
     
@@ -86,6 +88,8 @@ enum Language: String, CaseIterable, Identifiable {
         case .FR: return "fr"
         case .DE: return "de"
         case .ANG: return "ang"
+        case .FRM: return "frm"
+        case .FRO: return "fro"
         }
     }
     
@@ -95,6 +99,8 @@ enum Language: String, CaseIterable, Identifiable {
         case .ANG: return .angTB1
         case .FR: return .frTB1
         case .DE: return .deTB1
+        case .FRO: return .froTB1
+        case .FRM: return .frmTB1
         }
         
     }
@@ -110,6 +116,8 @@ enum Language: String, CaseIterable, Identifiable {
         case deTB1 = "de_gsd"
         case deTB2 = "de_hdt"
         case angTB1 = "ang_oedt"
+        case frmTB1 = "frm_profiterole"
+        case froTB1 = "fro_profiterole"
         
         var id: String { rawValue }
         
@@ -125,7 +133,8 @@ enum Language: String, CaseIterable, Identifiable {
             case .deTB1: return "gsd"
             case .deTB2: return "hdt"
             case .angTB1: return "oedt"
-
+            case .frmTB1: return "profiterole"
+            case .froTB1: return "profiterole"
             }
         }
     }
@@ -137,6 +146,8 @@ enum Language: String, CaseIterable, Identifiable {
         case .FR:  return [.frTB1, .frTB2, .frTB3]
         case .DE:  return [.deTB1, .deTB2]
         case .ANG: return [.angTB1]
+        case .FRM: return [.frmTB1]
+        case .FRO: return [.froTB1]
         }
     }
 }
@@ -174,20 +185,21 @@ enum RetokenisationType: String, Identifiable, CaseIterable{
     case manual = "Manual"
     case rule = "Rule"
     case skip = "skip" // special case for txt parsed from raw file - is already Hashable, so skip by toggling value
+    
+    }
+enum SentencizingMethod: String, Identifiable, CaseIterable {
+    var id: Self {self}
 
-//    var displayName: String{
-//        switch self{
-//        case .predict: return "Predict"
-//        case .manual: return "Manual"
-//        case .rule: return "Rule"
-//    }
+    case nlSentencizer
+    case custom
+    
+    }
+
+enum TokenizingMethod : String, Identifiable, CaseIterable{
+    var id: Self {self}
+    case custom = "Custom"
+    case nltokeniser = "NLTokenizer"
+    case trained = "Trained"
+    case manual = "Manual"
+    case skip = "Skip"
 }
-
-//enum TokenisationMethod: String, CaseIterable, Identifiable {
-//    var id: Self {self}
-//    case conll
-////    case naive
-//    case retokenise
-//    case xml
-//}
-//
