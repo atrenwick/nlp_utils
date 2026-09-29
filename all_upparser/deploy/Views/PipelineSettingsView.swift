@@ -4,9 +4,6 @@
 //
 //  Created by Adam on 08/09/2026.
 //
-//TODO: A-B choices for tokenisation method, source type, sourcelang
-
-//TODO: view output files
 
 import SwiftUI
 internal import UniformTypeIdentifiers
@@ -14,17 +11,40 @@ internal import UniformTypeIdentifiers
 
 struct PipelineSettingsView: View {
     
+    //MARK: defaults via AppStorage
+    //input file
+    @AppStorage("inputFileTypeDefault") var inputFileTypeDefault: InputFileType = .txt
+    
+    // import + parsing
+    @AppStorage("detectLangDefault") var detectLangDefault: Bool = false
+    @AppStorage("selectedLanguageDefault") var selectedLanguageDefault: Language = .FR
+    @AppStorage("selectedTreebankDefault") var selectedTreebankDefault: Language.Treebank = .frTB3
+    @AppStorage("tokenizingMethodDefault") var tokenizingMethodDefault: TokenizingMethod = .nltokeniser
+    @AppStorage("sentencizingMethodDefault")  var sentencizingMethodDefault: SentencizingMethod = .nlSentencizer
+    @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
+
+    //export
+    @AppStorage("selectedExportFormatDefault") var selectedExportFormatDefault: ExportFormat = .xml
+    @AppStorage("xmlAuthorDefault") var xmlAuthorDefault: String = "XML Author"
+    @AppStorage("xmlTitleDefault") var xmlTitleDefault: String = "XML Title"
+    @AppStorage("fileNameDefault") var fileNameDefault: String = "fileName"
+    
+    //MARK: state vars
     // input file
+    @State var inputFileType: InputFileType = .conll
     @State var fileContainerModel = SourceFileContainerModel()
     @State var selectedInputFile: URL? = nil
-    @State var inputFileType: InputFileType = .conll
+
 
     // import, parsing settings
+    @State var detectLanguage: Bool = false
     @State var selectedLanguage: Language = .FR
     @State var selectedTreebank: Language.Treebank = .frTB1
+
     @State var maxPipelineStep: PipelineStep = .step5
     @State var runRetokeniser: Bool = false
-    @State var selectedRetokenisationType: RetokenisationType = .predict
+    @State var tokenizingMethod: TokenizingMethod = .nltokeniser
+    @State var sentencizingMethod: SentencizingMethod = .nlSentencizer
 
     // export settings
     @State var fileName: String = "Filename"
@@ -62,12 +82,12 @@ struct PipelineSettingsView: View {
     // outtput data
     @State var exportContent: String = ""
     
-    let runExplicit = false //true // hardcoded bool for testing verbosity, display of test elements
+    let runExplicit = true //true // hardcoded bool for testing verbosity, display of test elements
 
     var unreadCount: Int {
         topLevelOutputList.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
-    
+    //TODO: funct exists to make same, but not called :: consider where, if, to use it
     var safeHeaderAttribs: XmlHeaderAttribs {
         let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
         let xmlSafeXMLTitle = xmlTitle.xmlEscaped != "" ? xmlTitle.xmlEscaped : "title"
@@ -83,6 +103,11 @@ struct PipelineSettingsView: View {
         let xmlsafeSourceFile = fileContainerModel.localSandboxFileURL?.path().xmlEscaped ?? "unk"
         let runID = UUID().uuidString
 
+        let maxPipelineStep = maxPipelineStep.title.xmlEscaped
+        let runRetokeniser = String(runRetokeniser).xmlEscaped
+        let tokenizingMethod = tokenizingMethod.rawValue.xmlEscaped
+        let sentencizingMethod = sentencizingMethod.rawValue.xmlEscaped
+        
         let outputStruct = XmlHeaderAttribs(
             xmlTitle: xmlSafeXMLTitle,
             xmlAuthorName: xmlSafeXMLAuthor,
@@ -91,10 +116,16 @@ struct PipelineSettingsView: View {
             taggingDate: xmlsafeDate,
             sourceFile: xmlsafeSourceFile,
             runID: runID,
+            maxPipelineStep: maxPipelineStep,
+            runRetokeniser: runRetokeniser,
+            tokenizingMethod: tokenizingMethod,
+            sentencizingMethod: sentencizingMethod,
+
         )
         return outputStruct
     }
-        
+    
+    
     var body: some View {
         NavigationStack{
             Form {
@@ -102,21 +133,54 @@ struct PipelineSettingsView: View {
                     Section{
                         ImportFileViewSection(fileContainerModel: fileContainerModel )
                     }
+                } else {
+                    Section {
+                        NavigationLink("Manual entry…"){
+                            ManualTokenisationView(builtSents: $builtSents)
+                        }
+                    }
                 }
                 // First Picker
                 Section("Parameters"){
                     Picker("Inputtype", selection: $inputFileType){
                         ForEach(InputFileType.allCases){fType in
                             Text(fType.rawValue)}
+                    }.onChange(of: inputFileType) { _, newFileType in
+                        print(fileContainerModel.localSandboxFileURL ?? "nofile selected")
+                        if newFileType != .manual && detectLanguage {
+                            print("detect mode active")
+                            if let detectedLang = detectLangInFilename(
+                                inputURL: fileContainerModel.localSandboxFileURL) {
+                                selectedLanguage = detectedLang
+                                print("Lang changed to \(detectedLang)")
+                            }
+                        }
+                        if newFileType == .txt {
+                            runRetokeniser = true
+                        }
                     }
-                    if inputFileType == .manual{
-                        NavigationLink("Manual entry…"){
-                            ManualTokenisationView(builtSents: $builtSents)
+                    
+                    Toggle(isOn: $detectLanguage) {
+                        Text("AutodetectLang")
+                    }.onChange(of: detectLanguage){_, newValue in
+                        if newValue == true {
+                            if let detectedLang = detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
+                                selectedLanguage = detectedLang
+                                print("Lang changed to \(detectedLang)")
+                            }
                         }
                     }
                     Picker("Language", selection: $selectedLanguage) {
                         ForEach(Language.allCases) { lang in
                             Text(lang.rawValue) // Displays "EN", "FR"
+                        }
+                    }
+                    .onChange(of: fileContainerModel.localSandboxFileURL){
+                        if detectLanguage {
+                            if let detectedLang = detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
+                                selectedLanguage = detectedLang
+                                print("Lang changed to \(detectedLang)")
+                            }
                         }
                     }
                     .onChange(of: selectedLanguage) { _, newLang in
@@ -131,15 +195,15 @@ struct PipelineSettingsView: View {
                         }
                     }
                     .onChange(of: selectedLanguage) { _, newLang in
-                                    // Automatically update selected tb to language default
-                                    selectedTreebank = newLang.defaultTB
-                                }
+                        // Automatically update selected tb to language default
+                        selectedTreebank = newLang.defaultTB
+                    }
                     NavigationLink("Select processor steps"){
                         ProcessorStepConfigViewSection(
                             maxActiveStep: $maxPipelineStep,
                             inputFileType: $inputFileType,
                             runRetokeniser: $runRetokeniser,
-                            selectedRetokenisationType: $selectedRetokenisationType
+                            tokenizingMethod: $tokenizingMethod
                         )
                     }
                 }//end section
@@ -182,31 +246,6 @@ struct PipelineSettingsView: View {
                         .padding(.horizontal)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
-                    Button(
-                        action:{
-                            runTagging(
-                                inputFileType: inputFileType,
-                                maxPipelineStep: maxPipelineStep,
-                                taggingInProgress: $taggingInProgress) }){
-                                    ZStack {
-                                        HStack {
-                                            Image(systemName: "play.fill")
-                                            
-                                            Text("Run")
-                                                .fontWeight(.semibold)
-                                        }
-                                        .opacity(taggingInProgress ? 0 : 1)
-                                    }
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.large)
-                                .disabled(taggingInProgress || !isPipelineReady)
-                                .animation(.easeInOut(duration: 0.2), value: isPipelineReady)
-                                .padding()
-                    
                     if hasStarted {
                         PipelineProgressView(
                             style: progressBarStyle,
@@ -216,8 +255,50 @@ struct PipelineSettingsView: View {
                             appleProgress: appleProgress
                         )
                     }
+                    Button(
+                        action:{
+                            runTagging(
+                                inputFileType: inputFileType,
+                                maxPipelineStep: maxPipelineStep,
+                                taggingInProgress: $taggingInProgress
+                            )
+                        })
+                    {
+                        ZStack {
+                            HStack {
+                                Image(systemName: "play.fill")
+                                Text("Run")
+                                    .fontWeight(.semibold)
+                            }
+                            .opacity(taggingInProgress ? 0 : 1)
+                        }
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(taggingInProgress || !isPipelineReady)
+                    .animation(.easeInOut(duration: 0.2), value: isPipelineReady)
+                    .padding()
                 }
-            }.toolbar{
+            }
+
+            // default values on appear
+            .onAppear {
+                inputFileType = inputFileTypeDefault
+                selectedLanguage = selectedLanguageDefault
+                detectLanguage = detectLangDefault
+                selectedTreebank = selectedTreebankDefault
+                tokenizingMethod = tokenizingMethodDefault
+                sentencizingMethod = sentencizingMethodDefault
+                selectedExportFormat = selectedExportFormatDefault
+                xmlAuthorName = xmlAuthorDefault
+                xmlTitle = xmlTitleDefault
+                fileName = fileNameDefault
+                maxPipelineStep = maxPipelineStepDefault
+                }
+            .toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
                         RunOutputView(
@@ -248,28 +329,7 @@ struct PipelineSettingsView: View {
         }
     }
 
-    
-    #if DEBUG
-    func testInstantiatePipeline(languageCode: String, treebank: String)   -> String {
-        // test instantiation of pipeline class based on params chosen
-        outputString = ""
-        
-        Task{
-            do {
-                let testPipeline = try UDPipeline(languageCode: selectedLanguage.rawValue, treebank: selectedTreebank.short)
-                await MainActor.run {
-                    outputString = "Success"
-                }
-            } catch{
-                await MainActor.run {
-                    outputString = "Fail : \(error.localizedDescription)"
-                }
-            }
-        }
-        return outputString
-    }
-    #endif
-
+ 
     private func runTagging(
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
@@ -277,22 +337,10 @@ struct PipelineSettingsView: View {
             //MARK: parameters, initialisations for task
             taggingInProgress.wrappedValue = true
 
-            let inputFileType: InputFileType = inputFileType
-            let inputFile = fileContainerModel.localSandboxFileURL
-            let displayName: String
-            
-            switch inputFileType {
-            case .manual:
-                displayName = "Manual entry"
-            case .conll, .xmlConll, .xml, .txt:
-                displayName = fileContainerModel.selectedFileName
-            } // end switch
-            
-            
             let saveInputMetas = SaveInputMetas(
                 lang: selectedLanguage,
-                displayName: displayName,
-                inputURL: inputFile,
+                displayName: inputFileType == .manual ? "Manual Entry" : fileContainerModel.selectedFileName,
+                inputURL: fileContainerModel.localSandboxFileURL,
                 saveName: fileName,
                 targetFolderURL: targetFolderURL,
                 exportFormat: selectedExportFormat,
@@ -316,47 +364,73 @@ struct PipelineSettingsView: View {
                 var allSentences: [HashableSentence] = []
                 
                 //MARK: INGEST SENTS ::
-                // TOKENISATION and Sentencisation
-                //sents = sents from tokeniser
-                // pipeline.runOnSentence([HashableSent])-> [Sentence]
-                
+
                 switch inputFileType {
                 case .conll:
-                    allSentences = conllFileToHashableSentForPipeline(inputURL: saveInputMetas.inputURL)
+                    allSentences = conllFileToHashableSentForPipeline(
+                        inputURL: saveInputMetas.inputURL
+                    )
                     
                 case .manual:
                     allSentences = builtSents
                     
                 case .xml:
-                    allSentences = xmlToHashableSentForPipeline(inputURL: saveInputMetas.inputURL)
+                    allSentences = xmlToHashableSentForPipeline(
+                        inputURL: saveInputMetas.inputURL
+                    )
                     
                 case .xmlConll:
-                    allSentences = xmlConllFileToHashableSentForPipeline(inputURL: saveInputMetas.inputURL)
+                    allSentences = xmlConllFileToHashableSentForPipeline(
+                        inputURL: saveInputMetas.inputURL
+                    )
                     
                 case .txt:
-                    // Step 1: tokenize everything with model
-                    for sentence in testSentences {
-                        allSentences.append(contentsOf: try pipeline.tokenize(sentence))
-                    }
+                    // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
+                    allSentences = try textFileToHashableSents(
+                        inputURL: saveInputMetas.inputURL,
+                        sentencizingMethod: sentencizingMethod,
+                        tokenizingMethod: tokenizingMethod,
+                        lang: saveInputMetas.lang,
+                        pipeline: pipeline
+                    )
+//                    let sentencesAsStrings = textFileToSentStrings(
+//                        inputURL: saveInputMetas.inputURL,
+//                        sentencizingMethod: sentencizingMethod,
+//                        lang: selectedLanguage
+//                    )
+//                    switch tokenizingMethod{
+//                    case .custom:
+//                        print("using custom rules:: need to get Swift version of rules……")
+//                    case .nltokeniser:
+//                        allSentences = getTokenisedSentences(sents: sentencesAsStrings, lang: selectedLanguage)
+//
+//                        print("nltokeniser")
+//                    case .trained:
+//                        // retokenize everything with model
+//                        // MARK: can change this IN to be testSentences
+//                        for sentence in sentencesAsStrings {
+//                            allSentences.append(contentsOf: try pipeline.tokenize(sentence))
+//                        
+//                    }
+//                    }
                     print("Mode a: \(allSentences.count) sents ")
-                    selectedRetokenisationType = .skip
+                    
                 }
                 
-                if runRetokeniser {
-                    //actions
+                if inputFileType != .txt && runRetokeniser && [TokenizingMethod.nltokeniser, TokenizingMethod.trained].contains(tokenizingMethod)  {
                     print("Retokenising")
-                    switch selectedRetokenisationType{
-                    case .predict:
-                        let inputSents = allSentences
-                        allSentences.removeAll()
-                        for sentence in inputSents {
-                            let retokSent = try pipeline.tokenize(sentence.detokenised)
-                            allSentences.append(contentsOf: retokSent)
-                        }
-                    case .manual, .rule, .skip:
-                        print("In manual mode, usin")
-                        break
+                    var sentencesAsStrings: [String] = []
+                    for sent in allSentences{
+                        sentencesAsStrings.append(sent.detokenised)
                     }
+                    
+                    let retokenisedSents = try stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: sentencesAsStrings, lang: saveInputMetas.lang, pipeline: pipeline)
+                    guard retokenisedSents.count > 0 else{
+                        print("No retokrnised sentences found, baling out… 🪂")
+                        return
+                    }
+                        
+                    allSentences = retokenisedSents
                 }
                 
                 // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
@@ -423,7 +497,6 @@ struct PipelineSettingsView: View {
                 }
                 
                 await MainActor.run {
-//                    sentsOut.append(contentsOf: outSents)
                     taggingInProgress.wrappedValue = false
                     
                     guard let runOutput else { return }

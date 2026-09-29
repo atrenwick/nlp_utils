@@ -1,9 +1,9 @@
 //
-//  ClassMethods.swift
+//  functions.swift
 //  Tagger
 //
 //  Created by Adam on 06/09/2026.
-// methods for use across classes
+// functs for general use
 
 import CoreML
 import Foundation
@@ -269,7 +269,197 @@ func xmlToHashableSentForPipeline(inputURL: URL?)  -> [HashableSentence]{
     
     return  xmlToHashableSents(from: inputFile)
 }
+// MARK: - TXT parsing
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  TXT parsing functions
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//  1. blob to sents: sentencise based on custom regex Rules
+//  2. getSentencesWithNL: sentencise with inbuilt NLTokeniser
+//  3. textFileToSentStrings : read in TXT file and use 1 or 2 to sentencise
+//  4. sentStringToHashableSents: use pipeline or func5 to tokenise
+//  5. getTokenisedSents: use inbuilt NL tagger to tokenise
+//  6. textFileToHashableSets : use func3 to sentencise then 4 to tokenise
 
+//1
+func blobToSents(blob: String) -> [String]{
+//        var holding: [String] = []
+        // break on \.\n\n
+        var test2: String
+        // double linebreak to sent boundary
+        let regex1 = "\n\n"
+        let regex2 = "\n"
+        let regex3 = #"\. ([A-Z])"#
+        
+        let regexPattern1 = try! Regex(regex1)
+        let regexPattern2 = try! Regex(regex2)
+        let regexPattern3 = try! Regex(regex3)
+        let overzealousPattern = try! Regex("U.S._EOS_")
+        
+        test2 = blob.replacing(regexPattern1){ match in "_EOS_" }
+        test2 = test2.replacing(regexPattern2){ match in "_EOS_" }
+        test2 = test2.replacing(regexPattern3){match in
+            let matchedText = match[1].substring ?? "_ERROR_"
+            let returnstring = "._EOS_\(matchedText)"
+            return returnstring
+        }
+        test2 = test2.replacing(overzealousPattern){ match in "U.S. " }
+        
+        
+        let chunks = test2.components(separatedBy: "_EOS_")
+        for (num, chunk) in chunks.enumerated() {
+            print("\(num) :: \(chunk)")
+        }
+        let printArray = Array(repeating: "#", count: 133).joined(separator: "")
+        print(printArray)
+        return chunks
+    }
+//2
+func getSentencesWithNL(text: String, lang: Language)-> [String]{
+        let tokenizer = NLTokenizer(unit: .sentence) // unit == sentences ::>> SENTENCISATION
+        let nlLang: NLLanguage
+        switch lang {
+        case .ANG, .EN: nlLang = NLLanguage.english
+        case .FR,.FRM, .FRO: nlLang = NLLanguage.french
+        case .DE: nlLang = NLLanguage.german
+        }
+        print("sentencizing with nlSentencizer->192")
+        tokenizer.setLanguage(nlLang)
+        tokenizer.string = text
+        var sentencesOut: [String] = []
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex){range, _ in
+            let itemToAppend = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !itemToAppend.isEmpty  {
+                sentencesOut.append(itemToAppend)}
+            return true
+        }
+        
+        for (num, chunk) in sentencesOut.enumerated() {
+            print("\(num) :: \(chunk)")
+        }
+        let printArray = Array(repeating: "#", count: 133).joined(separator: "")
+        print(printArray)
+
+        return sentencesOut
+    }
+//3
+func textFileToSentStrings(inputURL: URL?, sentencizingMethod: SentencizingMethod, lang: Language) -> [String]{
+        guard let inputFile = inputURL else {
+            print("guard let failed loading form file")
+            return []
+        }
+        print("running text file to sent strings function")
+
+        do {
+            let normalizedText = try String(contentsOf: inputFile, encoding: .utf8).replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
+            print("first let success")
+            // var sentenceList: [String] = []
+            //let inputBlob: String = load_from_file(args)
+            var sentencesAsStrings: [String] = []
+//            var tokenisedSents: [HashableSentence] = []
+            switch sentencizingMethod {
+                // use NL or custom logic to get sentences as strings from an input blob
+            case .nlSentencizer:
+                // get sentences from input blob
+                print("sentencizing with nlSentencizer")
+                sentencesAsStrings = getSentencesWithNL(text: normalizedText, lang: lang)
+            case .custom:
+                print("sentencizing with custom")
+                sentencesAsStrings = blobToSents(blob: normalizedText)
+            }
+                        
+            return sentencesAsStrings
+            
+        } catch {
+            print("Failed to read text from sandbox file: \(error)")
+        }
+        return []
+    }
+    
+//4
+func stringSentsToHashableSents(tokenizingMethod: TokenizingMethod, sents: [String], lang: Language, pipeline: UDPipeline) throws -> [HashableSentence]{
+
+    var internalSentList: [HashableSentence] = []
+    switch tokenizingMethod {
+        
+    case .custom, .manual, .skip:
+        print("using custom rules:: need to get Swift version of rules……")
+        break
+
+    case .nltokeniser:
+        print("calling getTokSents @ line 85")
+        internalSentList = getTokenisedSentences(sents: sents, lang: lang)
+        
+        print("nltokeniser")
+    case .trained:
+        // retokenize everything with model
+        // MARK: can change this IN to be testSentences
+        for sentence in sents {
+            print("sentencizing with trained")
+            internalSentList.append(contentsOf: try pipeline.tokenize(sentence))
+            
+        }
+    }
+    return internalSentList
+}
+
+
+//5
+func getTokenisedSentences(sents: [String], lang: Language) -> [HashableSentence]{
+        let tagger = NLTagger(tagSchemes: [.tokenType]) // unit == tokenType ::>> TOKENISATION
+        let nlLang: NLLanguage
+        switch lang {
+        case .ANG, .EN: nlLang = NLLanguage.english
+        case .FR, .FRM, .FRO: nlLang = NLLanguage.french
+        case .DE: nlLang = NLLanguage.german
+        }
+        var sentsOut: [HashableSentence] = []
+    
+        for (snum, sent) in sents.enumerated() {
+            tagger.string = sent
+            let myRange = sent.startIndex..<sent.endIndex
+            tagger.setLanguage(nlLang, range: myRange)
+            
+            var currentToks: [String] = []
+            tagger.enumerateTags(in: myRange, unit: .word, scheme: .tokenType, options: []){tag, range  in
+                let newToken = String(sent[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !newToken.isEmpty  {
+                    currentToks.append(newToken)
+                }
+                return true
+            }
+            let doneSent = HashableSentence(id: String(snum), tokens: currentToks)
+            sentsOut.append(doneSent)
+        }
+        for sent in sentsOut{
+            let printArray = Array(repeating: "#", count: 133).joined(separator: "")
+            print(printArray)
+//            print("Sent :: \(sent.sentNum)")
+            for (tnum, token) in sent.tokens.enumerated() {
+                print("[\(tnum)]\t: \(token)")
+            }
+        }
+        
+        
+        return sentsOut
+        
+    }
+    
+//6
+func textFileToHashableSents(inputURL: URL?, sentencizingMethod: SentencizingMethod, tokenizingMethod: TokenizingMethod, lang: Language, pipeline: UDPipeline) throws -> [HashableSentence]{
+    var internalSentList: [HashableSentence] = []
+    
+    let sentencesAsStrings = textFileToSentStrings(
+        inputURL: inputURL,
+        sentencizingMethod: sentencizingMethod,
+        lang: lang
+    )
+    print("Got sents as strings")
+    internalSentList = try stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: sentencesAsStrings, lang: lang, pipeline: pipeline)
+    print("got internal sentlist")
+    return internalSentList
+}
 
 
 // MARK: - Agnostic output making
@@ -312,13 +502,18 @@ func makeExportContent(sentences: [Sentence], exportFormat: ExportFormat, safeHe
 //1. make safe header attributes
 //2. Make XML string from list of sentences with output of 1, 2
 
-//2.
+//1.
 func makeSafeXmlHeaderAttribs(
     xmlTitle: String,
     xmlAuthorName: String,
     selectedLanguage: Language,
     selectedTreebank: Language.Treebank,
     sourceFile: URL,
+    maxPipelineStep: PipelineStep,
+    runRetokeniser: Bool,
+    tokenizingMethod: TokenizingMethod,
+    sentencizingMethod: SentencizingMethod
+
 )-> XmlHeaderAttribs {
     
     let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
@@ -334,6 +529,10 @@ func makeSafeXmlHeaderAttribs(
 
     let xmlsafeSourceFile = sourceFile.path().xmlEscaped
     let runID = UUID().uuidString
+    let xmlSafeMaxPipelineStep = maxPipelineStep.title.xmlEscaped
+    let xmlSafeRunRetokeniser = String(runRetokeniser).xmlEscaped
+    let xmlSafeTokenizingMethod = tokenizingMethod.rawValue.xmlEscaped
+    let xmlSafeSentencizingMethod = sentencizingMethod.rawValue.xmlEscaped
 
     let outputStruct = XmlHeaderAttribs(
         xmlTitle: xmlSafeXMLTitle,
@@ -343,6 +542,10 @@ func makeSafeXmlHeaderAttribs(
         taggingDate: xmlsafeDate,
         sourceFile: xmlsafeSourceFile,
         runID: runID,
+        maxPipelineStep: xmlSafeMaxPipelineStep,
+        runRetokeniser: xmlSafeRunRetokeniser,
+        tokenizingMethod: xmlSafeTokenizingMethod,
+        sentencizingMethod: xmlSafeSentencizingMethod,
     )
     return outputStruct
 }
@@ -353,6 +556,8 @@ func sentListToXML(
     selectedExportFormat: ExportFormat,
     safeHeaderAttribs: XmlHeaderAttribs
 ) -> String {
+    let sentCount = String(sentences.count)
+    let tokCount = String(sentences.generateTokCount())
     
     let xmlHeader = """
         <?xml version="1.0" encoding="utf-8"?>
@@ -368,8 +573,7 @@ func sentListToXML(
             <date />
             <pubDate />
             </publicationStmt>
-                <sourceDesc model="\(safeHeaderAttribs.lang.lowercased())" treebank="\(safeHeaderAttribs.treebank)" tagging_date="\(safeHeaderAttribs.taggingDate)" sourcefile="\(safeHeaderAttribs.sourceFile)" runID="\(safeHeaderAttribs.runID)">
-                <p />
+                <sourceDesc model="\(safeHeaderAttribs.lang.lowercased())" treebank="\(safeHeaderAttribs.treebank)" tagging_date="\(safeHeaderAttribs.taggingDate)" sourcefile="\(safeHeaderAttribs.sourceFile)" runID="\(safeHeaderAttribs.runID)" maxPipelineStep="\(safeHeaderAttribs.maxPipelineStep)" runRetokeniser="\(safeHeaderAttribs.runRetokeniser)" tokenizingMethod="\(safeHeaderAttribs.tokenizingMethod)" sentencizingMethod="\(safeHeaderAttribs.sentencizingMethod)" sentCount="\(sentCount)" tokenCount="\(tokCount)">
                 </sourceDesc>
             </fileDesc>
             <profileDesc>
@@ -595,12 +799,14 @@ func dumpDetailsForRunExplicit(runExplicit: Bool, outSents: [Sentence], targetFo
     //no returns
 }
 
+//MARK: encapsulations
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
 //                                                  encapsulation of run inputs, outputs
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
 
+//MARK: settings updaters
 func makeTidyRunOutput(outSents: [Sentence], saveInputMetas: SaveInputMetas, safeHeaderAttribs: XmlHeaderAttribs) -> RunOutput {
     
     let exportContent = makeExportContent(
@@ -630,6 +836,60 @@ func makeTidyRunOutput(outSents: [Sentence], saveInputMetas: SaveInputMetas, saf
 
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
+//                                                  encapsulation of run inputs, outputs
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+
+
+func detectLangInFilename(inputURL: URL?)-> Language?{
+    // actions
+    guard let urlExists = inputURL else { return nil }
+    let targetPartOfString = urlExists.lastPathComponent.lowercased()
+    var langGuess: Language? = nil
+    var matchCount: Int = 0
+    let myMaps: [RegexLangPatternToLangMap] = [
+        RegexLangPatternToLangMap(string: #"[_\.]fr"#, langValue: .FR),
+        RegexLangPatternToLangMap(string: #"[_\.]de"#, langValue: .DE),
+        RegexLangPatternToLangMap(string: #"[_\.]en"#, langValue: .EN),
+        RegexLangPatternToLangMap(string: #"[_\.]ang"#, langValue: .ANG),
+    ]
+    for thisItem in myMaps {
+        if targetPartOfString.contains(thisItem.asRegex){
+            langGuess = thisItem.langValue
+            matchCount += 1
+            print("\(langGuess?.rawValue) for \(targetPartOfString)")
+        }
+    }
+    if matchCount > 0 {
+        return langGuess
+    } else {
+        return nil
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+
+func testInstantiatePipeline(languageCode: String, treebank: String)   -> String {
+    // test instantiation of pipeline class based on params chosen
+    var outputString: String = ""
+    
+    Task{
+        do {
+            let testPipeline = try UDPipeline(languageCode: languageCode, treebank: treebank)
+            await MainActor.run {
+                outputString = "Success"
+            }
+        } catch{
+            await MainActor.run {
+                outputString = "Fail : \(error.localizedDescription)"
+            }
+        }
+    }
+    return outputString
+}
+
+
 //                                                  end of main functions; experimental below
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------

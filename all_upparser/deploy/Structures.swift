@@ -1,5 +1,5 @@
 //
-//  UDStructures.swift
+//  Structures.swift
 //  Tagger
 //
 //  Created by Adam on 06/09/2026.
@@ -70,6 +70,16 @@ struct HashableSentence: Hashable {
     }
 }
 
+struct RegexLangPatternToLangMap: Identifiable{
+    var id = UUID()
+    let string: String
+    let langValue: Language
+    
+    var asRegex: Regex<Substring>{
+        try! Regex(string)
+    }
+}
+
 struct RunMetas: Identifiable{
     var id = UUID()
     let lang: String
@@ -103,6 +113,28 @@ struct RunOutput: Identifiable {
     var runMetas: RunMetas
 }
 
+struct SandboxImporter {
+    /// Copies or writes external file data into the app's local Documents directory.
+    static func importToSandbox(from externalURL: URL) throws -> URL {
+        let fileManager = FileManager.default
+        let docsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        
+        // Ensure a unique local filename so existing files aren't overwritten
+        let targetURL = docsDir.appendingPathComponent(externalURL.lastPathComponent)
+        
+        // Remove old instance if it exists at target path
+        if fileManager.fileExists(atPath: targetURL.path) {
+            try fileManager.removeItem(at: targetURL)
+        }
+        
+        // Copy the file into your app's local sandbox memory space
+        try fileManager.copyItem(at: externalURL, to: targetURL)
+        
+        return targetURL
+    }
+}
+
+
 struct SaveInputMetas: Identifiable{
     var id = UUID()
     let lang: Language
@@ -122,6 +154,9 @@ struct Sentence : Identifiable {
     let sentID: String
     let conllData: [Token]
 
+    var tokCount: Int {
+        conllData.count
+    }
     var runSentIdRegexes: String{
         var content = sentID.trimmingCharacters(in: .newlines)
         // 2. Remove existing header if any
@@ -298,5 +333,9 @@ struct XmlHeaderAttribs{
     let taggingDate: String
     let sourceFile: String
     let runID: String
+    let maxPipelineStep: String
+    let runRetokeniser: String
+    let tokenizingMethod: String
+    let sentencizingMethod: String
 }
 

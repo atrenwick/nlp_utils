@@ -76,23 +76,3 @@ struct ImportFileViewSection: View {
     return ImportFileViewSection(fileContainerModel: fileContainerModel)
 }
 
-struct SandboxImporter {
-    /// Copies or writes external file data into the app's local Documents directory.
-    static func importToSandbox(from externalURL: URL) throws -> URL {
-        let fileManager = FileManager.default
-        let docsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        
-        // Ensure a unique local filename so existing files aren't overwritten
-        let targetURL = docsDir.appendingPathComponent(externalURL.lastPathComponent)
-        
-        // Remove old instance if it exists at target path
-        if fileManager.fileExists(atPath: targetURL.path) {
-            try fileManager.removeItem(at: targetURL)
-        }
-        
-        // Copy the file into your app's local sandbox memory space
-        try fileManager.copyItem(at: externalURL, to: targetURL)
-        
-        return targetURL
-    }
-}

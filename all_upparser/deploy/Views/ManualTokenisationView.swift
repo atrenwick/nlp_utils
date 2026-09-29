@@ -9,24 +9,21 @@ import SwiftUI
 
 struct ManualTokenisationView: View {
     
+    @State var tempTokens: [TempToken] = []
     @State private var language: Language = .FR
     @State private var selectedRetokenisationType: RetokenisationType = .predict
     @FocusState var isFocused
-    @State var tempTokens: [TempToken] = []
-    @Binding var builtSents: [HashableSentence]
  
-    
-    //2 hardcoded sents for testing
-    //MARK: data
-//
-
-    @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, mais avant, c'était Bonn mais on trouvait que c'était pas bon.", "Paris est une grande ville française"]
+    @Binding var builtSents: [HashableSentence]
     @State private var newSentence: String = ""
+    @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, mais avant, c'était Bonn mais on trouvait que c'était pas bon.", "Paris est une grande ville française"]
+
+    
+    @State var getsentNum: Int = 0
 
     private var visibleSents: [String] {
         Array(testSentences.prefix(5))
     }
-
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -58,13 +55,6 @@ struct ManualTokenisationView: View {
                 }
                 .pickerStyle(.segmented)
                 .tint(.blue)
-//                Picker("Tokenisation", selection: $currentTokenisationType) {
-//                    ForEach(RetokenisationType.allCases) { mode in
-//                        Text(mode.rawValue).tag(mode)
-//                    }
-//                }
-//                .pickerStyle(.segmented)
-//                .tint(.blue)
             }
 
             
@@ -72,35 +62,64 @@ struct ManualTokenisationView: View {
                 Button {
                     let thisSentence: String
                     if newSentence.count == 0 {
-                        thisSentence = testSentences[0]
+                        thisSentence = testSentences[getsentNum]
                     } else {
                         thisSentence = newSentence
                     }
                     tempTokens = applyNaiveTokenisation(language: language, myString: thisSentence
                     )
                 } label: {
-                Text("Tokenise")
+                    Text("Tokenise")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.indigo)
+                    Spacer()
+                Button {
+                    
+                    if (0..<testSentences.count).contains(getsentNum - 1){
+                        getsentNum -= 1
+                            } else {
+                                getsentNum = testSentences.count
+                            }
+
+                } label: {
+                    HStack{
+                        Text(String("-"))
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.cyan)
+                Text(String(getsentNum))
+                Button {
+                    if (0..<testSentences.count).contains(getsentNum + 1){
+                        getsentNum += 1
+                            } else {
+                                getsentNum = 0
+                            }
+                } label: {
+                    HStack{
+                        Text(String("+"))
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.pink)
 
                 Spacer()
                 Button {
-                    if let doneSent = makeHashableSentFromTestToks(tempTokens: tempTokens)
-                        {
-                            builtSents.append(doneSent)
+                    if let doneSent = makeHashableSentFromTestToks(
+                        tempTokens: tempTokens) {
+                        builtSents.append(doneSent)
                         print("Added 1 sent to builtSents")
-                        }
+                    }
                     tempTokens = []
                     
                 } label: {
-                Text("done")
+                    Text("done")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
-
+                
             }
-            
             Form{
                 ForEach($tempTokens, id:\.self) { token in
                     TextField("Token", text: token.form)
@@ -168,7 +187,7 @@ struct ManualTokenisationView: View {
         for (num, item) in step1.enumerated() {
             tempTokens.append(
                 TempToken(id: num, form: String(item))
-                                )
+            )
         }
         return tempTokens
     }
@@ -187,11 +206,6 @@ struct ManualTokenisationView: View {
         }
         return returnObject
         }
-        
-    
-    
-    
-
 }
 
 #Preview {
