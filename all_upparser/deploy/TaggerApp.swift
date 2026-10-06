@@ -16,12 +16,9 @@ struct TaggerApp: App {
                 Tab("Config", systemImage: "book.pages.fill"){
                     PipelineSettingsView()
                 }
-                Tab("PipelineRun", systemImage: "book.pages.fill"){
-                    UDPipelineTestView()
+                Tab("Settings", systemImage: "slider.horizontal.3"){
+                    SetDefaultsView()
                 }
-//                Tab("Main", systemImage: "book.pages.fill"){
-//                    ContentView()
-//                }
             }
         }
     }

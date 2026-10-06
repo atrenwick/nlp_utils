@@ -39,7 +39,12 @@ struct RunOutputDetailView: View{
         NavigationStack{
             Form{
                 Section("Run \(shortUUID)"){
-                    Text("Input file : \(run.runMetas.sourceFileName)")
+//                    Text("Input file : \(run.runMetas.sourceFileName)")
+                    NavigationLink(destination: FileViewerView(fileURL: run.runMetas.sourceFileURL)) {
+                        Text("Input file : \(run.runMetas.sourceFileName)")
+                    }
+                    
+                    
                     NavigationLink(destination: FileViewerView(fileURL: run.runMetas.savedURL)) {
                         Text("Output : \(run.runMetas.outputFileName)")
                     }
@@ -60,7 +65,11 @@ struct RunOutputDetailView: View{
                     }
                     Spacer()
                     Button {
-                        exportContent = makeExportContent(sentences: run.runData.sents, exportFormat: additionalExportFormat, safeHeaderAttribs:run.runMetas.safeHeaderAttribs)
+                        exportContent = makeExportContent(
+                            sentences: run.runData.sents,
+                            exportFormat: additionalExportFormat,
+                            safeHeaderAttribs:run.runMetas.safeHeaderAttribs
+                        )
                         
                         print("run.sents.count: \(run.runData.sents.count)")
                         print("chosenformat: \(additionalExportFormat.fileExtension)")

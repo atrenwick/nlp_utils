@@ -36,14 +36,12 @@ struct ProcessorStepConfigViewSection: View {
                     
                     Toggle(isOn: toggleBinding(for: step)) {
                         Text(step.title)
-                        // Greys out text when step is off
                             .foregroundColor(isActive ? .primary : .secondary)
                     }
                 }
             }
         }
     }
-    // Helper to check if a specific step is currently active
     private func isStepActive(_ step: PipelineStep) -> Bool {
         let maxStep = maxActiveStep
         if maxStep >= step { return true }
