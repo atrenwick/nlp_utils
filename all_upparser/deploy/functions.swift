@@ -8,6 +8,7 @@
 import CoreML
 import Foundation
 import NaturalLanguage
+import SwiftUI
 
 // MARK: - MLMultiArray helpers
 // can be called in debug to get, show logits…
@@ -833,13 +834,111 @@ func makeTidyRunOutput(outSents: [Sentence], saveInputMetas: SaveInputMetas, saf
     return runOutput
 }
 
+//MARK: tokenisation functions
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  Tokenisation functions
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+
+//1.  apply naive tokenisation - spaces = token boundaries
+//2. make hashable sent from manually redefinable tokens
+//3. Make string of Sent for View, with red / as token boundary
+
+//1.
+func applyNaiveTokenisation(language: Language, myString: String)-> [TempToken]{
+    
+    let input: String = myString
+    var tempTokens: [TempToken] = []
+    var step1: [Substring] = []
+    if [.FR, .FRO, .FRM].contains(language) {
+        
+        let replacements: [String: String] = [
+            "jourd'hui": "jourdhui",
+            "rud'homm": "rudhomm",
+            "'":"' "
+        ]
+        let unreplacements: [String: String] = [
+            "jourdhui": "jourd'hui",
+            "rudhomm": "rud'homm"
+        ]
+
+        let unreplacePattern = unreplacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        let regexUnreplace = try! Regex(unreplacePattern)
+
+        let literalPattern = replacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        let fullPattern = "(\(literalPattern))|([.?!]$)|([,;:])"
+        let regex = try! Regex(fullPattern)
+
+        
+        let frResult = myString.replacing(regex) { match in
+            let matchedText = String(match.0)
+            if matchedText == "." && match.0 == myString.suffix(1) {
+                return " ."
+            }
+            if let replacement = replacements[matchedText] {
+                return replacement
+            }
+            // must be punctuation needing a leading space
+            return " " + matchedText
+        }
+        var preSplit = frResult.replacingOccurrences(of: "  ", with: " ")
+        
+        preSplit = preSplit.replacing(regexUnreplace) { match in
+            unreplacements[String(match.0)] ?? String(match.0)
+        }
+        step1 = preSplit.split(whereSeparator: { $0 == " " })
+    } // end FR
+    
+    if language == .EN {
+        step1 = input.split(whereSeparator: { $0 == " "})
+    }
+
+    for (num, item) in step1.enumerated() {
+        tempTokens.append(
+            TempToken(id: num, form: String(item))
+        )
+    }
+    return tempTokens
+}
+
+//2.
+func makeHashableSentFromTestToks(tempTokens: [TempToken])-> HashableSentence?{
+    guard tempTokens.count > 0 else {return nil}
+    var keepTokens: [String] = []
+    for item in tempTokens{
+        if item.form != ""{
+            keepTokens.append(item.form)
+        }
+    }
+    let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens)
+    for x in returnObject.tokens{
+        print(x)
+    }
+    return returnObject
+    }
+//3.
+func markupTokenisationInSent(hashableSent: HashableSentence) -> AttributedString{
+        
+        var result = AttributedString()
+        for (index, word) in hashableSent.tokens.enumerated() {
+            result.append(AttributedString(word))
+            if index < hashableSent.tokens.count - 1 {
+                var separator = AttributedString("/")
+                separator.foregroundColor = .red // Make separator red
+                separator.font = .system(size: 17, weight: .bold)
+                result.append(separator)
+            }
+        }
+        
+    return result
+}
 
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
 //                                                  encapsulation of run inputs, outputs
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
-
 
 func detectLangInFilename(inputURL: URL?)-> Language?{
     // actions

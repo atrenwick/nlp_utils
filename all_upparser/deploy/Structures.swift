@@ -7,6 +7,14 @@
 
 import Foundation
 
+struct BuiltSentHolder: Identifiable, Hashable{
+    var id = UUID()
+    let hashableSent: HashableSentence
+    let showString: AttributedString
+    
+}
+
+
 //TODO: update calculated property to use Extension method
 struct Document {
     var id = UUID()

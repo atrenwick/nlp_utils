@@ -8,6 +8,19 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
+
+struct BuiltSentsViewer: View {
+    let builtSents:[BuiltSentHolder]
+//    var showSents: [AttributedString] { markupTokenisationInSents(hashableSents: builtSents) }
+    var body: some View{
+        Form{
+            ForEach(builtSents, id:\.self){sentence in
+                Text(sentence.showString)
+            }
+        }
+    }
+}
+
 struct ExportConfigViewSection: View {
     @State private var isSelectingFolder: Bool = false
     @State private var isProcessing: Bool = false
@@ -106,7 +119,7 @@ struct ChooseInputFileViewSection: View {
                 let gotAccess = url.startAccessingSecurityScopedResource()
                 defer { if gotAccess { url.stopAccessingSecurityScopedResource() } }
                 do {
-                    let text = try String(contentsOf: url, encoding: .utf8)
+                    let _ = try String(contentsOf: url, encoding: .utf8)
                     // hand off to your pipeline here
                 } catch {
                     print("Failed to read file: \(error)")

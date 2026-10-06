@@ -61,7 +61,6 @@ struct SetDefaultsView: View {
                         }
                     }
                     .onChange(of: selectedLanguageDefault) { _, newLang in
-                        // Automatically update selected tb to language default
                         selectedTreebankDefault = newLang.defaultTB
                     }
 
@@ -70,11 +69,13 @@ struct SetDefaultsView: View {
                             Text(method.rawValue)
                         }
                     }
+
                     Picker("Sentencization method", selection: $sentencizingMethodDefault){
                         ForEach(SentencizingMethod.allCases){method in
                             Text(method.rawValue)
                         }
                     }
+
                     Picker("Max pipeline step", selection: $maxPipelineStepDefault){
                         ForEach(PipelineStep.allCases){step in
                             Text(step.title)
@@ -90,7 +91,6 @@ struct SetDefaultsView: View {
                         }
                     }
                     TextField("XML Title", text: $xmlTitleDefault)
-
                     TextField("XML Author", text: $xmlAuthorDefault)
                     }
             }
@@ -98,9 +98,6 @@ struct SetDefaultsView: View {
     }
 }
 
-
-
 #Preview {
     SetDefaultsView()
 }
-

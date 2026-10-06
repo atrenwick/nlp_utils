@@ -29,7 +29,6 @@ struct PipelineSettingsView: View {
     @AppStorage("xmlTitleDefault") var xmlTitleDefault: String = "XML Title"
     @AppStorage("fileNameDefault") var fileNameDefault: String = "fileName"
     
-    //MARK: state vars
     // input file
     @State var inputFileType: InputFileType = .conll
     @State var fileContainerModel = SourceFileContainerModel()
@@ -72,9 +71,9 @@ struct PipelineSettingsView: View {
     @State var taggingInProgress: Bool = false
     @State var showImporter: Bool = false
     @State private var isSelectingFolder = false
-    
+    @State var hasAppeared: Bool = false
     // sentences ::
-    @State var builtSents: [HashableSentence] = []
+    @State var builtSents: [BuiltSentHolder] = []
     @State var sentsToRetokenise: [String] = []
     @State private var testSentences = ["Paris est la capitale de la France.", "La capitale de l'Allemagne est Berlin, mais avant, c'était Bonn mais on trouvait que c'était pas bon.", "Paris est une grande ville française"]
     @State private var newSentence: String = ""
@@ -87,6 +86,7 @@ struct PipelineSettingsView: View {
     var unreadCount: Int {
         topLevelOutputList.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
+
     //TODO: funct exists to make same, but not called :: consider where, if, to use it
     var safeHeaderAttribs: XmlHeaderAttribs {
         let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
@@ -120,66 +120,58 @@ struct PipelineSettingsView: View {
             runRetokeniser: runRetokeniser,
             tokenizingMethod: tokenizingMethod,
             sentencizingMethod: sentencizingMethod,
-
         )
         return outputStruct
     }
     
-    
     var body: some View {
         NavigationStack{
             Form {
-                if inputFileType != .manual {
-                    Section{
-                        ImportFileViewSection(fileContainerModel: fileContainerModel )
-                    }
-                } else {
-                    Section {
-                        NavigationLink("Manual entry…"){
-                            ManualTokenisationView(builtSents: $builtSents)
+                Picker("Inputtype", selection: $inputFileType){
+                    ForEach(InputFileType.allCases){fType in
+                        Text(fType.rawValue)}
+                }.onChange(of: inputFileType) { _, newFileType in
+                    if newFileType != .manual && detectLanguage {
+                        if let detectedLang = detectLangInFilename(
+                            inputURL: fileContainerModel.localSandboxFileURL) {
+                            selectedLanguage = detectedLang
                         }
+                    }
+                    if newFileType == .txt {
+                        runRetokeniser = true
                     }
                 }
                 // First Picker
                 Section("Parameters"){
-                    Picker("Inputtype", selection: $inputFileType){
-                        ForEach(InputFileType.allCases){fType in
-                            Text(fType.rawValue)}
-                    }.onChange(of: inputFileType) { _, newFileType in
-                        print(fileContainerModel.localSandboxFileURL ?? "nofile selected")
-                        if newFileType != .manual && detectLanguage {
-                            print("detect mode active")
-                            if let detectedLang = detectLangInFilename(
-                                inputURL: fileContainerModel.localSandboxFileURL) {
-                                selectedLanguage = detectedLang
-                                print("Lang changed to \(detectedLang)")
+                    if inputFileType != .manual {
+                        Section{
+                            ImportFileViewSection(fileContainerModel: fileContainerModel, inputFileType: inputFileType )
+                        }
+                    } else {
+                        Section {
+                            NavigationLink("Manual entry…"){
+                                ManualTokenisationView(selectedLanguage: $selectedLanguage,builtSents: $builtSents)
                             }
                         }
-                        if newFileType == .txt {
-                            runRetokeniser = true
-                        }
                     }
-                    
                     Toggle(isOn: $detectLanguage) {
-                        Text("AutodetectLang")
+                        Text("Autodetect Language")
                     }.onChange(of: detectLanguage){_, newValue in
                         if newValue == true {
                             if let detectedLang = detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
                                 selectedLanguage = detectedLang
-                                print("Lang changed to \(detectedLang)")
                             }
                         }
                     }
                     Picker("Language", selection: $selectedLanguage) {
                         ForEach(Language.allCases) { lang in
-                            Text(lang.rawValue) // Displays "EN", "FR"
+                            Text(lang.rawValue)
                         }
                     }
                     .onChange(of: fileContainerModel.localSandboxFileURL){
                         if detectLanguage {
                             if let detectedLang = detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
                                 selectedLanguage = detectedLang
-                                print("Lang changed to \(detectedLang)")
                             }
                         }
                     }
@@ -188,14 +180,12 @@ struct PipelineSettingsView: View {
                             selectedTreebank = first
                         }
                     }
-                    // Model picker, dynamically updating based on Lang picker
                     Picker("Treebank", selection: $selectedTreebank) {
                         ForEach(selectedLanguage.availableTBs) { tb in
                             Text(tb.short).tag(tb)
                         }
                     }
                     .onChange(of: selectedLanguage) { _, newLang in
-                        // Automatically update selected tb to language default
                         selectedTreebank = newLang.defaultTB
                     }
                     NavigationLink("Select processor steps"){
@@ -286,18 +276,21 @@ struct PipelineSettingsView: View {
 
             // default values on appear
             .onAppear {
-                inputFileType = inputFileTypeDefault
-                selectedLanguage = selectedLanguageDefault
-                detectLanguage = detectLangDefault
-                selectedTreebank = selectedTreebankDefault
-                tokenizingMethod = tokenizingMethodDefault
-                sentencizingMethod = sentencizingMethodDefault
-                selectedExportFormat = selectedExportFormatDefault
-                xmlAuthorName = xmlAuthorDefault
-                xmlTitle = xmlTitleDefault
-                fileName = fileNameDefault
-                maxPipelineStep = maxPipelineStepDefault
+                if hasAppeared == false {
+                    inputFileType = inputFileTypeDefault
+                    selectedLanguage = selectedLanguageDefault
+                    detectLanguage = detectLangDefault
+                    selectedTreebank = selectedTreebankDefault
+                    tokenizingMethod = tokenizingMethodDefault
+                    sentencizingMethod = sentencizingMethodDefault
+                    selectedExportFormat = selectedExportFormatDefault
+                    xmlAuthorName = xmlAuthorDefault
+                    xmlTitle = xmlTitleDefault
+                    fileName = fileNameDefault
+                    maxPipelineStep = maxPipelineStepDefault
+                    hasAppeared = true
                 }
+            }
             .toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
@@ -370,20 +363,17 @@ struct PipelineSettingsView: View {
                     allSentences = conllFileToHashableSentForPipeline(
                         inputURL: saveInputMetas.inputURL
                     )
-                    
                 case .manual:
-                    allSentences = builtSents
-                    
+                    allSentences = builtSents.map {$0.hashableSent}
+
                 case .xml:
                     allSentences = xmlToHashableSentForPipeline(
                         inputURL: saveInputMetas.inputURL
                     )
-                    
                 case .xmlConll:
                     allSentences = xmlConllFileToHashableSentForPipeline(
                         inputURL: saveInputMetas.inputURL
                     )
-                    
                 case .txt:
                     // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
                     allSentences = try textFileToHashableSents(
@@ -498,7 +488,6 @@ struct PipelineSettingsView: View {
                 
                 await MainActor.run {
                     taggingInProgress.wrappedValue = false
-                    
                     guard let runOutput else { return }
                         topLevelOutputList.append(runOutput)
                     if runExplicit{

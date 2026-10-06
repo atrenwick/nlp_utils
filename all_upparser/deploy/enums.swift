@@ -6,6 +6,7 @@
 //
 
 import Foundation
+internal import UniformTypeIdentifiers
 
 
 enum ConllLineContent {
@@ -64,6 +65,13 @@ enum InputFileType: String, Identifiable, CaseIterable {
         case .txt: return ["txt","TXT"]
         case .conll: return ["conll", "conllu", "txt"]
         case .xml, .xmlConll, .manual: return ["xml", "XML"]
+        }
+    }
+    
+    var utType: UTType{
+        switch self {
+        case .conll, .manual, .txt: return .plainText
+        case .xml, .xmlConll: return UTType(filenameExtension: "xml") ?? .plainText
         }
     }
     

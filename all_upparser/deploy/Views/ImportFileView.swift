@@ -11,7 +11,7 @@ internal import UniformTypeIdentifiers
 struct ImportFileViewSection: View {
     @Bindable var fileContainerModel: SourceFileContainerModel
     @State private var isSelectingFile = false
-    
+    let inputFileType: InputFileType
     var body: some View {
         HStack(spacing: 16) {
             if let localURL = fileContainerModel.localSandboxFileURL {
@@ -35,7 +35,7 @@ struct ImportFileViewSection: View {
             }
             .fileImporter(
                 isPresented: $isSelectingFile,
-                allowedContentTypes: [.item], // Accepts any file type
+                allowedContentTypes: [inputFileType.utType], // Accepts any file type
                 allowsMultipleSelection: false
             ) { result in
                 switch result {
@@ -71,8 +71,9 @@ struct ImportFileViewSection: View {
 }
 
 #Preview {
+    @Previewable var inputFileType: InputFileType = .conll
     @Previewable var fileContainerModel = SourceFileContainerModel()
     fileContainerModel.localSandboxFileURL = URL(fileURLWithPath: "/tmp/sample.xml") // for this to work, need to add return ; if this is deactivated, remove return from next line
-    return ImportFileViewSection(fileContainerModel: fileContainerModel)
+    return ImportFileViewSection(fileContainerModel: fileContainerModel, inputFileType: inputFileType)
 }
 

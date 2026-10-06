@@ -16,14 +16,12 @@ struct XMLSettingView: View {
         switch selectedExportFormat {
         case .conll, .conllTidy, .conllTxt:
             Text("XML settings not relevant")
-            
         case .xml, .xmlConll:
             Form{
                 TextField("XML Author", text: $xmlAuthorName)
                     .textInputAutocapitalization(TextInputAutocapitalization.never)
                     .autocorrectionDisabled()
                     .onChange(of: xmlAuthorName) { _, newValue in
-                        // Strip any forbidden characters immediately as typed or pasted
                         let cleaned = xmlAuthorName.xmlEscaped
                         if cleaned != newValue {
                             xmlAuthorName = cleaned
@@ -34,12 +32,10 @@ struct XMLSettingView: View {
                     .onSubmit {
                         isFocused = false
                     }
-                
                 TextField("XML Title", text: $xmlTitle)
                     .textInputAutocapitalization(TextInputAutocapitalization.never)
                     .autocorrectionDisabled()
                     .onChange(of: xmlTitle) { _, newValue in
-                        // Strip any forbidden characters immediately as typed or pasted
                         let cleaned = xmlTitle.xmlEscaped
                         if cleaned != newValue {
                             xmlTitle = cleaned
