@@ -9,17 +9,15 @@ import SwiftUI
 
 struct ManualTokenisationView: View {
     
-    @Binding var selectedLanguage: Language
     @State var tempTokens: [TempToken] = []
     @State private var selectedRetokenisationType: RetokenisationType = .predict
-    @FocusState var isFocused
-    
-    @Binding var builtSents: [BuiltSentHolder]
+    @State var getsentNum: Int = 0
     @State private var newSentence: String = ""
     @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, mais avant, c'était Bonn mais on trouvait que c'était pas bon.", "Paris est une grande ville française", "Li chevaliers combattent les dragons."]
     
-    
-    @State var getsentNum: Int = 0
+    @Binding var selectedLanguage: Language
+    @Binding var builtSents: [BuiltSentHolder]
+    @FocusState var isFocused
     
     private var visibleSents: [String] {
         Array(testSentences.prefix(5))
@@ -74,7 +72,6 @@ struct ManualTokenisationView: View {
                     .tint(.indigo)
                     Spacer()
                     Button {
-                        
                         if (0..<testSentences.count).contains(getsentNum - 1){
                             getsentNum -= 1
                         } else {

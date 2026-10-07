@@ -61,5 +61,3 @@ struct XMLSettingView: View {
         xmlTitle: $xmlTitle
     )
 }
-
-

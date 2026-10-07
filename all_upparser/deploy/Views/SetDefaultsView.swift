@@ -9,7 +9,8 @@ import SwiftUI
 import NaturalLanguage
 
 struct SetDefaultsView: View {
-	
+    @AppStorage("runExplicitDefault")  var runExplicitDefault: Bool = false
+    
     //input file
     @AppStorage("inputTypeDefault") private var inputFileTypeDefault: InputFileType = .txt
 
@@ -22,18 +23,23 @@ struct SetDefaultsView: View {
     @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
 
     //export
-    @AppStorage("selectedExportFormatDefault")  var selectedExportFormatDefault: ExportFormat = .xml
     @AppStorage("xmlAuthorDefault")  var xmlAuthorDefault: String = "XML Author"
     @AppStorage("xmlTitleDefault")  var xmlTitleDefault: String = "XML Title"
     @AppStorage("fileNameDefault") var fileNameDefault: String = "fileName"
+    @AppStorage("selectedExportFormatDefault")  var selectedExportFormatDefault: ExportFormat = .xml
     
     @State var sentences: [String] = []
 
-
-
     var body: some View {
+        
         VStack{
             Form{
+                Section{
+                    Toggle(isOn: $runExplicitDefault){
+                        Text("Verbose Mode")
+                    }
+                    
+                }
                 Section("Source file"){
                     Toggle(isOn: $detectLangDefault){
                         Text("Autodetect lang in filename")
@@ -54,7 +60,7 @@ struct SetDefaultsView: View {
                             selectedTreebankDefault = first
                         }
                     }
-
+                    
                     Picker("Treebank", selection: $selectedTreebankDefault){
                         ForEach(selectedLanguageDefault.availableTBs){tb in
                             Text(tb.short).tag(tb)
@@ -63,25 +69,25 @@ struct SetDefaultsView: View {
                     .onChange(of: selectedLanguageDefault) { _, newLang in
                         selectedTreebankDefault = newLang.defaultTB
                     }
-
+                    
                     Picker("Tokenisation method", selection: $tokenizingMethodDefault){
                         ForEach(TokenizingMethod.allCases){method in
                             Text(method.rawValue)
                         }
                     }
-
+                    
                     Picker("Sentencization method", selection: $sentencizingMethodDefault){
                         ForEach(SentencizingMethod.allCases){method in
                             Text(method.rawValue)
                         }
                     }
-
+                    
                     Picker("Max pipeline step", selection: $maxPipelineStepDefault){
                         ForEach(PipelineStep.allCases){step in
                             Text(step.title)
                         }
                     }
-
+                    
                 }
                 Section("Output file"){
                     TextField("Filename", text: $fileNameDefault)
@@ -92,7 +98,7 @@ struct SetDefaultsView: View {
                     }
                     TextField("XML Title", text: $xmlTitleDefault)
                     TextField("XML Author", text: $xmlAuthorDefault)
-                    }
+                }
             }
         }
     }

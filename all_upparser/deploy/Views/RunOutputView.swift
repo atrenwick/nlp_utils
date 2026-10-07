@@ -5,14 +5,18 @@
 //  Created by Adam on 11/09/2026.
 //
 
-import SwiftUI
 
+import SwiftUI
 struct RunOutputDetailView: View{
     @Environment(\.openURL) var openURL
 
     @State var additionalExportFormat: ExportFormat = .conll
-    @State var exportContent: String = ""
     @State var exportStatusMessage: String = ""
+    @State var runOutputFileList: [URL] = []
+    @State var hasAppeared: Bool = false
+    @State var fileToView: URL? =   nil
+    @State var alertMessage: String?
+    
     @Binding var topLevelOutput: [RunOutput]
     @Binding var run: RunOutput
     @Binding var xmlTitle: String
@@ -24,7 +28,7 @@ struct RunOutputDetailView: View{
     
     let safeHeaderAttribs: XmlHeaderAttribs
     let runExplicit = true
-
+    
     var shortUUID: String{
         String(Array(run.id.uuidString).suffix(7))
     }
@@ -39,19 +43,32 @@ struct RunOutputDetailView: View{
         NavigationStack{
             Form{
                 Section("Run \(shortUUID)"){
-//                    Text("Input file : \(run.runMetas.sourceFileName)")
                     NavigationLink(destination: FileViewerView(fileURL: run.runMetas.sourceFileURL)) {
                         Text("Input file : \(run.runMetas.sourceFileName)")
                     }
                     
-                    
-                    NavigationLink(destination: FileViewerView(fileURL: run.runMetas.savedURL)) {
-                        Text("Output : \(run.runMetas.outputFileName)")
+                    if runOutputFileList.count == 1 {
+                        NavigationLink(destination: FileViewerView(fileURL: fileToView)) {
+                            Text("Output : \(run.runMetas.outputFileName)")
+                        }
+                    } else {
+                        NavigationLink(destination: OutputFileListView(runOutputFileList: runOutputFileList)){
+                            Text("Output files")
+                        }
                     }
                     Text("Sentence count : \(run.runData.sents.count)")
                     Text("Tok count : \(run.runData.tokCount)")
                     Text("Language : \(run.runMetas.lang)")
                     Text("Treebank : \(run.runMetas.treebank)")
+                }
+            }
+            .onAppear{
+                if hasAppeared == false{
+                    hasAppeared = true
+                    if let hasURL = run.runMetas.savedURL{
+                        runOutputFileList.append(hasURL)
+                        fileToView = hasURL
+                    }
                 }
             }
         }
@@ -65,49 +82,91 @@ struct RunOutputDetailView: View{
                     }
                     Spacer()
                     Button {
-                        exportContent = makeExportContent(
-                            sentences: run.runData.sents,
-                            exportFormat: additionalExportFormat,
-                            safeHeaderAttribs:run.runMetas.safeHeaderAttribs
-                        )
-                        
-                        print("run.sents.count: \(run.runData.sents.count)")
-                        print("chosenformat: \(additionalExportFormat.fileExtension)")
-                        print("lang: \(selectedLanguage.rawValue)")
-                        print("xmltitlte: \(xmlTitle)")
-                        print("xmlauthor: \(xmlAuthor)")
-                        print(exportContent)
-                        
-                        let runData = RunData(
-                            sents: run.runData.sents,
-                            exportContent: exportContent
-                        )
-                        let updatedInputMetas = SaveInputMetas(
-                            lang: selectedLanguage,
-                            displayName: run.runMetas.sourceFileName,
-                            inputURL: run.runMetas.sourceFileURL,
-                            saveName: fileName,
-                            targetFolderURL: run.runMetas.savedURL?.deletingLastPathComponent(),
-                            exportFormat: additionalExportFormat,
-                            treebank: selectedTreebank,
-                            safeHeaderAttribs: run.runMetas.safeHeaderAttribs
-                        )
-                        
-                        let runMetas = saveFileToChosenLocation(exportContent: exportContent, saveInputMetas: updatedInputMetas)
-                        let runOutput = RunOutput(runData: runData, runMetas: runMetas)
-                        topLevelOutput.append(runOutput)
+                        do{
+                            let runOutput = try additionalExportRunner(
+                                run: run,
+                                additionalExportFormat: additionalExportFormat,
+                                selectedLanguage: selectedLanguage,
+                                selectedTreebank: selectedTreebank
+                            )
+                            if let hasURL = runOutput.runMetas.savedURL{
+                                runOutputFileList.append(hasURL)
+                            }
+                            topLevelOutput.append(runOutput)
+                        } catch {
+                            switch error {
+                            case let parseProcessingError as ParseProcessingError:
+                                alertMessage = parseProcessingError.errorDescription
+                            default:
+                                alertMessage = error.localizedDescription
+                            }
+                        }
                     } label: {
                         Text("Export")
                     }
                     .tint(.green)
                     .buttonStyle(.borderedProminent)
                 }
-                    .onAppear {
-                        run.runMetas.unread = false
-                    }
+                .alert(
+                    "Error",
+                    isPresented: Binding(
+                        get: {alertMessage != nil},
+                        set: {if !$0 {alertMessage = nil}}
+                    )
+                )
+                {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text(alertMessage ?? "")
+                }
+                .onAppear {
+                    run.runMetas.unread = false
+                }
             }
         }
     }
+    func additionalExportRunner(
+        run:RunOutput,
+        additionalExportFormat: ExportFormat,
+        selectedLanguage: Language,
+        selectedTreebank: Language.Treebank
+    ) throws -> RunOutput {
+        
+        let exportContent = makeExportContent(
+            sentences: run.runData.sents,
+            exportFormat: additionalExportFormat,
+            safeHeaderAttribs:run.runMetas.safeHeaderAttribs
+        )
+//        print("run.sents.count: \(run.runData.sents.count)")
+//        print("chosenformat: \(additionalExportFormat.fileExtension)")
+//        print("lang: \(selectedLanguage.rawValue)")
+//        print(exportContent)
+        
+        guard !exportContent.isEmpty else {
+            throw ParseProcessingError.makeExportContentError
+        }
+        
+        let runData = RunData(
+            sents: run.runData.sents,
+            exportContent: exportContent
+        )
+        let updatedInputMetas = SaveInputMetas(
+            lang: selectedLanguage,
+            displayName: run.runMetas.sourceFileName,
+            inputURL: run.runMetas.sourceFileURL,
+            saveName: run.runMetas.outputFileName,
+            targetFolderURL: run.runMetas.savedURL?.deletingLastPathComponent(),
+            exportFormat: additionalExportFormat,
+            treebank: selectedTreebank ,
+            safeHeaderAttribs: run.runMetas.safeHeaderAttribs
+        )
+        
+        let runMetas = saveFileToChosenLocation(exportContent: exportContent, saveInputMetas: updatedInputMetas)
+        let runOutput = RunOutput(runData: runData, runMetas: runMetas)
+
+        return runOutput
+    }
+
 }
 
 
@@ -133,7 +192,17 @@ struct RunOutputView: View {
                 List{
                     ForEach(runs.enumerated(), id:\.offset){num,run in
                         NavigationLink {
-                            RunOutputDetailView(topLevelOutput: $runs, run: bindingFor(run), xmlTitle: $xmlTitle, xmlAuthor: $xmlAuthor, selectedLanguage: $selectedLanguage, targetFolderURL: $targetFolderURL, fileName: $fileName, selectedTreebank: $selectedTreebank, safeHeaderAttribs: safeHeaderAttribs  )
+                            RunOutputDetailView(
+                                topLevelOutput: $runs,
+                                run: bindingFor(run),
+                                xmlTitle: $xmlTitle,
+                                xmlAuthor: $xmlAuthor,
+                                selectedLanguage: $selectedLanguage,
+                                targetFolderURL: $targetFolderURL,
+                                fileName: $fileName,
+                                selectedTreebank: $selectedTreebank,
+                                safeHeaderAttribs: safeHeaderAttribs
+                            )
                         } label: {
                             Text("Run \(num + 1): \(run.runMetas.sourceFileName) | \(run.runMetas.lang) | \(run.runMetas.treebank) | \(run.runMetas.exportFormat)")
                         }

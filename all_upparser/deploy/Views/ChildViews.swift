@@ -11,7 +11,6 @@ internal import UniformTypeIdentifiers
 
 struct BuiltSentsViewer: View {
     let builtSents:[BuiltSentHolder]
-//    var showSents: [AttributedString] { markupTokenisationInSents(hashableSents: builtSents) }
     var body: some View{
         Form{
             ForEach(builtSents, id:\.self){sentence in
@@ -170,6 +169,18 @@ struct FileNameInputViewSection: View {
     }
 }
 
+struct OutputFileListView: View{
+    let runOutputFileList: [URL]
+    var body: some View{
+        Form{
+            ForEach(runOutputFileList, id:\.self){link in
+                NavigationLink(destination: FileViewerView(fileURL: link)) {
+                    Text("Output : \(link.lastPathComponent)")
+                }
+            }
+        }
+    }
+}
 
 struct OutputLinesViewSection: View {
     let outputLines: [String]

@@ -94,7 +94,7 @@ class SWParser: NSObject, XMLParserDelegate {
 
         case "s":
             guard let id = currentSID else { return }
-            print("have sent :: tokens == ")
+            print("have sent :: tokens == \(currentTokens.count)")
             results.append(HashableSentence(id: id, tokens: currentTokens))
             insideS = false
 
