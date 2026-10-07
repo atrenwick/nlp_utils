@@ -14,7 +14,6 @@ enum ConllLineContent {
     case blank
 }
 
-
 enum ExportFormat: String, CaseIterable, Identifiable{
     var id: Self {self}
     case xml
@@ -33,7 +32,6 @@ enum ExportFormat: String, CaseIterable, Identifiable{
         }
     }
 }
-
 
 enum InputFileType: String, Identifiable, CaseIterable {
     var id: Self { self }
@@ -76,7 +74,6 @@ enum InputFileType: String, Identifiable, CaseIterable {
     }
     
 }
-
 
 enum Language: String, CaseIterable, Identifiable {
     // uppercase lang code as used in file paths
@@ -160,6 +157,52 @@ enum Language: String, CaseIterable, Identifiable {
     }
 }
 
+
+enum ParseProcessingError: LocalizedError{
+    case missingURL
+    case parserCreationError
+    case xmlParserFailure(line: Int, reason: String)
+    case noSentencesLoaded
+    case retokenisationError
+    case noRunOutput
+    case ConllParsingError(line: String, filename:String)
+    case ReadFromSandboxError
+    case ConllLineIdentificationError
+    case conllChunkToLineError
+    case makeConllLinesFromURLError
+    case makeExportContentError
+    
+    var errorDescription: String? {
+        switch self{
+        case .noRunOutput:
+            return "No run output to return"
+        case .missingURL:
+            return "No URL provided"
+        case .noSentencesLoaded:
+            return "No sentences found when switching on inputFileTYpe"
+        case .parserCreationError:
+            return "Couldn't create XML parser from URL"
+        case .xmlParserFailure:
+            return "Unknown XML parsing error with XML parser + delegate"
+        case .retokenisationError:
+            return "Error retokenising: no sentences found"
+        case .ReadFromSandboxError:
+            return "Error reading the file from the sandbox"
+        case .ConllParsingError(let lineNumber, let filename):
+            return "Error parsing conll lines : 10 fields not found in file \(filename) line \(lineNumber)"
+        case .ConllLineIdentificationError:
+            return "Error getting finding sentence chunks in conll input"
+        case .makeConllLinesFromURLError:
+            return "Error in makeConllLinesFromURL function"
+        case .conllChunkToLineError:
+            return "Error in conllChunkToLineError function"
+        case .makeExportContentError:
+            return "Error in makeExportContent function"
+        }
+    }
+}
+
+
 enum PipelineStep: Int, CaseIterable, Identifiable, Comparable {
     // RawValue type (Int) links each case to an integer (1, 2, 3, 4).
     // Comparable conformance allows using <, >, <=, >= on enum cases.
@@ -193,14 +236,12 @@ enum RetokenisationType: String, Identifiable, CaseIterable{
     case manual = "Manual"
     case rule = "Rule"
     case skip = "skip" // special case for txt parsed from raw file - is already Hashable, so skip by toggling value
-    
     }
+
 enum SentencizingMethod: String, Identifiable, CaseIterable {
     var id: Self {self}
-
     case nlSentencizer
     case custom
-    
     }
 
 enum TokenizingMethod : String, Identifiable, CaseIterable{
@@ -211,3 +252,4 @@ enum TokenizingMethod : String, Identifiable, CaseIterable{
     case manual = "Manual"
     case skip = "Skip"
 }
+

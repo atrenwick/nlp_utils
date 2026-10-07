@@ -11,6 +11,8 @@ internal import UniformTypeIdentifiers
 
 struct PipelineSettingsView: View {
     
+    @AppStorage("runExplicitDefault") var runExplicitDefault: Bool = false
+    
     //MARK: defaults via AppStorage
     //input file
     @AppStorage("inputFileTypeDefault") var inputFileTypeDefault: InputFileType = .txt
@@ -22,7 +24,7 @@ struct PipelineSettingsView: View {
     @AppStorage("tokenizingMethodDefault") var tokenizingMethodDefault: TokenizingMethod = .nltokeniser
     @AppStorage("sentencizingMethodDefault")  var sentencizingMethodDefault: SentencizingMethod = .nlSentencizer
     @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
-
+    
     //export
     @AppStorage("selectedExportFormatDefault") var selectedExportFormatDefault: ExportFormat = .xml
     @AppStorage("xmlAuthorDefault") var xmlAuthorDefault: String = "XML Author"
@@ -33,25 +35,25 @@ struct PipelineSettingsView: View {
     @State var inputFileType: InputFileType = .conll
     @State var fileContainerModel = SourceFileContainerModel()
     @State var selectedInputFile: URL? = nil
-
-
+    
+    
     // import, parsing settings
     @State var detectLanguage: Bool = false
     @State var selectedLanguage: Language = .FR
     @State var selectedTreebank: Language.Treebank = .frTB1
-
+    
     @State var maxPipelineStep: PipelineStep = .step5
     @State var runRetokeniser: Bool = false
     @State var tokenizingMethod: TokenizingMethod = .nltokeniser
     @State var sentencizingMethod: SentencizingMethod = .nlSentencizer
-
+    
     // export settings
     @State var fileName: String = "Filename"
     @State var targetFolderURL: URL? = nil
     @State var selectedExportFormat: ExportFormat = .xml
     @State var xmlAuthorName: String = "XML Author"
     @State var xmlTitle: String = "XML Title"
-
+    
     //progressbars::
     @State private var appleProgress = Progress(totalUnitCount: 1)
     @State private var progressBarStyle: ProgressBarStyle = .apple
@@ -59,14 +61,14 @@ struct PipelineSettingsView: View {
     @State private var processedCount = 0
     @State private var totalCount = 0
     @State private var hasStarted = false
-
+    
     // reporting
     @State private var errorMessage: String?
     @State private var topLevelOutputList: [RunOutput] = []
     @State private var exportStatusMessage: String?
     @State var outputString: String = "not yet run"
     @State private var runOutput: RunOutput?
-
+    
     //controlling visibility
     @State var taggingInProgress: Bool = false
     @State var showImporter: Bool = false
@@ -77,16 +79,18 @@ struct PipelineSettingsView: View {
     @State var sentsToRetokenise: [String] = []
     @State private var testSentences = ["Paris est la capitale de la France.", "La capitale de l'Allemagne est Berlin, mais avant, c'était Bonn mais on trouvait que c'était pas bon.", "Paris est une grande ville française"]
     @State private var newSentence: String = ""
-
+    
     // outtput data
     @State var exportContent: String = ""
     
-    let runExplicit = true //true // hardcoded bool for testing verbosity, display of test elements
-
+    @State private var alertMessage: String?
+    
+    @State var runExplicit: Bool = true //true // hardcoded bool for testing verbosity, display of test elements
+    
     var unreadCount: Int {
         topLevelOutputList.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
-
+    
     //TODO: funct exists to make same, but not called :: consider where, if, to use it
     var safeHeaderAttribs: XmlHeaderAttribs {
         let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
@@ -99,10 +103,10 @@ struct PipelineSettingsView: View {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         let dateString = formatter.string(from:Date())
         let xmlsafeDate = dateString.xmlEscaped
-
+        
         let xmlsafeSourceFile = fileContainerModel.localSandboxFileURL?.path().xmlEscaped ?? "unk"
         let runID = UUID().uuidString
-
+        
         let maxPipelineStep = maxPipelineStep.title.xmlEscaped
         let runRetokeniser = String(runRetokeniser).xmlEscaped
         let tokenizingMethod = tokenizingMethod.rawValue.xmlEscaped
@@ -272,10 +276,23 @@ struct PipelineSettingsView: View {
                     .animation(.easeInOut(duration: 0.2), value: isPipelineReady)
                     .padding()
                 }
+                .alert(
+                    " Error",
+                    isPresented: Binding(
+                        get: {alertMessage != nil},
+                        set: {if !$0 {alertMessage = nil}}
+                    )
+                )
+                {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text(alertMessage ?? "")
+                }
             }
-
+            
             // default values on appear
             .onAppear {
+                runExplicit = runExplicitDefault
                 if hasAppeared == false {
                     inputFileType = inputFileTypeDefault
                     selectedLanguage = selectedLanguageDefault
@@ -321,15 +338,13 @@ struct PipelineSettingsView: View {
             }
         }
     }
-
- 
     private func runTagging(
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
         taggingInProgress: Binding<Bool>) {
             //MARK: parameters, initialisations for task
             taggingInProgress.wrappedValue = true
-
+            
             let saveInputMetas = SaveInputMetas(
                 lang: selectedLanguage,
                 displayName: inputFileType == .manual ? "Manual Entry" : fileContainerModel.selectedFileName,
@@ -347,164 +362,175 @@ struct PipelineSettingsView: View {
             totalCount = 0
             
             
-        Task {
-            // MARK: tagging :
-            do {
-                // get pipeline object
-                let pipeline = try UDPipeline(
-                    languageCode: saveInputMetas.lang.rawValue,
-                    treebank: saveInputMetas.treebank.short)
-                var allSentences: [HashableSentence] = []
-                
-                //MARK: INGEST SENTS ::
-
-                switch inputFileType {
-                case .conll:
-                    allSentences = conllFileToHashableSentForPipeline(
-                        inputURL: saveInputMetas.inputURL
-                    )
-                case .manual:
-                    allSentences = builtSents.map {$0.hashableSent}
-
-                case .xml:
-                    allSentences = xmlToHashableSentForPipeline(
-                        inputURL: saveInputMetas.inputURL
-                    )
-                case .xmlConll:
-                    allSentences = xmlConllFileToHashableSentForPipeline(
-                        inputURL: saveInputMetas.inputURL
-                    )
-                case .txt:
-                    // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
-                    allSentences = try textFileToHashableSents(
-                        inputURL: saveInputMetas.inputURL,
-                        sentencizingMethod: sentencizingMethod,
-                        tokenizingMethod: tokenizingMethod,
-                        lang: saveInputMetas.lang,
-                        pipeline: pipeline
-                    )
-//                    let sentencesAsStrings = textFileToSentStrings(
-//                        inputURL: saveInputMetas.inputURL,
-//                        sentencizingMethod: sentencizingMethod,
-//                        lang: selectedLanguage
-//                    )
-//                    switch tokenizingMethod{
-//                    case .custom:
-//                        print("using custom rules:: need to get Swift version of rules……")
-//                    case .nltokeniser:
-//                        allSentences = getTokenisedSentences(sents: sentencesAsStrings, lang: selectedLanguage)
-//
-//                        print("nltokeniser")
-//                    case .trained:
-//                        // retokenize everything with model
-//                        // MARK: can change this IN to be testSentences
-//                        for sentence in sentencesAsStrings {
-//                            allSentences.append(contentsOf: try pipeline.tokenize(sentence))
-//                        
-//                    }
-//                    }
-                    print("Mode a: \(allSentences.count) sents ")
+            Task {
+                // MARK: tagging :
+                do {
+                    // get pipeline object
+                    let pipeline = try UDPipeline(
+                        languageCode: saveInputMetas.lang.rawValue,
+                        treebank: saveInputMetas.treebank.short)
+                    var allSentences: [HashableSentence] = []
                     
-                }
-                
-                if inputFileType != .txt && runRetokeniser && [TokenizingMethod.nltokeniser, TokenizingMethod.trained].contains(tokenizingMethod)  {
-                    print("Retokenising")
-                    var sentencesAsStrings: [String] = []
-                    for sent in allSentences{
-                        sentencesAsStrings.append(sent.detokenised)
-                    }
+                    //MARK: INGEST SENTS ::
                     
-                    let retokenisedSents = try stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: sentencesAsStrings, lang: saveInputMetas.lang, pipeline: pipeline)
-                    guard retokenisedSents.count > 0 else{
-                        print("No retokrnised sentences found, baling out… 🪂")
-                        return
-                    }
+                    switch inputFileType {
+                    case .conll:
+                        allSentences = try conllFileToHashableSentForPipeline(
+                            inputURL: saveInputMetas.inputURL
+                        )
+                    case .manual:
+                        allSentences = builtSents.map {$0.hashableSent}
                         
-                    allSentences = retokenisedSents
-                }
-                
-                // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
-                if runExplicit{
-                    var nlInputTexts: [String] = []
-                    for sent in allSentences{
-                        nlInputTexts.append(sent.tokens.joined(separator: " "))
+                    case .xml:
+                        allSentences = try xmlToHashableSentForPipeline(
+                            inputURL: saveInputMetas.inputURL
+                        )
+                    case .xmlConll:
+                        allSentences = try xmlConllFileToHashableSentForPipeline(
+                            inputURL: saveInputMetas.inputURL
+                        )
+                    case .txt:
+                        // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
+                        allSentences = try textFileToHashableSents(
+                            inputURL: saveInputMetas.inputURL,
+                            sentencizingMethod: sentencizingMethod,
+                            tokenizingMethod: tokenizingMethod,
+                            lang: saveInputMetas.lang,
+                            pipeline: pipeline
+                        )
+                        //                    let sentencesAsStrings = textFileToSentStrings(
+                        //                        inputURL: saveInputMetas.inputURL,
+                        //                        sentencizingMethod: sentencizingMethod,
+                        //                        lang: selectedLanguage
+                        //                    )
+                        //                    switch tokenizingMethod{
+                        //                    case .custom:
+                        //                        print("using custom rules:: need to get Swift version of rules……")
+                        //                    case .nltokeniser:
+                        //                        allSentences = getTokenisedSentences(sents: sentencesAsStrings, lang: selectedLanguage)
+                        //
+                        //                        print("nltokeniser")
+                        //                    case .trained:
+                        //                        // retokenize everything with model
+                        //                        // MARK: can change this IN to be testSentences
+                        //                        for sentence in sentencesAsStrings {
+                        //                            allSentences.append(contentsOf: try pipeline.tokenize(sentence))
+                        //
+                        //                    }
+                        //                    }
+                        print("Mode a: \(allSentences.count) sents ")
+                        
                     }
-                    for chunk in nlInputTexts{
-                        let rnReturn = getNLTags(text: chunk)
+                    guard !allSentences.isEmpty else {
+                        taggingInProgress.wrappedValue = false
+                        throw ParseProcessingError.noSentencesLoaded
                     }
-                }
-                
-                guard  allSentences.count > 0 else {
-                    print("No sentences found, baling out… 🪂")
-                    return
-                }
-                print("Mysents count = \(allSentences.count)")
-                
-                await MainActor.run {
-                    totalCount = allSentences.count
-                    appleProgress = Progress(totalUnitCount: Int64(max(allSentences.count, 1)))
-                    startTime = Date()
-                }
-                
-                var outSents: [Sentence] = []
-                // MARK: Step 2: iterate over sentences
-                
-#if DEBUG
-                let runfive = false
-                if runfive {
-                    allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
-#endif
-                
-                for sentence in allSentences {
-                    let parsedTokens = try pipeline.runOnSentence(sentence, level: maxPipelineStep.rawValue)
-                    if runExplicit {
-                        print("max requested step == \(maxPipelineStep.rawValue)")
-                    }
-                    let mySent: Sentence = Sentence(
-                        sentID: sentence.id,
-                        conllData: parsedTokens
-                    )
-                    outSents.append(mySent)
                     
-                    await MainActor.run {
-                        processedCount += 1
-                        appleProgress.completedUnitCount = Int64(processedCount)
+                    if inputFileType != .txt && runRetokeniser && [TokenizingMethod.nltokeniser, TokenizingMethod.trained].contains(tokenizingMethod)  {
+                        print("Retokenising")
+                        var sentencesAsStrings: [String] = []
+                        for sent in allSentences{
+                            sentencesAsStrings.append(sent.detokenised)
+                        }
+                        
+                        let retokenisedSents = try stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: sentencesAsStrings, lang: saveInputMetas.lang, pipeline: pipeline)
+                        guard !retokenisedSents.isEmpty else {
+                            taggingInProgress.wrappedValue = false
+                            throw ParseProcessingError.retokenisationError
+                        }
+                        allSentences = retokenisedSents
                     }
-                }
-#if DEBUG
-                dumpDetailsForRunExplicit(runExplicit: runExplicit, outSents: outSents, targetFolderURL: targetFolderURL, fileName: fileName)
-#endif
-
-                runOutput = makeTidyRunOutput(
-                    outSents: outSents,
-                    saveInputMetas: saveInputMetas,
-                    safeHeaderAttribs: safeHeaderAttribs
-                )
-                
-                if runExplicit {
-                    guard let runOutput else { return }
-                    print(runOutput.runData.sents.generateExportText())
-                }
-                
-                await MainActor.run {
-                    taggingInProgress.wrappedValue = false
-                    guard let runOutput else { return }
-                        topLevelOutputList.append(runOutput)
+                    
+                    // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
                     if runExplicit{
-                        print("topLevelOutputList length == \(topLevelOutputList.count)")
+                        var nlInputTexts: [String] = []
+                        for sent in allSentences{
+                            nlInputTexts.append(sent.tokens.joined(separator: " "))
+                        }
+                        for chunk in nlInputTexts{
+                            let rnReturn = getNLTags(text: chunk)
+                        }
                     }
-                }
-            } catch {
-                print(error.localizedDescription)
-                await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    taggingInProgress.wrappedValue = false
+                    print("Mysents count = \(allSentences.count)")
+                    await MainActor.run {
+                        totalCount = allSentences.count
+                        appleProgress = Progress(totalUnitCount: Int64(max(allSentences.count, 1)))
+                        startTime = Date()
+                    }
+                    
+                    var outSents: [Sentence] = []
+                    // MARK: Step 2: iterate over sentences
+#if DEBUG
+                    let runfive = false
+                    if runfive {
+                        allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
+#endif
+                    
+                    for sentence in allSentences {
+                        let parsedTokens = try pipeline.runOnSentence(sentence, level: maxPipelineStep.rawValue)
+                        if runExplicit {
+                            print("max requested step == \(maxPipelineStep.rawValue)")
+                        }
+                        let mySent: Sentence = Sentence(
+                            sentID: sentence.id,
+                            conllData: parsedTokens
+                        )
+                        outSents.append(mySent)
+                        
+                        
+                        
+                        await MainActor.run {
+                            processedCount += 1
+                            appleProgress.completedUnitCount = Int64(processedCount)
+                        }
+                    }
+#if DEBUG
+                    dumpDetailsForRunExplicit(runExplicit: runExplicit, outSents: outSents, targetFolderURL: targetFolderURL, fileName: fileName)
+#endif
+                    
+                    runOutput = makeTidyRunOutput(
+                        outSents: outSents,
+                        saveInputMetas: saveInputMetas,
+                        safeHeaderAttribs: safeHeaderAttribs
+                    )
+                    
+                    if runExplicit {
+                        guard let runOutput else {
+                            taggingInProgress.wrappedValue = false
+                            throw ParseProcessingError.noRunOutput
+                        }
+                        print(runOutput.runData.sents.generateExportText())
+                    }
+                    
+                    try await MainActor.run {
+                        taggingInProgress.wrappedValue = false
+                        guard let runOutput else {
+                            throw ParseProcessingError.noRunOutput
+                        }
+                        topLevelOutputList.append(runOutput)
+                        if runExplicit{
+                            print("topLevelOutputList length == \(topLevelOutputList.count)")
+                        }
+                    }
+                } catch {
+                    switch error {
+                    case let parseProcessingError as ParseProcessingError:
+                        alertMessage = parseProcessingError.errorDescription
+                        
+                    case let nsError as NSError where nsError.domain == XMLParser.errorDomain:
+                        alertMessage = "XML Parsing error : No valid XML to parse"
+                    default:
+                        alertMessage = error.localizedDescription
+                    }
+                    await MainActor.run {
+                        taggingInProgress.wrappedValue = false
+                    }
                 }
             }
         }
-    }
 }
 
 #Preview {
     PipelineSettingsView()
 }
+

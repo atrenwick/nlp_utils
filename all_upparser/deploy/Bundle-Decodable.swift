@@ -11,16 +11,19 @@ import libxml2
 //
 extension Bundle {
     
-    func loadText(_ file: String, format: String) -> String {
+    func loadText(_ file: String, format: String) throws -> String {
         let normalizedText: String
         guard let url = self.url(forResource: file, withExtension: nil) else {
-            fatalError("Failed to locate \(file) in the bundle")
+            throw ParseProcessingError.fileNotInBundle
+//            fatalError("Failed to locate \(file) in the bundle")
         }
         guard let data = try? Data(contentsOf: url) else {
-            fatalError("Failed to load \(file)")
+            throw ParseProcessingError.fileLoadError
+//            fatalError("Failed to load \(file)")
         }
         guard let text = String(data: data, encoding: .utf8) else {
-            fatalError("Failed to decode \(file) as UTF-8 text")
+            throw ParseProcessingError.utf8DecodeError
+//            fatalError("Failed to decode \(file) as UTF-8 text")
         }
         // BBEdit yields texts with tab = 4 spaces so send to \t here
         if format == "conllu" {

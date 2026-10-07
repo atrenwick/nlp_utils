@@ -100,8 +100,6 @@ struct RunMetas: Identifiable{
     let savedURL: URL?
     let message: String
     let safeHeaderAttribs: XmlHeaderAttribs
-
-    
 }
 
 struct RunData: Identifiable{
@@ -112,8 +110,6 @@ struct RunData: Identifiable{
         // reduce collection to single element : start at 0, add iteratively over elements
         sents.reduce(0) { $0 + $1.conllData.count }
     }
-    
-    
 }
 struct RunOutput: Identifiable {
     var id = UUID()
@@ -292,7 +288,6 @@ struct Sentence : Identifiable {
 struct TempToken: Identifiable, Hashable {
     let id: Int
     var form: String
-    
 }
 
 
