@@ -165,7 +165,7 @@ final class UDPipeline {
         if !currentSentence.isEmpty { tokenLists.append(currentSentence) }
 
         return tokenLists.enumerated().map { i, tokens in
-            HashableSentence(id: String(i + 1), tokens: tokens)
+            HashableSentence(id: String(i + 1), tokens: tokens, conllMetas: [])
         }
     }
 
@@ -517,30 +517,19 @@ final class UDPipeline {
             return true // signal to enumerator to keep going with enumeration
         }
 
-        print("level = \(level)")
         if level >= 2 {
             let raw = try runTaggerParserModel(on: sentence)
             uposTags = decodeUPOS(raw)
-            print("POS decoded, moving to lemmas")
             if level >= 3 {
                 lemmas = getLemmas(raw)
-                print("lemmas decoded, moving to feats")
             }
             if level >= 4 {
                 featsTags = decodeFeats(raw)
-                print("Feats decoded, moving to deps")
             }
             if level >= 5 {
-                print("line 507")
                 let deps = decodeDependencies(raw)
-                print("line 509")
-                for item in deps{
-                    print("DepItem == \(item)")
-                }
                 heads = deps.map { String($0.head) }
-                print("line 514")
                 deprels = deps.map { $0.deprel }
-                print("line 516")
             }
         }
 

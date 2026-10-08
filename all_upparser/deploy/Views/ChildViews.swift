@@ -28,12 +28,19 @@ struct ExportConfigViewSection: View {
     @Binding var selectedExportFormat: ExportFormat
     @Binding var xmlAuthorName: String
     @Binding var xmlTitle: String
+    @Binding var includeConllSentIdLine: Bool
+    @Binding var includeConllSentText: Bool
 
     var xmlSettingDisplayText: String{
-        if selectedExportFormat == .xml || selectedExportFormat == .xmlConll{
-        return "XML settings"}
-        else {
-            return "No XML settings"
+        switch selectedExportFormat {
+        case .xml:
+            return "XML Settings"
+        case .xmlConll:
+            return "XML-CoNLL settings"
+        case .conll, .conllTxt, .conllTidy:
+            return "CoNLL settings"
+        default:
+            return "Settings"
         }
     }
 
@@ -59,7 +66,13 @@ struct ExportConfigViewSection: View {
                 }
             }
             NavigationLink {
-                XMLSettingView(selectedExportFormat: $selectedExportFormat, xmlAuthorName: $xmlAuthorName, xmlTitle: $xmlTitle)
+                ExportSettingsDetailView(
+                    selectedExportFormat: $selectedExportFormat,
+                    xmlAuthorName: $xmlAuthorName,
+                    xmlTitle: $xmlTitle,
+                    includeConllSentIdLine: $includeConllSentIdLine,
+                    includeConllSentText: $includeConllSentText
+                )
             } label: {
                 Text( xmlSettingDisplayText)
             }

@@ -36,7 +36,7 @@ extension String {
 extension Sequence where Element == Sentence {
     /// Combines calculated properties across all structures
     func generateExportText() -> String {
-        return self.map { $0.conll }.joined(separator: "\n")
+        return self.map { $0.conll}.joined(separator: "\n")
     }
     func generateExportTextTidy() -> String {
         return self.map { $0.conllTidy }.joined(separator: "\n")

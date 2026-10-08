@@ -13,7 +13,7 @@ struct ManualTokenisationView: View {
     @State private var selectedRetokenisationType: RetokenisationType = .predict
     @State var getsentNum: Int = 0
     @State private var newSentence: String = ""
-    @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, mais avant, c'était Bonn mais on trouvait que c'était pas bon.", "Paris est une grande ville française", "Li chevaliers combattent les dragons."]
+    @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, parce que Bonn n'était assez bonne pour tous", "Alors que Paris est une grande ville, elle est plus petite que Tokyo", "Li chevaliers combattent les dragons."]
     
     @Binding var selectedLanguage: Language
     @Binding var builtSents: [BuiltSentHolder]

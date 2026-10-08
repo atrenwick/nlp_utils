@@ -72,7 +72,7 @@ struct HashableSentence: Hashable {
     // sentence as id + list of strings as input for parser
     let id: String
     let tokens: [String]
-    
+    let conllMetas: [String]
     var detokenised: String {
         tokens.joined(separator: " ")
     }
@@ -100,6 +100,7 @@ struct RunMetas: Identifiable{
     let savedURL: URL?
     let message: String
     let safeHeaderAttribs: XmlHeaderAttribs
+    let includeConllSentText: Bool
 }
 
 struct RunData: Identifiable{
@@ -149,6 +150,7 @@ struct SaveInputMetas: Identifiable{
     let exportFormat: ExportFormat
     let treebank: Language.Treebank
     let safeHeaderAttribs: XmlHeaderAttribs
+    let includeConllSentText: Bool
 }
 
 
@@ -157,6 +159,7 @@ struct Sentence : Identifiable {
     var id = UUID()
     let sentID: String
     let conllData: [Token]
+    let conllMetas: [String]
 
     var tokCount: Int {
         conllData.count
@@ -173,11 +176,17 @@ struct Sentence : Identifiable {
         return content
     }
     
+    var conllMetaTextLine: String {
+        var internalList: [String] = ["# sent_text = "]
+        internalList.append(contentsOf: conllData.map {$0.form})
+        return internalList.joined(separator: " ")
+    }
+    
     var sentIdAsMeta: String {
         return "\n\n# sent_id = \(runSentIdRegexes)"
     }
     
-    func makeXMLsent(exportFormat: ExportFormat) -> String {
+    func makeXMLsent(exportFormat: ExportFormat, includeConllSentText: Bool) -> String {
         var xmlTokenElements: [String] = []
         let sentHeader = """
         <s id=\"\(runSentIdRegexes)\">
@@ -187,6 +196,10 @@ struct Sentence : Identifiable {
             """
         
         xmlTokenElements.append(sentHeader)
+        if includeConllSentText {
+            xmlTokenElements.append("# sent_id = \(runSentIdRegexes)")
+            xmlTokenElements.append(conllMetaTextLine)
+        }
 
         switch exportFormat{
         case .xml:
@@ -199,14 +212,41 @@ struct Sentence : Identifiable {
         xmlTokenElements.append(sentFooter)
         return xmlTokenElements.joined(separator: "\n")
     }
+    func makeConll(sentInMeta: Bool = true) -> String {
+        var lineStore: [String] = []
+        lineStore.append(sentIdAsMeta)
 
-    var conll: String {
-        var internalLineList: [String] = []
-        internalLineList.append(sentIdAsMeta)
-        for token in conllData{
-            internalLineList.append(token.conllRaw)
+        if sentInMeta {
+            var sentTextLine = ["# sent = "]
+            sentTextLine.append(contentsOf: conllData.map {$0.form} )
+            lineStore.append(sentTextLine.joined(separator: " "))
         }
-        return internalLineList.joined(separator: "\n")
+        lineStore.append(contentsOf: conllData.map {$0.form})
+//        var internalLineList: [String] = []
+//        internalLineList.append(sentIdAsMeta)
+//        let test: [String] = conllData.map {$0.form}
+//        print(test)
+//        if sentInMeta{
+//            var sentInMetaLine: [String] = ["# sent = "]
+//            for token in conllData{
+//                sentInMetaLine.append(token.form)
+//            }
+//        }
+//        for token in conllData{
+//            internalLineList.append(token.conllRaw)
+//        }
+        return lineStore.joined(separator: "\n")
+    }
+    var conll: String {
+        var testText = ["## thsi is a test"]
+        testText.append(contentsOf: conllData.map {$0.form})
+        return testText.joined(separator: "\n")
+//        var internalLineList: [String] = []
+//        internalLineList.append(sentIdAsMeta)
+//        for token in conllData{
+//            internalLineList.append(token.conllRaw)
+//        }
+//        return internalLineList.joined(separator: "\n")
     }
     
     var conllTidy: String {
@@ -223,7 +263,7 @@ struct Sentence : Identifiable {
         for token in conllData{
             internalTokList.append(token.form)
         }
-        return HashableSentence(id: sentID, tokens: internalTokList)
+        return HashableSentence(id: sentID, tokens: internalTokList, conllMetas: self.conllMetas)
     }
     
     func formatRaw() -> [String]{

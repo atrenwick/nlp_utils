@@ -74,29 +74,41 @@ func conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Sentenc
     let inputSents = conllLines // rename for similarity to model
     for (sentNum, inputSent) in inputSents.enumerated() {
         var currentToks: [Token] = []
+        var currentMetas: [String] = []
         for (lineNum, inputLine) in inputSent.enumerated() {
-            if inputLine.hasPrefix("#") {
-                currentSentId = String(inputLine)
+            // deal with metas
+//            print(inputLine)
+            if inputLine.hasPrefix("#"){
+                if lineNum == 0 {
+                    currentSentId = String(inputLine)
+                } else {
+                    currentMetas.append(String(inputLine))
+                }
             } else {
-                let lineChunks = inputLine.split(separator: "\t", omittingEmptySubsequences: false)
-                
-                // Allow 0 or 1 chunk (empty/malformed line that resets state)
-                if lineChunks.count < 1 {
+                // deal with all non-meta
+                let lineChunks = inputLine.split(separator: "\t", omittingEmptySubsequences: true)
+                if lineChunks.count == 0 {
+                    // Allow 0 or 1 chunk (empty/malformed line that resets state)
+//                    print("Linechunk len ==0")
                     if !currentToks.isEmpty {
                         let newSentenceObject = Sentence(
                             sentID: currentSentId,
-                            conllData: currentToks
+                            conllData: currentToks,
+                            conllMetas: currentMetas
                         )
                         outputSentences.append(newSentenceObject)
                         currentToks = []
                         currentSentId = ""
                     }
-                    continue
+//                    print("continue")
+                continue
                 }
-                
+
                 // Validate chunk count: Must be exactly 10, otherwise throw error
                 guard lineChunks.count == 10 else {
-                    let errorstring = lineChunks.joined(separator: "<TAB>")
+                    
+                let errorstring = lineChunks.count == 0 ?  "no chunks " :lineChunks.joined(separator: "<TAB>")
+//              print(errorstring)
                 throw ParseProcessingError.ConllParsingError(
                     line: String("Sent:\(sentNum + 1) line \(lineNum + 1) :: \(errorstring)"),
                     filename: String(inputURL.lastPathComponent))
@@ -121,7 +133,8 @@ func conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Sentenc
         if !currentToks.isEmpty {
             let newSentenceObject = Sentence(
                 sentID: currentSentId,
-                conllData: currentToks
+                conllData: currentToks,
+                conllMetas: currentMetas
             )
             outputSentences.append(newSentenceObject)
         }
@@ -450,7 +463,7 @@ func getTokenisedSentences(sents: [String], lang: Language) -> [HashableSentence
                 }
                 return true
             }
-            let doneSent = HashableSentence(id: String(snum), tokens: currentToks)
+            let doneSent = HashableSentence(id: String(snum), tokens: currentToks, conllMetas: [])
             sentsOut.append(doneSent)
         }
         for sent in sentsOut{
@@ -487,7 +500,7 @@ func textFileToHashableSents(inputURL: URL?, sentencizingMethod: SentencizingMet
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
 //1. convert sent to dumpable string for selected format
-func makeExportContent(sentences: [Sentence], exportFormat: ExportFormat, safeHeaderAttribs: XmlHeaderAttribs) -> String{
+func makeExportContent(sentences: [Sentence], exportFormat: ExportFormat, safeHeaderAttribs: XmlHeaderAttribs, includeConllSentText: Bool) -> String{
     var returnString: String = ""
     switch exportFormat {
     case .conll, .conllTxt:
@@ -498,14 +511,16 @@ func makeExportContent(sentences: [Sentence], exportFormat: ExportFormat, safeHe
         returnString = sentListToXML(
             sentences: sentences,
             selectedExportFormat: .xml,
-            safeHeaderAttribs: safeHeaderAttribs
+            safeHeaderAttribs: safeHeaderAttribs,
+            includeConllSentText: includeConllSentText
             )
     case .xmlConll:
         //make xml conll
         returnString = sentListToXML(
             sentences: sentences,
             selectedExportFormat: .xmlConll,
-            safeHeaderAttribs: safeHeaderAttribs
+            safeHeaderAttribs: safeHeaderAttribs,
+            includeConllSentText: includeConllSentText
             )
     }
     return returnString
@@ -570,7 +585,8 @@ func makeSafeXmlHeaderAttribs(
 func sentListToXML(
     sentences: [Sentence],
     selectedExportFormat: ExportFormat,
-    safeHeaderAttribs: XmlHeaderAttribs
+    safeHeaderAttribs: XmlHeaderAttribs,
+    includeConllSentText: Bool
 ) -> String {
     let sentCount = String(sentences.count)
     let tokCount = String(sentences.generateTokCount())
@@ -612,7 +628,11 @@ func sentListToXML(
     var outputStore: [String] = []
     outputStore.append(xmlHeader)
     for sentence in sentences {
-        outputStore.append(sentence.makeXMLsent(exportFormat: selectedExportFormat))
+        let addConllMetas: Bool = true
+        if addConllMetas{
+            outputStore.append(contentsOf: sentence.conllMetas)
+        }
+        outputStore.append(sentence.makeXMLsent(exportFormat: selectedExportFormat, includeConllSentText: includeConllSentText))
     }
     outputStore.append(xmlFooter)
     
@@ -650,7 +670,8 @@ func saveFileToChosenLocation(exportContent: String, saveInputMetas: SaveInputMe
             unread: true,
             savedURL: nil,
             message: "Guard failure in save file to chosen location",
-            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs
+            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
+            includeConllSentText: saveInputMetas.includeConllSentText
         )
         
     }
@@ -677,7 +698,8 @@ func saveFileToChosenLocation(exportContent: String, saveInputMetas: SaveInputMe
             unread: true,
             savedURL: savedURL,
             message: exportStatusMessage,
-            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs
+            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
+            includeConllSentText: saveInputMetas.includeConllSentText
         )
     } catch {
         exportStatusMessage = "Export failed: \(error.localizedDescription)"
@@ -693,7 +715,8 @@ func saveFileToChosenLocation(exportContent: String, saveInputMetas: SaveInputMe
             unread:  true,
             savedURL: nil,
             message: exportStatusMessage,
-            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs
+            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
+            includeConllSentText: saveInputMetas.includeConllSentText
         )
     }
 }
@@ -824,7 +847,8 @@ func makeTidyRunOutput(outSents: [Sentence], saveInputMetas: SaveInputMetas, saf
     let exportContent = makeExportContent(
         sentences: outSents,
         exportFormat: saveInputMetas.exportFormat,
-        safeHeaderAttribs: saveInputMetas.safeHeaderAttribs
+        safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
+        includeConllSentText: saveInputMetas.includeConllSentText
     )
     
     let runData: RunData = RunData(
@@ -922,7 +946,7 @@ func makeHashableSentFromTestToks(tempTokens: [TempToken])-> HashableSentence?{
             keepTokens.append(item.form)
         }
     }
-    let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens)
+    let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens, conllMetas: [])
     for x in returnObject.tokens{
         print(x)
     }
