@@ -30,7 +30,13 @@ struct PipelineSettingsView: View {
     @AppStorage("xmlAuthorDefault") var xmlAuthorDefault: String = "XML Author"
     @AppStorage("xmlTitleDefault") var xmlTitleDefault: String = "XML Title"
     @AppStorage("fileNameDefault") var fileNameDefault: String = "fileName"
+
+    @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
+    @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
+
     
+    
+
     // input file
     @State var inputFileType: InputFileType = .conll
     @State var fileContainerModel = SourceFileContainerModel()
@@ -53,6 +59,10 @@ struct PipelineSettingsView: View {
     @State var selectedExportFormat: ExportFormat = .xml
     @State var xmlAuthorName: String = "XML Author"
     @State var xmlTitle: String = "XML Title"
+    
+    @State var includeConllSentIdLine: Bool = true
+    @State var includeConllSentText: Bool = true
+
     
     //progressbars::
     @State private var appleProgress = Progress(totalUnitCount: 1)
@@ -141,10 +151,15 @@ struct PipelineSettingsView: View {
                             selectedLanguage = detectedLang
                         }
                     }
+                    if newFileType == .manual {
+                        runRetokeniser = false
+                    }
                     if newFileType == .txt {
                         runRetokeniser = true
                     }
                 }
+                .accessibilityIdentifier("InputTypePicker")
+
                 // First Picker
                 Section("Parameters"){
                     if inputFileType != .manual {
@@ -167,6 +182,8 @@ struct PipelineSettingsView: View {
                             }
                         }
                     }
+                    .accessibilityIdentifier("DetectLanguageToggle")
+
                     Picker("Language", selection: $selectedLanguage) {
                         ForEach(Language.allCases) { lang in
                             Text(lang.rawValue)
@@ -184,6 +201,8 @@ struct PipelineSettingsView: View {
                             selectedTreebank = first
                         }
                     }
+                    .accessibilityIdentifier("LanguagePicker")
+
                     Picker("Treebank", selection: $selectedTreebank) {
                         ForEach(selectedLanguage.availableTBs) { tb in
                             Text(tb.short).tag(tb)
@@ -192,6 +211,8 @@ struct PipelineSettingsView: View {
                     .onChange(of: selectedLanguage) { _, newLang in
                         selectedTreebank = newLang.defaultTB
                     }
+                    .accessibilityIdentifier("TreebankPicker")
+
                     NavigationLink("Select processor steps"){
                         ProcessorStepConfigViewSection(
                             maxActiveStep: $maxPipelineStep,
@@ -199,9 +220,21 @@ struct PipelineSettingsView: View {
                             runRetokeniser: $runRetokeniser,
                             tokenizingMethod: $tokenizingMethod
                         )
-                    }
+                    }.accessibilityIdentifier("ProcessorStepLink")
                 }//end section
-                ExportConfigViewSection(fileName: $fileName, targetFolderURL: $targetFolderURL,  selectedExportFormat: $selectedExportFormat, xmlAuthorName: $xmlAuthorName, xmlTitle: $xmlTitle)
+               
+                ExportConfigViewSection(
+                    fileName: $fileName,
+                    targetFolderURL: $targetFolderURL,
+                    selectedExportFormat: $selectedExportFormat,
+                    xmlAuthorName: $xmlAuthorName,
+                    xmlTitle: $xmlTitle,
+                    includeConllSentIdLine: $includeConllSentIdLine,
+                    includeConllSentText: $includeConllSentText
+                )
+                
+
+                
                 if runExplicit {
                     HStack{
                         Button {
@@ -261,10 +294,10 @@ struct PipelineSettingsView: View {
                         ZStack {
                             HStack {
                                 Image(systemName: "play.fill")
-                                Text("Run")
+                                Text(taggingInProgress ? "Running" : "Run")
                                     .fontWeight(.semibold)
                             }
-                            .opacity(taggingInProgress ? 0 : 1)
+                            .opacity(taggingInProgress ? 0.5 : 1)
                         }
                         .font(.headline)
                         .frame(maxWidth: .infinity)
@@ -273,7 +306,7 @@ struct PipelineSettingsView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .disabled(taggingInProgress || !isPipelineReady)
-                    .animation(.easeInOut(duration: 0.2), value: isPipelineReady)
+//                    .animation(.easeInOut(duration: 0.001), value: isPipelineReady)
                     .padding()
                 }
                 .alert(
@@ -289,7 +322,8 @@ struct PipelineSettingsView: View {
                     Text(alertMessage ?? "")
                 }
             }
-            
+
+
             // default values on appear
             .onAppear {
                 runExplicit = runExplicitDefault
@@ -303,11 +337,14 @@ struct PipelineSettingsView: View {
                     selectedExportFormat = selectedExportFormatDefault
                     xmlAuthorName = xmlAuthorDefault
                     xmlTitle = xmlTitleDefault
+                    includeConllSentIdLine = includeConllSentTextDefault
+                    includeConllSentText = includeConllSentTextDefault
                     fileName = fileNameDefault
                     maxPipelineStep = maxPipelineStepDefault
                     hasAppeared = true
                 }
             }
+            .accessibilityIdentifier("RunParsingButton")
             .toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
@@ -319,6 +356,8 @@ struct PipelineSettingsView: View {
                             targetFolderURL: $targetFolderURL,
                             fileName: $fileName,
                             selectedTreebank : $selectedTreebank,
+                            builtSents: $builtSents,
+                            inputFileType: $inputFileType,
                             safeHeaderAttribs: safeHeaderAttribs
                         )
                     } label: {
@@ -353,7 +392,8 @@ struct PipelineSettingsView: View {
                 targetFolderURL: targetFolderURL,
                 exportFormat: selectedExportFormat,
                 treebank: selectedTreebank,
-                safeHeaderAttribs: safeHeaderAttribs
+                safeHeaderAttribs: safeHeaderAttribs,
+                includeConllSentText: includeConllSentText
             )
             errorMessage = nil
             startTime = nil
@@ -473,7 +513,8 @@ struct PipelineSettingsView: View {
                         }
                         let mySent: Sentence = Sentence(
                             sentID: sentence.id,
-                            conllData: parsedTokens
+                            conllData: parsedTokens,
+                            conllMetas:  []
                         )
                         outSents.append(mySent)
                         

@@ -35,7 +35,7 @@ struct ImportFileViewSection: View {
             }
             .fileImporter(
                 isPresented: $isSelectingFile,
-                allowedContentTypes: [inputFileType.utType], // Accepts any file type
+                allowedContentTypes: [.item],//inputFileType.utType, // Accepts any file type
                 allowsMultipleSelection: false
             ) { result in
                 switch result {

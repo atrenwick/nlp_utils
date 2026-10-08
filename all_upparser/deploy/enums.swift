@@ -31,6 +31,7 @@ enum ExportFormat: String, CaseIterable, Identifiable{
         case .conllTxt: "txt"
         }
     }
+    
 }
 
 enum InputFileType: String, Identifiable, CaseIterable {
@@ -160,6 +161,9 @@ enum Language: String, CaseIterable, Identifiable {
 
 enum ParseProcessingError: LocalizedError{
     case missingURL
+    case fileLoadError
+    case utf8DecodeError
+    case fileNotInBundle
     case parserCreationError
     case xmlParserFailure(line: Int, reason: String)
     case noSentencesLoaded
@@ -174,6 +178,13 @@ enum ParseProcessingError: LocalizedError{
     
     var errorDescription: String? {
         switch self{
+            
+        case .fileLoadError:
+            return "Failed to load file from outside bundle"
+        case .utf8DecodeError:
+            return "Failed to decode as UTF-8"
+        case .fileNotInBundle:
+            return "File not in bundle"
         case .noRunOutput:
             return "No run output to return"
         case .missingURL:

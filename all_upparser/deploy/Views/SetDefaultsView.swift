@@ -28,6 +28,10 @@ struct SetDefaultsView: View {
     @AppStorage("fileNameDefault") var fileNameDefault: String = "fileName"
     @AppStorage("selectedExportFormatDefault")  var selectedExportFormatDefault: ExportFormat = .xml
     
+    @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
+    @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
+
+    
     @State var sentences: [String] = []
 
     var body: some View {
@@ -98,6 +102,13 @@ struct SetDefaultsView: View {
                     }
                     TextField("XML Title", text: $xmlTitleDefault)
                     TextField("XML Author", text: $xmlAuthorDefault)
+                    Toggle(isOn: $includeConllSentIdLineDefault){
+                        Text("Include metaline # sent_id = ")
+                    }
+                    Toggle(isOn: $includeConllSentTextDefault){
+                        Text("Include metaline # sent_text = ")
+                    }
+
                 }
             }
         }
@@ -107,3 +118,4 @@ struct SetDefaultsView: View {
 #Preview {
     SetDefaultsView()
 }
+
