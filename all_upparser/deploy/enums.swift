@@ -76,6 +76,13 @@ enum InputFileType: String, Identifiable, CaseIterable {
     
 }
 
+enum InsertPosition : String, Identifiable, CaseIterable{
+    var id: Self {self}
+    case before
+    case after
+}
+
+
 enum Language: String, CaseIterable, Identifiable {
     // uppercase lang code as used in file paths
     case EN
@@ -175,10 +182,12 @@ enum ParseProcessingError: LocalizedError{
     case conllChunkToLineError
     case makeConllLinesFromURLError
     case makeExportContentError
+    case badTempTokens
     
     var errorDescription: String? {
         switch self{
-            
+        case .badTempTokens:
+            return "Error makiing hashable sentence from temp tokens"
         case .fileLoadError:
             return "Failed to load file from outside bundle"
         case .utf8DecodeError:

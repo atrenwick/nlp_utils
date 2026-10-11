@@ -21,16 +21,15 @@ struct SetDefaultsView: View {
     @AppStorage("tokenizingMethodDefault") var tokenizingMethodDefault: TokenizingMethod = .nltokeniser
     @AppStorage("sentencizingMethodDefault")  var sentencizingMethodDefault: SentencizingMethod = .nlSentencizer
     @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
+    @AppStorage("insertNewTokPositionDefault") var insertNewTokPositionDefault: InsertPosition = .after
 
     //export
     @AppStorage("xmlAuthorDefault")  var xmlAuthorDefault: String = "XML Author"
     @AppStorage("xmlTitleDefault")  var xmlTitleDefault: String = "XML Title"
     @AppStorage("fileNameDefault") var fileNameDefault: String = "fileName"
     @AppStorage("selectedExportFormatDefault")  var selectedExportFormatDefault: ExportFormat = .xml
-    
     @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
     @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
-
     
     @State var sentences: [String] = []
 
@@ -84,6 +83,11 @@ struct SetDefaultsView: View {
                         ForEach(SentencizingMethod.allCases){method in
                             Text(method.rawValue)
                         }
+                    }
+                    
+                    Picker("Insert new token position", selection: $insertNewTokPositionDefault){
+                        ForEach(InsertPosition.allCases){position in
+                            Text(position.rawValue)}
                     }
                     
                     Picker("Max pipeline step", selection: $maxPipelineStepDefault){

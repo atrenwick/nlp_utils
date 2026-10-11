@@ -8,13 +8,23 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
-
 struct BuiltSentsViewer: View {
-    let builtSents:[BuiltSentHolder]
+    @Binding var builtSents:[BuiltSentHolder]
+    @Binding var insertNewTokPosition: InsertPosition
     var body: some View{
         Form{
-            ForEach(builtSents, id:\.self){sentence in
-                Text(sentence.showString)
+            ForEach($builtSents, id:\.self.id) { $sent in
+                NavigationLink(destination: TokenisationEditView(toks: $sent.tempToks, insertNewTokPosition: $insertNewTokPosition)) {
+                    Text(sent.toShowString(tempToks: sent.tempToks))
+                }
+                .contentShape(Rectangle())
+                .swipeActions(edge: .trailing){
+                    Button(role: .destructive){
+                        builtSents.removeAll(where: {$0.id == sent.id})
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
             }
         }
     }
@@ -220,7 +230,7 @@ struct OutputLinesViewSection: View {
 
 
 struct PretokenisedSentViewSection : View {
-    let pretokSentsOut: [HashableSentence]
+    @Binding var pretokSentsOut: [HashableSentence]
     var body: some View{
         ScrollView{
             ForEach(pretokSentsOut, id:\.self){instance in
@@ -228,6 +238,67 @@ struct PretokenisedSentViewSection : View {
                 ForEach(instance.tokens, id:\.self){tok in
                 Text(tok)}
             }
+            .onDelete(perform: removeItems)
         }
     }
+    
+    private func removeItems(_ offsets: IndexSet) {
+        guard !offsets.isEmpty else { return }
+        // 2. Filter the offsets to ensure they are actually within the current bounds.
+        let validOffsets = IndexSet(offsets.filter { $0 < pretokSentsOut.count })
+        // If no offsets are valid (e.g., the user swiped on a deleted cell), just bail.
+        guard !validOffsets.isEmpty else { return }
+        pretokSentsOut.remove(atOffsets: offsets)
+    }
 }
+
+struct TokenisationEditView: View {
+    @Binding var toks: [TempToken]
+    @FocusState var isFocused
+    @Binding var insertNewTokPosition: InsertPosition
+    
+    var insertImage: String { (insertNewTokPosition == .before) ? "arrow.turn.left.up" : "arrow.turn.left.down"}
+    
+    var body: some View {
+        Form{
+            ForEach($toks) { token in
+                HStack{
+                    TextField("Token", text: token.form)
+                }
+                .contentShape(Rectangle())
+                .swipeActions(edge: .trailing){
+                    Button(role: .destructive){
+                        toks.removeAll(where: {$0.id == token.id})
+                    } label : {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+                .swipeActions(edge: .leading){
+                    Button{
+                        insertItem( insertNewTokPosition, relativeTo: token.id)
+                    } label: {
+                        VStack{
+                            Image(systemName: insertImage)
+                        }
+                    }
+                }
+                .textInputAutocapitalization(TextInputAutocapitalization.never)
+                .autocorrectionDisabled()
+                .focused($isFocused)
+                .submitLabel(.go)
+                .onSubmit {
+                    isFocused = false
+                }
+            }
+        }
+    }
+    
+    func insertItem(_ position: InsertPosition, relativeTo id: UUID){
+        guard let index = toks.firstIndex(where: { $0.id == id }) else { return }
+        let newItem = TempToken(form: "")
+        let insertionIndex = (position == .before) ? index : index + 1
+        toks.insert(newItem, at: insertionIndex)
+    }
+}
+
+

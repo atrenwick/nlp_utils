@@ -24,7 +24,8 @@ struct PipelineSettingsView: View {
     @AppStorage("tokenizingMethodDefault") var tokenizingMethodDefault: TokenizingMethod = .nltokeniser
     @AppStorage("sentencizingMethodDefault")  var sentencizingMethodDefault: SentencizingMethod = .nlSentencizer
     @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
-    
+    @AppStorage("insertNewTokPositionDefault") var insertNewTokPositionDefault: InsertPosition = .after
+
     //export
     @AppStorage("selectedExportFormatDefault") var selectedExportFormatDefault: ExportFormat = .xml
     @AppStorage("xmlAuthorDefault") var xmlAuthorDefault: String = "XML Author"
@@ -34,16 +35,12 @@ struct PipelineSettingsView: View {
     @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
     @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
 
-    
-    
-
     // input file
     @State var inputFileType: InputFileType = .conll
     @State var fileContainerModel = SourceFileContainerModel()
     @State var selectedInputFile: URL? = nil
     
-    
-    // import, parsing settings
+        // import, parsing settings
     @State var detectLanguage: Bool = false
     @State var selectedLanguage: Language = .FR
     @State var selectedTreebank: Language.Treebank = .frTB1
@@ -52,6 +49,10 @@ struct PipelineSettingsView: View {
     @State var runRetokeniser: Bool = false
     @State var tokenizingMethod: TokenizingMethod = .nltokeniser
     @State var sentencizingMethod: SentencizingMethod = .nlSentencizer
+    @State var insertNewTokPosition: InsertPosition = .after
+    
+    @State var tempTokens: [TempToken] = []
+    @State var selectedRetokenisationType: RetokenisationType = .predict
     
     // export settings
     @State var fileName: String = "Filename"
@@ -62,7 +63,6 @@ struct PipelineSettingsView: View {
     
     @State var includeConllSentIdLine: Bool = true
     @State var includeConllSentText: Bool = true
-
     
     //progressbars::
     @State private var appleProgress = Progress(totalUnitCount: 1)
@@ -78,6 +78,7 @@ struct PipelineSettingsView: View {
     @State private var exportStatusMessage: String?
     @State var outputString: String = "not yet run"
     @State private var runOutput: RunOutput?
+    @State private var alertMessage: String?
     
     //controlling visibility
     @State var taggingInProgress: Bool = false
@@ -87,14 +88,9 @@ struct PipelineSettingsView: View {
     // sentences ::
     @State var builtSents: [BuiltSentHolder] = []
     @State var sentsToRetokenise: [String] = []
-    @State private var testSentences = ["Paris est la capitale de la France.", "La capitale de l'Allemagne est Berlin, mais avant, c'était Bonn mais on trouvait que c'était pas bon.", "Paris est une grande ville française"]
-    @State private var newSentence: String = ""
     
     // outtput data
     @State var exportContent: String = ""
-    
-    @State private var alertMessage: String?
-    
     @State var runExplicit: Bool = true //true // hardcoded bool for testing verbosity, display of test elements
     
     var unreadCount: Int {
@@ -169,7 +165,13 @@ struct PipelineSettingsView: View {
                     } else {
                         Section {
                             NavigationLink("Manual entry…"){
-                                ManualTokenisationView(selectedLanguage: $selectedLanguage,builtSents: $builtSents)
+                                ManualTokenisationView(
+                                    tempTokens: $tempTokens,
+                                    selectedRetokenisationType: $selectedRetokenisationType,
+                                    selectedLanguage: $selectedLanguage,
+                                    builtSents: $builtSents,
+                                    insertNewTokPosition: $insertNewTokPosition,
+                                )
                             }
                         }
                     }
@@ -306,7 +308,6 @@ struct PipelineSettingsView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .disabled(taggingInProgress || !isPipelineReady)
-//                    .animation(.easeInOut(duration: 0.001), value: isPipelineReady)
                     .padding()
                 }
                 .alert(
@@ -322,7 +323,6 @@ struct PipelineSettingsView: View {
                     Text(alertMessage ?? "")
                 }
             }
-
 
             // default values on appear
             .onAppear {
@@ -341,6 +341,7 @@ struct PipelineSettingsView: View {
                     includeConllSentText = includeConllSentTextDefault
                     fileName = fileNameDefault
                     maxPipelineStep = maxPipelineStepDefault
+                    insertNewTokPosition = insertNewTokPositionDefault
                     hasAppeared = true
                 }
             }
@@ -358,6 +359,8 @@ struct PipelineSettingsView: View {
                             selectedTreebank : $selectedTreebank,
                             builtSents: $builtSents,
                             inputFileType: $inputFileType,
+                            tempTokens: $tempTokens,
+                            insertNewTokPosition: $insertNewTokPosition,
                             safeHeaderAttribs: safeHeaderAttribs
                         )
                     } label: {
@@ -377,6 +380,7 @@ struct PipelineSettingsView: View {
             }
         }
     }
+    
     private func runTagging(
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
@@ -419,7 +423,7 @@ struct PipelineSettingsView: View {
                             inputURL: saveInputMetas.inputURL
                         )
                     case .manual:
-                        allSentences = builtSents.map {$0.hashableSent}
+                        allSentences = builtSents.compactMap {$0.toHashableSent(tempToks: $0.tempToks) }
                         
                     case .xml:
                         allSentences = try xmlToHashableSentForPipeline(

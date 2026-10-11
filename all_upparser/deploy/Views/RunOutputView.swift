@@ -27,7 +27,9 @@ struct RunOutputDetailView: View{
     @Binding var selectedTreebank: Language.Treebank
     @Binding var builtSents: [BuiltSentHolder]
     @Binding var inputFileType: InputFileType
-
+    @Binding var tempTokens: [TempToken]
+    @Binding var insertNewTokPosition: InsertPosition
+    
     let safeHeaderAttribs: XmlHeaderAttribs
     let runExplicit = true
     
@@ -45,10 +47,13 @@ struct RunOutputDetailView: View{
         NavigationStack{
             Form{
                 Section("Run \(shortUUID)"){
-                    // TODO: if manual -> built Sent View
                     if inputFileType == .manual{
                         NavigationLink(destination:
-                                        BuiltSentsViewer( builtSents: builtSents)){
+                                        BuiltSentsViewer(
+                                            builtSents: $builtSents,
+                                            insertNewTokPosition: $insertNewTokPosition
+                                        )
+                        ){
                             Text("Input sents")
                         }
                     }
@@ -149,10 +154,6 @@ struct RunOutputDetailView: View{
             safeHeaderAttribs:run.runMetas.safeHeaderAttribs,
             includeConllSentText: run.runMetas.includeConllSentText
         )
-//        print("run.sents.count: \(run.runData.sents.count)")
-//        print("chosenformat: \(additionalExportFormat.fileExtension)")
-//        print("lang: \(selectedLanguage.rawValue)")
-//        print(exportContent)
         
         guard !exportContent.isEmpty else {
             throw ParseProcessingError.makeExportContentError
@@ -173,13 +174,11 @@ struct RunOutputDetailView: View{
             safeHeaderAttribs: run.runMetas.safeHeaderAttribs,
             includeConllSentText:run.runMetas.includeConllSentText
         )
-        
         let runMetas = saveFileToChosenLocation(exportContent: exportContent, saveInputMetas: updatedInputMetas)
         let runOutput = RunOutput(runData: runData, runMetas: runMetas)
 
         return runOutput
     }
-
 }
 
 
@@ -195,6 +194,8 @@ struct RunOutputView: View {
     @Binding var selectedTreebank: Language.Treebank
     @Binding var builtSents: [BuiltSentHolder]
     @Binding var inputFileType: InputFileType
+    @Binding var tempTokens: [TempToken]
+    @Binding var insertNewTokPosition: InsertPosition
 
     let runExplicit = true
     let safeHeaderAttribs: XmlHeaderAttribs
@@ -218,8 +219,9 @@ struct RunOutputView: View {
                                 selectedTreebank: $selectedTreebank,
                                 builtSents: $builtSents,
                                 inputFileType: $inputFileType,
+                                tempTokens: $tempTokens,
+                                insertNewTokPosition: $insertNewTokPosition,
                                 safeHeaderAttribs: safeHeaderAttribs
-
                             )
                         } label: {
                         Text(makeRunLabel(run: run, num: num))
@@ -231,8 +233,6 @@ struct RunOutputView: View {
     }
     func makeRunLabel(run: RunOutput, num: Int) -> String{
         return "Run \(num + 1): \(run.runMetas.sourceFileName) | \(run.runMetas.lang) | \(run.runMetas.treebank) | \(run.runMetas.exportFormat)"
-
-        
     }
     
     // func to get binding for specific el to pass as write-accessible
