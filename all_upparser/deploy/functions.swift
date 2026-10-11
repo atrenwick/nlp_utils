@@ -652,59 +652,13 @@ func sentListToXML(
 
 
 // write string to location
-func saveFileToChosenLocation(exportContent: String, saveInputMetas: SaveInputMetas, runExplicit: Bool = false) -> RunMetas {
-    // function called via UI to run main dump to file
-    var savedURL: URL
+func saveFileToChosenLocation(exportContent: String, saveInputMetas: SaveInputMetas, runExplicit: Bool = false) -> RunMetas{
+    var savedURL: URL?
     var exportStatusMessage: String
+    // deal with bad URL case
     guard let folderURL = saveInputMetas.targetFolderURL else {
-        if runExplicit {
-            print("Guard 292 fail")
-        }
-        return RunMetas(
-            lang: saveInputMetas.lang.rawValue,
-            sourceFileURL: saveInputMetas.inputURL,
-            sourceFileName: saveInputMetas.displayName,
-            outputFileName: saveInputMetas.saveName,
-            treebank: saveInputMetas.treebank.short,
-            exportFormat: saveInputMetas.exportFormat,
-            unread: true,
-            savedURL: nil,
-            message: "Guard failure in save file to chosen location",
-            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
-            includeConllSentText: saveInputMetas.includeConllSentText
-        )
-        
-    }
-    if runExplicit {
-        print("Guard 292 passed")
-    }
-    do {
-        savedURL = try ExporterService.exportDataToFile(
-            exportContent: exportContent,
-            customName: "\(saveInputMetas.saveName)_\(saveInputMetas.treebank.short)_\(saveInputMetas.exportFormat.rawValue)",
-            targetFolderURL: folderURL,
-            exportFormat: saveInputMetas.exportFormat
-        )
-        exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
-        if runExplicit { print(exportStatusMessage) }
-        
-        return RunMetas(
-            lang: saveInputMetas.lang.rawValue,
-            sourceFileURL: saveInputMetas.inputURL,
-            sourceFileName: saveInputMetas.displayName,
-            outputFileName: saveInputMetas.saveName,
-            treebank: saveInputMetas.treebank.short,
-            exportFormat: saveInputMetas.exportFormat,
-            unread: true,
-            savedURL: savedURL,
-            message: exportStatusMessage,
-            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
-            includeConllSentText: saveInputMetas.includeConllSentText
-        )
-    } catch {
-        exportStatusMessage = "Export failed: \(error.localizedDescription)"
-        if runExplicit { print(exportStatusMessage) }
-        
+        if runExplicit{ print("Guard 661 fail") }
+        exportStatusMessage = "Guard failure in save file to chosen location"
         return RunMetas(
             lang: saveInputMetas.lang.rawValue,
             sourceFileURL: saveInputMetas.inputURL,
@@ -719,7 +673,114 @@ func saveFileToChosenLocation(exportContent: String, saveInputMetas: SaveInputMe
             includeConllSentText: saveInputMetas.includeConllSentText
         )
     }
+    if runExplicit{ print("Guard 661 pass")  }
+    
+    do {
+        savedURL = try ExporterService.exportDataToFile(
+            exportContent: exportContent,
+            customName: "\(saveInputMetas.saveName)_\(saveInputMetas.treebank.short)_\(saveInputMetas.exportFormat.rawValue)",
+            targetFolderURL: folderURL,
+            exportFormat: saveInputMetas.exportFormat
+        )
+        exportStatusMessage = "Successfully exported to"
+        if let savedURL {
+            print("Line 685: \(savedURL)")
+            exportStatusMessage += "\(savedURL.lastPathComponent)"
+            if runExplicit {print (exportStatusMessage) }
+        }
+    } catch {
+        print("return 690: ")
+        exportStatusMessage = "Export failed: \(error.localizedDescription)"
+        if runExplicit { print(exportStatusMessage) }
+    }
+    // return for do-catch
+    print("return 694: ")
+    
+    return RunMetas(
+        lang: saveInputMetas.lang.rawValue,
+        sourceFileURL: saveInputMetas.inputURL,
+        sourceFileName: saveInputMetas.displayName,
+        outputFileName: saveInputMetas.saveName,
+        treebank: saveInputMetas.treebank.short,
+        exportFormat: saveInputMetas.exportFormat,
+        unread:  true,
+        savedURL: savedURL ??  nil,
+        message: exportStatusMessage,
+        safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
+        includeConllSentText: saveInputMetas.includeConllSentText
+    )
 }
+
+
+//func saveFileToChosenLocationV1(exportContent: String, saveInputMetas: SaveInputMetas, runExplicit: Bool = false) -> RunMetas {
+//    // function called via UI to run main dump to file
+//    var savedURL: URL
+//    var exportStatusMessage: String
+//    guard let folderURL = saveInputMetas.targetFolderURL else {
+//        if runExplicit {
+//            print("Guard 292 fail")
+//        }
+//        return RunMetas(
+//            lang: saveInputMetas.lang.rawValue,
+//            sourceFileURL: saveInputMetas.inputURL,
+//            sourceFileName: saveInputMetas.displayName,
+//            outputFileName: saveInputMetas.saveName,
+//            treebank: saveInputMetas.treebank.short,
+//            exportFormat: saveInputMetas.exportFormat,
+//            unread: true,
+//            savedURL: nil,
+//            message: "Guard failure in save file to chosen location",
+//            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
+//            includeConllSentText: saveInputMetas.includeConllSentText
+//        )
+//        
+//    }
+//    if runExplicit {
+//        print("Guard 292 passed")
+//    }
+//    do {
+//        savedURL = try ExporterService.exportDataToFile(
+//            exportContent: exportContent,
+//            customName: "\(saveInputMetas.saveName)_\(saveInputMetas.treebank.short)_\(saveInputMetas.exportFormat.rawValue)",
+//            targetFolderURL: folderURL,
+//            exportFormat: saveInputMetas.exportFormat
+//        )
+//        exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
+//        if runExplicit { print(exportStatusMessage) }
+//        
+//        return RunMetas(
+//            lang: saveInputMetas.lang.rawValue,
+//            sourceFileURL: saveInputMetas.inputURL,
+//            sourceFileName: saveInputMetas.displayName,
+//            outputFileName: saveInputMetas.saveName,
+//            treebank: saveInputMetas.treebank.short,
+//            exportFormat: saveInputMetas.exportFormat,
+//            unread: true,
+//            savedURL: savedURL,
+//            message: exportStatusMessage,
+//            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
+//            includeConllSentText: saveInputMetas.includeConllSentText
+//        )
+//    } catch {
+//        exportStatusMessage = "Export failed: \(error.localizedDescription)"
+//        if runExplicit { print(exportStatusMessage) }
+//        
+//        return RunMetas(
+//            lang: saveInputMetas.lang.rawValue,
+//            sourceFileURL: saveInputMetas.inputURL,
+//            sourceFileName: saveInputMetas.displayName,
+//            outputFileName: saveInputMetas.saveName,
+//            treebank: saveInputMetas.treebank.short,
+//            exportFormat: saveInputMetas.exportFormat,
+//            unread:  true,
+//            savedURL: nil,
+//            message: exportStatusMessage,
+//            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
+//            includeConllSentText: saveInputMetas.includeConllSentText
+//        )
+//    }
+//        // make here
+//}
 
 func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
     try writeStringDump(lines)
@@ -828,9 +889,6 @@ func dumpDetailsForRunExplicit(runExplicit: Bool, outSents: [Sentence], targetFo
         print("output name = \(fileName)")
         print("Main actor done, running function 277")
     }
-    
-    
-    
     //no returns
 }
 
@@ -879,6 +937,20 @@ func makeTidyRunOutput(outSents: [Sentence], saveInputMetas: SaveInputMetas, saf
 //1.  apply naive tokenisation - spaces = token boundaries
 //2. make hashable sent from manually redefinable tokens
 //3. Make string of Sent for View, with red / as token boundary
+
+
+func getTokensFromText(inputText: String) -> [String] {
+
+    let tokensRaw = inputText.split(separator: " ")
+    var tidyTokens: [String] = []
+    for token in tokensRaw {
+        if token != ""{
+            tidyTokens.append(String(token))
+        }
+    }
+    return tidyTokens
+}
+
 
 //1.
 func applyNaiveTokenisation(language: Language, myString: String)-> [TempToken]{
@@ -929,30 +1001,30 @@ func applyNaiveTokenisation(language: Language, myString: String)-> [TempToken]{
         step1 = input.split(whereSeparator: { $0 == " "})
     }
 
-    for (num, item) in step1.enumerated() {
+    for (_, item) in step1.enumerated() {
         tempTokens.append(
-            TempToken(id: num, form: String(item))
+            TempToken(form: String(item))
         )
     }
     return tempTokens
 }
 
 //2.
-func makeHashableSentFromTestToks(tempTokens: [TempToken])-> HashableSentence?{
-    guard tempTokens.count > 0 else {return nil}
-    var keepTokens: [String] = []
-    for item in tempTokens{
-        if item.form != ""{
-            keepTokens.append(item.form)
-        }
-    }
-    let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens, conllMetas: [])
-    for x in returnObject.tokens{
-        print(x)
-    }
-    return returnObject
-    }
-//3.
+//func makeHashableSentFromTestToks(tempTokens: [TempToken])-> HashableSentence?{
+//    guard tempTokens.count > 0 else {return nil}
+//    var keepTokens: [String] = []
+//    for item in tempTokens{
+//        if item.form != ""{
+//            keepTokens.append(item.form)
+//        }
+//    }
+//    let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens, conllMetas: [])
+//    for x in returnObject.tokens{
+//        print(x)
+//    }
+//    return returnObject
+//    }
+////3.
 func markupTokenisationInSent(hashableSent: HashableSentence) -> AttributedString{
         
         var result = AttributedString()
@@ -968,6 +1040,500 @@ func markupTokenisationInSent(hashableSent: HashableSentence) -> AttributedStrin
         
     return result
 }
+
+//func applyNaiveTokenisationToString(inputText: String) -> [String]{
+//    return inputText.components(separatedBy: " ")
+//}
+//func getTokens(languageCode: String, method: TokenisationMethod, inputFile: String = "", targetString: String = "") -> [[String]]{
+//    var internalList: [[String]] = []
+//    switch method {
+//    case .conll:
+//        print("Use conll input as tokenisation")
+//        return makeConllLinesFromFile(inputFile: inputFile)
+//
+//    case .retokenise:
+//        print("Use tokeniser to predict")
+//        do {
+//            let pipeline = try UDPipeline(languageCode: languageCode, treebank: "gsd")
+//            let hashableSentences = try pipeline.tokenize(targetString)
+//            print("printing chunks")
+//            print(hashableSentences)
+//            print("End chunks")
+//
+//            for sent in hashableSentences{
+//                internalList.append(sent.tokens)
+//            }
+//        }
+//        catch {
+//            let errorDesc = error.localizedDescription
+//            print("error in get tokens function with pipeline")
+//            print(errorDesc)
+//        }
+//        return internalList
+//    }
+//}
+//
+
+
+//MARK: tokenisation
+
+///Tokenisation -> core tokeniser from moonshot:
+// COPY
+//struct RegexLangPatternToLangMap: Identifiable{
+//    var id = UUID()
+//    let string: String
+//    let langValue: Language
+//    var asRegex: Regex<Substring>{
+//        try! Regex(string)
+//    }
+//}
+//let myMaps: [RegexLangPatternToLangMap] = [
+//    RegexLangPatternToLangMap(string: #"[_\.]fr|^fr_"#, langValue: .FR),
+
+//END_COPY
+//TODO : regexMap like RegexLangPatternToLangMap
+func run_tokeniser_core(thisText: String, lang: String, hyphen_join_value:Bool) -> String{
+    var thisText: String = thisText
+    thisText = thisText.replacingOccurrences(of: #"[\x{0D}\x{A0}\r\n\t\\]"#, with: " ", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #"(  )+"#, with: " ", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:"  ", with: " ", options: .regularExpression)
+    
+    thisText = thisText.replacingOccurrences(of: #"\.\.\."#, with:" … ", options: .regularExpression)
+
+    thisText = thisText.replacingOccurrences(of: #"et al"#, with:#"et_al"#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #"et\. al"#, with:#"et_al"#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #"et\. al\."#, with:#"et_al"#, options: .regularExpression)
+    // UPDATE : thisText = thisText.replacingOccurrences(of: #"\bet\.? al\.?"#, with: "et_al",options: .regularExpression)
+
+    thisText = thisText.replacingOccurrences(of: #"e\.g\."#, with:#"e_g_"#, options: .regularExpression)
+    // UPDATE : thisText = thisText = thisText.replacingOccurrences(of: #"\be\.?\s?g\b\.?"#,     with: "e_g", options: [.regularExpression, .caseInsensitive])
+
+    thisText = thisText.replacingOccurrences(of: #"i\.e\."#, with:#"i_e_"#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #"i\.e\."#, with:#"i_e_"#, options: .regularExpression)
+    
+    thisText = thisText.replacingOccurrences(of: #"i\. e \. ,"#, with:#"i_e_"#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #"i\. e \."#, with:#"i_e_"#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #",\.$"#, with:#"."#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #",\. "#, with:#". "#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #"\.,"#, with:#". "#, options: .regularExpression)
+
+    thisText = thisText.replacingOccurrences(of: #"(htt(p|ps)://.+?($| ))"# ,with:" _URL_ ", options: .regularExpression)
+    
+    if ["fr", "FR"].contains(lang) {
+        thisText = thisText.replacingOccurrences(of: #"[’''’]"#, with:"' ", options: .regularExpression)
+        thisText = runFRonlyReplacements(thisText: thisText)
+    }
+    if ["en", "EN"].contains(lang) {
+        thisText = thisText.replacingOccurrences(of: #"[’''’]"#, with:"' ", options: .regularExpression)
+        thisText = thisText.replacingOccurrences(of: #"[“”]"#, with:#"""#, options: .regularExpression)
+    }
+    
+    thisText = thisText.replacingOccurrences(of: #"([,\]\[;:\-&\(\)?!\.«»“”"])"#, with:#" $1 "#, options: .regularExpression)
+    
+    if hyphen_join_value {
+        thisText = thisText.replacingOccurrences(of: #" (-) "#, with:#"$1"#, options: .regularExpression)
+        thisText = thisText.replacingOccurrences(of: #" (–) "#, with:#"\1"#, options: .regularExpression)
+    }   else {
+        thisText = thisText.replacingOccurrences(of: #"(–)"#, with:#" $1 "#, options: .regularExpression)
+        thisText = thisText.replacingOccurrences(of: #"(-)"#, with:#" $1 "#, options: .regularExpression)
+    }
+    
+    thisText = thisText.replacingOccurrences(of: #"\. "#, with:#" . "#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:"  ",with:" ", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:"  ",with:" ", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:"  ",with:" ", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:"  ",with:" ", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:#"\n"#, with:#" \n "#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:#"(  )+"#, with:" ", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:#"  "#, with:" ", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:#"\t\t"#, with:#"\t"#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:#"(\n\n)+"#, with:#"\n"#, options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of:#"^ | $"#, with:"", options: .regularExpression)
+    return thisText
+    
+}
+
+func runFRonlyReplacements(thisText: String) -> String{
+    var thisText: String = thisText.replacingOccurrences(of: #"rud' homm"#, with: "rud'homm", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #"aujourd' hui"#, with: "aujourd'hui", options: .regularExpression)
+    thisText = thisText.replacingOccurrences(of: #"(-je|-tu|-il|-elle|-on|-ça|-cela|-nous|-vous|-ils|-elles|-moi|-toi|-lui|-leur|-en|-y|-ilz)"#,
+                                            with: " $1",
+                                            options: .regularExpression)
+    return thisText
+}
+func tokeniseEN(inputString: String, selectedLang: Language) -> [Substring]{
+    var enResult = inputString.replacingOccurrences(of: #"[\[\]()!?;:,\.\"]"#, with: " $0 ", options: .regularExpression)
+    enResult = enResult.replacingOccurrences(of: #"'s|s'"#, with: "$0 ", options: .regularExpression)
+    enResult = enResult.trimmingCharacters(in: .whitespacesAndNewlines)
+    return enResult.split(whereSeparator: {$0 == " "})
+}
+
+func tokeniseFR(inputString: String, selectedLang: Language) -> [Substring] {
+    let replacements: [String: String] = [
+        "jourd'hui": "jourdhui",
+        "rud'homm": "rudhomm",
+    ]
+    let unreplacements: [String: String] = [
+        "jourdhui": "jourd'hui",
+        "rudhomm": "rud'homm"
+    ]
+    
+    let unreplacePattern = unreplacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+    let regexUnreplace = try! Regex(unreplacePattern)
+    let literalPattern = replacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+    let regex = try! Regex(literalPattern)
+    
+    var frResult = inputString.replacing(regex) { match in
+        let matchedText = String(match.0)
+        if let replacement = replacements[matchedText] {
+            return replacement      // return match
+        }
+        return matchedText          // need somethign to return if regex settings set to, eg case insensitive, and dict not perfectly aligned to these
+    }
+    frResult = frResult.replacingOccurrences(of: #"[\[\]()!?;:,\.\"]"#, with: " $0 ", options: .regularExpression)
+
+    frResult = frResult.replacingOccurrences(of: #"([cdjlmnrst]|qu)'"#, with: "$0 ", options: .regularExpression)
+    
+    // if french, add space after ' when preceded by ()
+    frResult = frResult.replacingOccurrences(of: #"[^\S\n]+{2,}"#, with:" " , options: .regularExpression)
+    
+    var preSplit = frResult.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    preSplit = preSplit.replacing(regexUnreplace) { match in
+        unreplacements[String(match.0)] ?? String(match.0)
+    }
+    // NOTE : here, \n\n still present as LB/EOP
+    return preSplit.split(whereSeparator: {$0 == " "})
+}
+
+// testing tokenisations
+let foobar = "Il y a deux prud' hommes qui sont là aujourd' hui. Que doit-on leur dire ?"
+let modified = runFRonlyReplacements(thisText: foobar)
+//print(modified)
+
+let veryModified = run_tokeniser_core(thisText: foobar, lang: "fr", hyphen_join_value: false)
+let rawLength = inputText.count
+let rawSplitLength = inputText.split(separator: " ").count
+let modInput = run_tokeniser_core(thisText: inputText, lang: "fr", hyphen_join_value: false)
+let thisModifiedText = getTokensFromText(inputText: modInput)
+let thisCount = thisModifiedText.count
+
+//print("Input chars: \(rawLength)")
+//print("Input words: \(rawSplitLength)")
+//print("Mod length: \(modInput.count)")
+//print("Mod words: \(thisCount)")
+
+
+let testFileRaw = "/Users/Adam/Library/CloudStorage/Dropbox/swiftprojects/project7moonshot/old_data/textSample.txt"
+
+let myURL = URL(fileURLWithPath: testFileRaw)
+var inputText: String = ""
+//do {
+//
+//    inputText = try String(contentsOf: myURL, encoding: .utf8)
+//
+//} catch {
+//
+//    print(error)
+//
+//}
+
+
+
+
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//                                                  sentencization
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
+//MARK: sentencisation
+func makeHashableSentFromTestToks(tempTokens: [TempToken])-> HashableSentence?{
+    guard tempTokens.count > 0 else {return nil}
+    var keepTokens: [String] = []
+    for item in tempTokens{
+        if item.form != ""{
+            keepTokens.append(item.form)
+        }
+    }
+    let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens, conllMetas: [])
+    for x in returnObject.tokens{
+        print(x)
+    }
+    return returnObject
+}
+//func prepareBuiltSentFromTemp(tempTokens: [TempToken]) -> BuiltSentHolder? {
+//    guard tempTokens.count > 0 else {return nil}
+//    guard let hashableSent = makeHashableSentFromTestToks(tempTokens: tempTokens) else {return nil}
+//    let showString = markupTokenisationInSent(hashableSent: hashableSent)
+//    let thisSentence = BuiltSentHolder(
+//        hashableSent: hashableSent,
+//        showString: showString,
+//        tempToks: tempTokens
+//    )
+//    return thisSentence
+//}
+
+
+//func untokenisedInputToSents(text: [String], languageCode: Language) throws -> [[String]]{
+//    var returnItem: [[String]] = []
+//    let pipeline = try UDPipeline(languageCode: languageCode.rawValue, treebank: "gsd")
+//    for (_, sent) in text.enumerated(){
+//        let currentSent = try  pipeline.tokenize(sent)
+//        for chunk in currentSent{
+//            returnItem.append(chunk.tokens)
+//        }
+//    }
+//    return returnItem
+//}
+
+
+//func predictedSentsToTokenisedSents(input: [[String]]) -> [TokenisedSentence]{
+//    var returnItem: [TokenisedSentence] = []
+//    var count: Int = 0
+//    print(input)
+//
+//    //    actions
+//    for predictedSent in input{
+//        count += 1
+//        let tidyToks = predictedSent
+//        let newSent = HashableSentence(id: String(count), tokens: tidyToks)
+//        returnItem.append(newSent)
+//    }
+//    return returnItem
+//}
+//
+//
+//# use lang argument to load language specific abbreviations
+func markEosEnds(selectedLanguage: Language, tokListIn: [Substring])-> [EosTok]{
+    guard [.FR, .EN].contains(selectedLanguage) else {
+        return []
+    }
+    // common lists
+    let punctList = [";","-",","]
+    let eosList = ["!", "?", ".", "\n"]
+    let rightEls = ["”","’", "»","\"", "}", ")"]
+    let excList = ["1","2","3","4","5","6","7","8","9","0", "com", "net", "L","M", "R"]
+    
+    // get abbrev list
+    var abrevList: [String]
+    switch selectedLanguage {
+    case .EN:
+        abrevList = ["Mr", "Mrs","Dr","Bt"]
+    case .FR:
+        abrevList = ["M", "Mme","Dr"]
+    default:
+        return []
+    }
+
+    let compoundList1: [String] = punctList + abrevList
+    let compoundList2: [String] = punctList + excList
+    
+    var outputList: [EosTok] = []
+    var prevTok: String = "__"
+    var nextTok: String = "__"
+    //# iterate over all but the last w block, which will be marked EOS
+    
+    let tokList = tokListIn.map {String($0)}
+    for (wnum, tok) in tokList.enumerated(){
+        if wnum+1 < tokList.count {  // get next block if exists
+            nextTok = tokList[wnum+1]
+            if eosList.contains(tok){
+                    outputList.append(EosTok(form: tok, isEOS: "true", reason: "Rights"))
+            } else {
+            outputList.append(EosTok(form: tok, isEOS: "false", reason: "notExc"))
+            }
+            
+        } else {
+            outputList.append(EosTok(form: tok, isEOS: "true", reason: "end of list"))
+        }
+    }
+    return outputList
+    //[Token(tokid: 1, form: "placeholder", lemma: "_", upos: "_", xpos: "_", feats: "_", head: "_", deprel: "_", col8: "_", col9: "_")]
+}
+
+// mark sent ends- current tok approach
+func markSentEnds(tokens: [String], lang: String) -> [Item] {
+    // current-token approach
+    guard !tokens.isEmpty else {
+        return []
+    }
+    // 1. Setup Configuration
+    let eosList = ["!", "?", ".", "\n"]
+    let punctList = [";", "-", ","]
+    let rightEls = ["”", "’", "»", "\"", "}"]
+    let exclList = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "com", "net", "L", "M", "R"]
+    
+    // 2. Define language-specific abbreviations
+    var abbrevList: [String] = []
+    if lang == "en" {
+        abbrevList = ["Mr", "Mrs", "Dr", "Bt"]
+    } else if lang == "fr" {
+        abbrevList = ["M", "Mme", "Dr"]
+    }
+    
+    // 3. Construct compound lists (Optimized for O(1) lookup if converted to Sets)
+    // We use Sets for compound lists because lookups like .contains() are much faster.
+    let compoundList1 = Set(exclList + abbrevList)
+    let compoundList2 = Set(punctList + exclList)
+    
+    var results = [Item]()
+    
+    
+    
+    // 4. Main Processing Loop
+    // We use tokens.count - 1 to replicate the Python [:-1] behavior
+    // (skipping the very last token for special processing)
+    if tokens.count > 1 {
+        for i in 0..<(tokens.count - 1) {
+            let currentTok = tokens[i]
+            let prevTok = i > 0 ? tokens[i-1] : "__"
+            let nextTok = tokens[i+1]
+            
+            var newItem = Item(text: currentTok)
+            
+            // Identify if current is an EOS character and previous is not abbreviation
+            // if current it usually an EOS char, and the previous tok doesn't tell us we're dealing with an abbreviation
+            if eosList.contains(currentTok) && !abbrevList.contains(prevTok) {
+                // if the next token is a Right sent boundary, it's the se
+                if rightEls.contains(nextTok){
+                    newItem.isEOS = true
+                    newItem.varReason = "rights"
+                }
+                
+                else if !compoundList2.contains(nextTok) && !nextTok.isLower {
+                    newItem.isEOS = true
+                    newItem.varReason = "notExc"
+                }
+            }
+            results.append(newItem)
+        }
+        
+        // Handle the very last token (the one skipped by the loop)
+        // This matches the logic where the final block is handled separately.
+        if let lastTok = tokens.last {
+            results.append(
+                Item(text: lastTok, isEOS: true, varReason: "FINAL"))
+        }
+    } else if let firstTok = tokens.first {
+        // Handle single token edge case
+        var item = Item(text: firstTok)
+        if eosList.contains(firstTok)  {
+            item.isEOS = true
+            item.varReason = "inEOSlist"
+        }
+        results.append(item)
+    }
+
+    // deduplication pass
+
+    // If we have two EOS marks in a row, keep only the one that is the "Right" boundary
+    for i in 0..<(results.count - 1) {
+        if results[i].isEOS && results[i+1].isEOS {
+            // If the current one is just a punctuation and the next one is the "Right" boundary
+            // or the next one is the "true" EOS, we can potentially flip the current one.
+//            if results[i].varReason == "rights" {// do i want ?? !! > no, only 2nd is EOS ::
+                results[i].isEOS = false
+//            }
+        }
+    }
+
+    
+    return results
+}
+
+// uses next token approach :: worth hassle? use this or current-approach and final loop to take latter of consecutive True values
+func markSentEndsNextTokApproach(tokens: [String], lang: String) -> [Item] {
+    // 1. Setup Constants
+    let eosList = ["!", "?", ".", "\n"]
+    let punctList = [";", "-", ","]
+    let rightEls = ["”", "’", "»", "\"", "}"]
+    let exclList = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "com", "net", "L", "M", "R"]
+    
+    var abbrevList: [String] = []
+    if lang == "en" {
+        abbrevList = ["Mr", "Mrs", "Dr", "Bt"]
+    } else if lang == "fr" {
+        abbrevList = ["M", "Mme", "Dr"]
+    }
+    
+    let compoundList1 = Set(exclList + abbrevList)
+    let compoundList2 = Set(punctList + exclList)
+    
+    // 2. Initialize Flags
+    // We create a boolean array to track which indices are ends of sentences
+    // and a string array to track the reasons.
+    var isEosFlags = [Bool](repeating: false, count: tokens.count)
+    var reasonFlags = [String?](repeating: nil, count: tokens.count)
+    
+    // 3. The "Next Token" Logic Loop
+    // We iterate up to the second-to-last token because the last token
+    // can't have a "next" token to influence.
+    if tokens.count > 1 {
+        for i in 0..<(tokens.count - 1) {
+            let currentTok = tokens[i]
+            let prevTok = i > 0 ? tokens[i-1] : "__"
+            let nextTok = tokens[i+1]
+            
+            // If current token is an EOS character and previous was not an abbreviation
+            if eosList.contains(currentTok) && !abbrevList.contains(prevTok) {
+                
+                // CASE A: The next token is a "Right" boundary (e.g., "!")
+                if rightEls.contains(nextTok) {
+                    isEosFlags[i + 1] = true
+                    reasonFlags[i + 1] = "rights"
+                }
+                // CASE B: The next token is a new sentence (not in compound list and capitalized)
+                else if !compoundList2.contains(nextTok) && !nextTok.isLower {
+                    isEosFlags[i] = true
+                    reasonFlags[i] = "notExc"
+                }
+            }
+        }
+        
+        // 4. Handle the final token separately (no "next" token exists)
+        if let lastTok = tokens.last {
+            if eosList.contains(lastTok) {
+                isEosFlags[tokens.count - 1] = true
+                reasonFlags[tokens.count - 1] = "eos_list"
+            }
+        }
+    } else if let firstTok = tokens.first {
+        // Handle single-token list
+        if eosList.contains(firstTok) {
+            isEosFlags[0] = true
+            reasonFlags[0] = "eos_list"
+        }
+    }
+    
+    // 5. Construct the final result
+    var results = [Item]()
+    for i in 0..<tokens.count {
+        var item = Item(text: tokens[i])
+        item.isEOS = isEosFlags[i]
+        item.varReason = reasonFlags[i]
+        results.append(item)
+    }
+    
+    return results
+}
+
+// dev helpers
+struct Item {
+    var text: String
+    var isEOS: Bool = false
+    var varReason: String? = nil
+}
+
+// Your provided extension
+extension String {
+    var isLower: Bool {
+        self == self.lowercased() && self != self.uppercased()
+    }
+}
+
+
+
+
 
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
@@ -1074,68 +1640,5 @@ func getNLTags(text: String) -> NLParseResults{
     return NLParseResults(posReturn: posReturn, lemmaReturn: lemmaReturn)
 }
 //MARK: functions not called
-
-//MARK: sentencisation
-//func untokenisedInputToSents(text: [String], languageCode: Language) throws -> [[String]]{
-//    var returnItem: [[String]] = []
-//    let pipeline = try UDPipeline(languageCode: languageCode.rawValue, treebank: "gsd")
-//    for (_, sent) in text.enumerated(){
-//        let currentSent = try  pipeline.tokenize(sent)
-//        for chunk in currentSent{
-//            returnItem.append(chunk.tokens)
-//        }
-//    }
-//    return returnItem
-//}
-
-//MARK: tokenisation
-//func applyNaiveTokenisationToString(inputText: String) -> [String]{
-//    return inputText.components(separatedBy: " ")
-//}
-//func getTokens(languageCode: String, method: TokenisationMethod, inputFile: String = "", targetString: String = "") -> [[String]]{
-//    var internalList: [[String]] = []
-//    switch method {
-//    case .conll:
-//        print("Use conll input as tokenisation")
-//        return makeConllLinesFromFile(inputFile: inputFile)
-//
-//    case .retokenise:
-//        print("Use tokeniser to predict")
-//        do {
-//            let pipeline = try UDPipeline(languageCode: languageCode, treebank: "gsd")
-//            let hashableSentences = try pipeline.tokenize(targetString)
-//            print("printing chunks")
-//            print(hashableSentences)
-//            print("End chunks")
-//
-//            for sent in hashableSentences{
-//                internalList.append(sent.tokens)
-//            }
-//        }
-//        catch {
-//            let errorDesc = error.localizedDescription
-//            print("error in get tokens function with pipeline")
-//            print(errorDesc)
-//        }
-//        return internalList
-//    }
-//}
-//
-//
-//func predictedSentsToTokenisedSents(input: [[String]]) -> [TokenisedSentence]{
-//    var returnItem: [TokenisedSentence] = []
-//    var count: Int = 0
-//    print(input)
-//
-//    //    actions
-//    for predictedSent in input{
-//        count += 1
-//        let tidyToks = predictedSent
-//        let newSent = HashableSentence(id: String(count), tokens: tidyToks)
-//        returnItem.append(newSent)
-//    }
-//    return returnItem
-//}
-//
 
 

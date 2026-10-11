@@ -9,15 +9,17 @@ import SwiftUI
 
 struct ManualTokenisationView: View {
     
-    @State var tempTokens: [TempToken] = []
-    @State private var selectedRetokenisationType: RetokenisationType = .predict
+    @Binding var tempTokens: [TempToken]
+    @Binding var selectedRetokenisationType: RetokenisationType
     @State var getsentNum: Int = 0
     @State private var newSentence: String = ""
     @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, parce que Bonn n'était assez bonne pour tous", "Alors que Paris est une grande ville, elle est plus petite que Tokyo", "Li chevaliers combattent les dragons."]
     
     @Binding var selectedLanguage: Language
     @Binding var builtSents: [BuiltSentHolder]
+    @Binding var insertNewTokPosition: InsertPosition
     @FocusState var isFocused
+    @State var alertMessage: String?
     
     private var visibleSents: [String] {
         Array(testSentences.prefix(5))
@@ -72,10 +74,10 @@ struct ManualTokenisationView: View {
                     .tint(.indigo)
                     Spacer()
                     Button {
-                        if (0..<testSentences.count).contains(getsentNum - 1){
+                        if (0..<testSentences.count-1).contains(getsentNum - 1){
                             getsentNum -= 1
                         } else {
-                            getsentNum = testSentences.count
+                            getsentNum = testSentences.count - 1
                         }
                         
                     } label: {
@@ -87,7 +89,7 @@ struct ManualTokenisationView: View {
                     .tint(.cyan)
                     Text(String(getsentNum))
                     Button {
-                        if (0..<testSentences.count).contains(getsentNum + 1){
+                        if (0..<testSentences.count-1).contains(getsentNum + 1){
                             getsentNum += 1
                         } else {
                             getsentNum = 0
@@ -102,17 +104,13 @@ struct ManualTokenisationView: View {
                     
                     Spacer()
                     Button {
-                        if let doneSent = makeHashableSentFromTestToks(
-                            tempTokens: tempTokens) {
-                            let currentSent = BuiltSentHolder(
-                                hashableSent:doneSent,
-                                showString: markupTokenisationInSent(hashableSent: doneSent)
+                        do {
+                            builtSents.append(
+                                BuiltSentHolder(tempToks: tempTokens)
                             )
-                            builtSents.append(currentSent)
                             print("Added 1 sent to builtSents")
+                            tempTokens = []
                         }
-                        tempTokens = []
-                        
                     } label: {
                         Text("Build")
                     }
@@ -120,28 +118,18 @@ struct ManualTokenisationView: View {
                     .tint(.green)
                     
                 }
-                Form{
-                    ForEach($tempTokens, id:\.self) { token in
-                        TextField("Token", text: token.form)
-                            .textInputAutocapitalization(TextInputAutocapitalization.never)
-                            .autocorrectionDisabled()
-                            .focused($isFocused)
-                            .submitLabel(.go)
-                            .onSubmit {
-                                isFocused = false
-                            }
-                    }
-                }
+                TokenisationEditView(toks: $tempTokens, insertNewTokPosition: $insertNewTokPosition)
                 Spacer()
             }
             .toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
                         BuiltSentsViewer(
-                            builtSents: builtSents
+                            builtSents: $builtSents,
+                            insertNewTokPosition: $insertNewTokPosition
                         )
                     } label: {
-                        Image(systemName: "book.pages")
+                        Image(systemName: "textformat.characters.dottedunderline")
                             .overlay(alignment: .topTrailing) {
                                 if builtSents.count > 0 {
                                     Text(String(builtSents.count))
@@ -163,6 +151,30 @@ struct ManualTokenisationView: View {
 #Preview {
     @Previewable @State var selectedLanguage: Language = .FRM
     @Previewable @State var builtSents: [BuiltSentHolder] = []
-    ManualTokenisationView(selectedLanguage: $selectedLanguage, builtSents: $builtSents)
+    @Previewable @State var insertNewTokPosition: InsertPosition = .after
+    @Previewable @State var tempTokens: [TempToken] = []
+    @Previewable @State var selectedRetokenisationType: RetokenisationType = .predict
+    
+    ManualTokenisationView(
+        tempTokens: $tempTokens,
+        selectedRetokenisationType: $selectedRetokenisationType,
+        selectedLanguage: $selectedLanguage,
+        builtSents: $builtSents,
+        insertNewTokPosition: $insertNewTokPosition
+        
+    )
 }
 
+func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: IndexSet) {
+    // 1. Guard against empty inputs
+    guard !offsets.isEmpty else { return }
+    
+    // 2. Filter the offsets to ensure they are actually within the current bounds.
+    let validOffsets = IndexSet(offsets.filter { $0 < array.count })
+    // If no offsets are valid (e.g., the user swiped on a deleted cell), just bail.
+    guard !validOffsets.isEmpty else { return }
+    
+    // 3. Perform the removal
+    // We use the validOffsets to ensure we only touch existing indices.
+    array.remove(atOffsets: validOffsets)
+}

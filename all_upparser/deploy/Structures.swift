@@ -7,13 +7,24 @@
 
 import Foundation
 
+
 struct BuiltSentHolder: Identifiable, Hashable{
     var id = UUID()
-    let hashableSent: HashableSentence
-    let showString: AttributedString
+    var tempToks: [TempToken]
     
+    func toHashableSent(tempToks: [TempToken]) -> HashableSentence? {
+        guard tempToks.count > 0 else {return nil }
+        return makeHashableSentFromTestToks(tempTokens: tempToks)
+    }
+    
+    func toShowString(tempToks: [TempToken])-> AttributedString {
+        guard tempToks.count > 0 else {return "error1" }
+        if let hashableSent = makeHashableSentFromTestToks(tempTokens: tempToks){
+            return markupTokenisationInSent(hashableSent: hashableSent)
+        }
+        else {return "error2"}
+    }
 }
-
 
 //TODO: update calculated property to use Extension method
 struct Document {
@@ -153,8 +164,6 @@ struct SaveInputMetas: Identifiable{
     let includeConllSentText: Bool
 }
 
-
-
 struct Sentence : Identifiable {
     var id = UUID()
     let sentID: String
@@ -222,31 +231,12 @@ struct Sentence : Identifiable {
             lineStore.append(sentTextLine.joined(separator: " "))
         }
         lineStore.append(contentsOf: conllData.map {$0.form})
-//        var internalLineList: [String] = []
-//        internalLineList.append(sentIdAsMeta)
-//        let test: [String] = conllData.map {$0.form}
-//        print(test)
-//        if sentInMeta{
-//            var sentInMetaLine: [String] = ["# sent = "]
-//            for token in conllData{
-//                sentInMetaLine.append(token.form)
-//            }
-//        }
-//        for token in conllData{
-//            internalLineList.append(token.conllRaw)
-//        }
         return lineStore.joined(separator: "\n")
     }
     var conll: String {
         var testText = ["## thsi is a test"]
         testText.append(contentsOf: conllData.map {$0.form})
         return testText.joined(separator: "\n")
-//        var internalLineList: [String] = []
-//        internalLineList.append(sentIdAsMeta)
-//        for token in conllData{
-//            internalLineList.append(token.conllRaw)
-//        }
-//        return internalLineList.joined(separator: "\n")
     }
     
     var conllTidy: String {
@@ -326,7 +316,7 @@ struct Sentence : Identifiable {
 
 // struct for manually tokenised, modified inputs, before conversion to Token
 struct TempToken: Identifiable, Hashable {
-    let id: Int
+    var id = UUID()
     var form: String
 }
 
