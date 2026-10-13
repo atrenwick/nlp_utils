@@ -9,14 +9,112 @@ import CoreML
 import Foundation
 import NaturalLanguage
 import SwiftUI
+//----------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------
 
-// MARK: - MLMultiArray helpers
-// can be called in debug to get, show logits…
+
+//MARK : helper functions: get data from file, and specialloader from inside bundle
+//  1. read from file :: std read file via URL, for use outside bundle. URL -> String
+//  2. load textFromBundledFile : read file via name from inside bundle. Filename -> String
+//  3. Detect lang in filename. regex to find lang in inputfilename for view
+//  4. test instantiate pipeline.
+//  5. dump scalars : can be used to dump logits
+//1
+func readFromFile(inputURL: URL?) throws -> String {
+    guard let inputFile = inputURL else { throw ParseProcessingError.missingURL}
+    
+    do {
+        let returnString = try String(contentsOf: inputFile, encoding: .utf8)
+        return returnString
+    } catch {
+        return error.localizedDescription
+    }
+}
+//2.
+func loadTextFromBundledFile(inputFile: String, thisExtension: String) throws -> String{
+    
+    // load source file as a string from bundle:: step0
+    do {let normalizedText: String = try Bundle.main.loadText(inputFile, format: thisExtension)
+        return normalizedText
+    } catch {
+        return ParseProcessingError.fileLoadError.localizedDescription
+    }
+    
+}
+//3
+func detectLangInFilename(inputURL: URL?)-> Language?{
+    // actions
+    guard let urlExists = inputURL else { return nil }
+    let targetPartOfString = urlExists.lastPathComponent.lowercased()
+    var langGuess: Language? = nil
+    var matchCount: Int = 0
+    let myMaps: [RegexLangPatternToLangMap] = [
+        RegexLangPatternToLangMap(string: #"[_\.]fr|^fr_"#, langValue: .FR),
+        RegexLangPatternToLangMap(string: #"[_\.]fro|^fro_"#, langValue: .FRO),
+        RegexLangPatternToLangMap(string: #"[_\.]frm|^frm_"#, langValue: .FRM),
+        RegexLangPatternToLangMap(string: #"[_\.]de|^de_"#, langValue: .DE),
+        RegexLangPatternToLangMap(string: #"[_\.]en|^en_"#, langValue: .EN),
+        RegexLangPatternToLangMap(string: #"[_\.]ang|^ang_"#, langValue: .ANG),
+    ]
+    for thisItem in myMaps {
+        if targetPartOfString.contains(thisItem.asRegex){
+            langGuess = thisItem.langValue
+            matchCount += 1
+            print("\(langGuess?.rawValue) for \(targetPartOfString)")
+        }
+    }
+    if matchCount > 0 {
+        return langGuess
+    } else {
+        return nil
+    }
+}
+//4
+func testInstantiatePipeline(languageCode: String, treebank: String)   -> String {
+    // test instantiation of pipeline class based on params chosen
+    var outputString: String = ""
+    
+    Task{
+        do {
+            let testPipeline = try UDPipeline(languageCode: languageCode, treebank: treebank)
+            await MainActor.run {
+                outputString = "Success"
+            }
+        } catch{
+            await MainActor.run {
+                outputString = "Fail : \(error.localizedDescription)"
+            }
+        }
+    }
+    return outputString
+}
+//5
 func dumpScalars(_ text: String, maxChars: Int = 50) {
     // called in runTest() function
     for scalar in text.unicodeScalars.prefix(maxChars) {
         print("\(scalar) -> \(scalar.value)")
     }
+}
+
+////3.
+func markupTokenisationInSent(hashableSent: HashableSentence) -> AttributedString{
+        
+        var result = AttributedString()
+        for (index, word) in hashableSent.tokens.enumerated() {
+            result.append(AttributedString(word))
+            if index < hashableSent.tokens.count - 1 {
+                var separator = AttributedString("/")
+                separator.foregroundColor = .red // Make separator red
+                separator.font = .system(size: 17, weight: .bold)
+                result.append(separator)
+            }
+        }
+        
+    return result
+}
+
+func makeFilename() -> String {
+    return String(UUID().uuidString.prefix(6))
 }
 
 // MARK: - CoNLL Parsing
@@ -34,7 +132,7 @@ func dumpScalars(_ text: String, maxChars: Int = 50) {
 //  6. Make ConllLines runs 1-2-3, from URL, returning HashableSents to pass to Pipeline
 
 //1.
-func conllBlobToChunks(conllBlob: String) -> [String] {
+func _conllBlobToChunks(conllBlob: String) -> [String] {
     // iterate over chars to find boundaries between sents in rawConll : find \n# seq
     // return  : 1 string = 1 sentence, in a list
     let char1 = "\n"
@@ -58,7 +156,7 @@ func conllBlobToChunks(conllBlob: String) -> [String] {
     return conllSentenceChunks
 }
 //2.
-func conllChunksToLines(conllChunks: [String]) -> [[String]]{
+func _conllChunksToLines(conllChunks: [String]) -> [[String]]{
     var allSents: [[String]] = []
     for conllChunk in conllChunks{
         let currentSent = conllChunk.components(separatedBy: "\n")
@@ -67,7 +165,7 @@ func conllChunksToLines(conllChunks: [String]) -> [[String]]{
     return allSents
 }
 //3.
-func conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Sentence]{
+func _conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Sentence]{
     
     var outputSentences: [Sentence] = []
     var currentSentId: String = ""
@@ -108,7 +206,6 @@ func conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Sentenc
                 guard lineChunks.count == 10 else {
                     
                 let errorstring = lineChunks.count == 0 ?  "no chunks " :lineChunks.joined(separator: "<TAB>")
-//              print(errorstring)
                 throw ParseProcessingError.ConllParsingError(
                     line: String("Sent:\(sentNum + 1) line \(lineNum + 1) :: \(errorstring)"),
                     filename: String(inputURL.lastPathComponent))
@@ -142,7 +239,7 @@ func conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Sentenc
     return outputSentences
 }
 //4.
-func makeConllLinesFromURL(inputURL: URL?) throws -> [[String]]{
+func _makeConllLinesFromURL(inputURL: URL?) throws -> [[String]]{
 //    var pretokenisedSentences: [[String]] = []
     // load source file as a string
 //    let normalizedText: String = Bundle.main.loadText(inputFile, format: "conllu")
@@ -152,20 +249,21 @@ func makeConllLinesFromURL(inputURL: URL?) throws -> [[String]]{
 //    print("guardlet passed")
     do {
         // Reads raw text directly from your sandbox URL :: step0
-        let normalizedText = try String(contentsOf: inputFile, encoding: .utf8)
+        let normalizedText = try readFromFile(inputURL: inputURL)
+        //let normalizedText = try String(contentsOf: inputFile, encoding: .utf8)
 //        print("normalizedText passed")
         // split the string into sentence chunks : step1
         guard  !normalizedText.isEmpty else {
             throw ParseProcessingError.ReadFromSandboxError
         }
         
-        let sentenceChunks: [String] = conllBlobToChunks(conllBlob: normalizedText)
+        let sentenceChunks: [String] = _conllBlobToChunks(conllBlob: normalizedText)
 //        print("chunked")
         // split each chunk == sentence into its lines :: step2
         guard !sentenceChunks.isEmpty else {
             throw ParseProcessingError.ConllLineIdentificationError
         }
-        let hashableTokenLists: [[String]] = conllChunksToLines(conllChunks: sentenceChunks)
+        let hashableTokenLists: [[String]] = _conllChunksToLines(conllChunks: sentenceChunks)
 //        print("Got file from conll")
         guard !hashableTokenLists.isEmpty else {
             throw ParseProcessingError.conllChunkToLineError
@@ -178,35 +276,21 @@ func makeConllLinesFromURL(inputURL: URL?) throws -> [[String]]{
     }
     
 }
-//5.
-func makeConllLinesFromFile(inputFile: String) throws -> [[String]]{
-    
-    // load source file as a string from bundle:: step0
-    let normalizedText: String = try Bundle.main.loadText(inputFile, format: "conllu")
-    // split the string into sentence chunks :: step1
-    let sentenceChunks: [String] = conllBlobToChunks(conllBlob: normalizedText)
-    
-    // split each chunk == sentence into its lines step2
-    let pretokenisedSentences: [[String]] = conllChunksToLines(conllChunks: sentenceChunks)
-    return pretokenisedSentences
-}
+
 //6.
 func conllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSentence]{
     guard let inputFile = inputURL else {
         throw ParseProcessingError.missingURL
     }
     var allSentences: [HashableSentence] = []
-    let hashableTokenList: [[String]] = try makeConllLinesFromURL(inputURL: inputFile)
-    let intermedSents: [Sentence] = try conllLinesToSents(inputURL: inputFile, conllLines: hashableTokenList)
-    
+    let hashableTokenList: [[String]] = try _makeConllLinesFromURL(inputURL: inputFile) // funct4, calls 1,2
+    let intermedSents: [Sentence] = try _conllLinesToSents(inputURL: inputFile, conllLines: hashableTokenList)// func3
     
     for (sentNum,sent) in intermedSents.enumerated(){
         let TokSentVers = sent.hashableSentence
         print("\(sentNum) :: tokCount = \(sent.conllData.count)")
         allSentences.append(TokSentVers)
     }
-    
-    
     return allSentences
 }
 // MARK: - XML-conll parsing
@@ -218,7 +302,7 @@ func conllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSente
 
 // parse XMLconllu with XML parser, including making instance of class
 //1. parse xml-conll to get conll blob-pairs identical to CoNLL parsing
-func xmlConllToIdBlobPairs(from url: URL?) throws -> [XMLConllElement] {
+func _xmlConllToIdBlobPairs(from url: URL?) throws -> [XMLConllElement] {
     guard let url = url else {
         throw ParseProcessingError.missingURL
     }
@@ -248,11 +332,11 @@ func xmlConllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSe
     }
 
     var allSentences: [HashableSentence] = []
-    let conllBlobs: [XMLConllElement] = try xmlConllToIdBlobPairs(from: inputURL)
+    let conllBlobs: [XMLConllElement] = try _xmlConllToIdBlobPairs(from: inputURL)
     
     
-    let linesFromBlobs:[[String]] = conllChunksToLines(conllChunks:conllBlobs.map { ($0.blob) })
-    let intermedSents:[Sentence] = try conllLinesToSents(inputURL: inputURL, conllLines: linesFromBlobs)
+    let linesFromBlobs:[[String]] = _conllChunksToLines(conllChunks:conllBlobs.map { ($0.blob) })
+    let intermedSents:[Sentence] = try _conllLinesToSents(inputURL: inputURL, conllLines: linesFromBlobs)
     for (sentNum,sent) in intermedSents.enumerated(){
 
         let TokSentVers = sent.hashableSentence
@@ -272,7 +356,7 @@ func xmlConllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSe
 //  2. xmlToHashableSentForPipeline : wrapper for 1.
 
 //1. parse full XML to id:toklist ->> all sentences
-func xmlToHashableSents(from url: URL?) throws -> [HashableSentence] {
+func _xmlToHashableSents(from url: URL?) throws -> [HashableSentence] {
     guard let url = url else {
         throw ParseProcessingError.missingURL
     }
@@ -302,7 +386,7 @@ func xmlToHashableSentForPipeline(inputURL: URL?) throws  -> [HashableSentence]{
         throw ParseProcessingError.missingURL
     }
     // guardlet cf try,
-    return try xmlToHashableSents(from: inputFile)
+    return try _xmlToHashableSents(from: inputFile)
     // throw  xml to hashable sents error
 
 }
@@ -312,15 +396,17 @@ func xmlToHashableSentForPipeline(inputURL: URL?) throws  -> [HashableSentence]{
 //                                                  TXT parsing functions
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
-//  1. blob to sents: sentencise based on custom regex Rules
-//  2. getSentencesWithNL: sentencise with inbuilt NLTokeniser
-//  3. textFileToSentStrings : read in TXT file and use 1 or 2 to sentencise
-//  4. sentStringToHashableSents: use pipeline or func5 to tokenise
-//  5. getTokenisedSents: use inbuilt NL tagger to tokenise
-//  6. textFileToHashableSets : use func3 to sentencise then 4 to tokenise
+//  1. blob to sents: sentencise based on custom regex Rules 					:: String -> [String] w regex
+//  2. getSentencesWithNL: sentencise with inbuilt NLTokeniser					:: String -> [String] w nlSentencizer
+//  2b/ applySentencizingMethodToStirng                                         :: String -> [String] method :  encapsulates 1, 2
+//  3. textFileToSentStrings : read in TXT file and use 1 or 2 to sentencise	:: File -> String -> [String] : escapsulates load, 2b
+
+//  4. sentStringToHashableSents: use pipeline or func5 to tokenise				:: [String] -> [Hashable] w choose
+//  5. getTokenisedSents: use inbuilt NL tagger to tokenise						::[String] -> [Hashable] w pipeline
+//  6. textFileToHashableSets : use func3 to sentencise then 4 to tokenise      :: File -> Hashable
 
 //1
-func blobToSents(blob: String) -> [String]{
+func _blobToSents(blob: String) -> [String]{
 //        var holding: [String] = []
         // break on \.\n\n
         var test2: String
@@ -343,17 +429,19 @@ func blobToSents(blob: String) -> [String]{
         }
         test2 = test2.replacing(overzealousPattern){ match in "U.S. " }
         
-        
         let chunks = test2.components(separatedBy: "_EOS_")
-        for (num, chunk) in chunks.enumerated() {
+
+    let validChunks = chunks.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        for (num, chunk) in validChunks.enumerated() {
             print("\(num) :: \(chunk)")
         }
         let printArray = Array(repeating: "#", count: 133).joined(separator: "")
         print(printArray)
-        return chunks
+        return validChunks
     }
 //2
-func getSentencesWithNL(text: String, lang: Language)-> [String]{
+
+func _getSentencesWithNL(text: String, lang: Language)-> [String]{
         let tokenizer = NLTokenizer(unit: .sentence) // unit == sentences ::>> SENTENCISATION
         let nlLang: NLLanguage
         switch lang {
@@ -380,39 +468,150 @@ func getSentencesWithNL(text: String, lang: Language)-> [String]{
 
         return sentencesOut
     }
-//3
-func textFileToSentStrings(inputURL: URL?, sentencizingMethod: SentencizingMethod, lang: Language) -> [String]{
-        guard let inputFile = inputURL else {
-            print("guard let failed loading form file")
-            return []
-        }
-        print("running text file to sent strings function")
-
-        do {
-            let normalizedText = try String(contentsOf: inputFile, encoding: .utf8).replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
-            print("first let success")
-            // var sentenceList: [String] = []
-            //let inputBlob: String = load_from_file(args)
-            var sentencesAsStrings: [String] = []
-//            var tokenisedSents: [HashableSentence] = []
-            switch sentencizingMethod {
-                // use NL or custom logic to get sentences as strings from an input blob
-            case .nlSentencizer:
-                // get sentences from input blob
-                print("sentencizing with nlSentencizer")
-                sentencesAsStrings = getSentencesWithNL(text: normalizedText, lang: lang)
-            case .custom:
-                print("sentencizing with custom")
-                sentencesAsStrings = blobToSents(blob: normalizedText)
+//2b
+func _applySentencizingMethodToString(normalizedText: String, lang: Language, sentencizingMethod: SentencizingMethod) -> [String] {
+    
+    var sentencesAsStrings: [String] = []
+    switch sentencizingMethod {
+        // use NL or custom logic to get sentences as strings from an input blob
+    case .nlSentencizer:
+        // get sentences from input blob
+        print("sentencizing with nlSentencizer")
+        sentencesAsStrings = _getSentencesWithNL(text: normalizedText, lang: lang)
+        
+    case .eosMark:
+        print("finish code from EOS marking wiht regex")
+        
+    case .custom:
+        print("sentencizing with custom")
+        sentencesAsStrings = _blobToSents(blob: normalizedText)
+        
+    case .naive:
+        print("Using naive sentencizer based on toks")
+        let toksAsStrings = applyNaiveTokenisation(language: lang, myString: normalizedText)
+        let tempTokList: [TempToken] = toksAsStrings.map {$0.asTempToken}
+        
+        var outputSents: [String] = []
+        var currentSent: [String] = []
+        let list1 = [".", "?", "!"]
+        for (num, tok) in tempTokList.enumerated(){
+            
+            
+            // 1. Check if it ends with any item in list1
+            if let matchedItem = list1.first(where: { tok.form.hasSuffix($0) }) {
+                currentSent.append(tok.form)
+                outputSents.append(currentSent.joined(separator: " "))
+                currentSent = []
+                
             }
-            return sentencesAsStrings
-        } catch {
-            print("Failed to read text from sandbox file: \(error)")
+            // 2. Check if it ends with an actual newline (\n, NOT "\\n")
+            else if tok.form.hasSuffix("\n") {
+                // Strip the trailing newline safely
+                currentSent.append(String(tok.form.dropLast()))
+                outputSents.append(currentSent.joined(separator: " "))
+                currentSent = []
+            }
+            // 3. Check if it starts with an actual newline (\n)
+            else if tok.form.hasPrefix("\n") {
+                // Strip the leading newline safely
+                currentSent.append(String(tok.form.dropFirst()))
+                outputSents.append(currentSent.joined(separator: " "))
+                currentSent = []
+            }
+            // 4. Default fallback action
+            else {
+                currentSent.append(tok.form)
+            }
         }
-        return []
+        
+        if currentSent != []{
+            outputSents.append(currentSent.joined(separator: " "))
+        }
+        sentencesAsStrings = outputSents//filter here ???
     }
     
+    return sentencesAsStrings
+    
+}
+
+//3
+func textFileToSentStrings(inputURL: URL?, sentencizingMethod: SentencizingMethod, lang: Language, tokenizerPipeline: UDPipeline) throws -> [String]{
+    guard let inputFile = inputURL else {
+        print("guard let failed loading form file")
+        return []
+    }
+    print("running text file to sent strings function")
+    let inputString = try readFromFile(inputURL: inputURL)
+    guard !inputString.isEmpty else {
+        throw ParseProcessingError.fileLoadError
+    }
+    do {
+        let normalizedText = inputString.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
+        print("first let success")
+        // var sentenceList: [String] = []
+        //let inputBlob: String = load_from_file(args)
+        let sentencesAsString = _applySentencizingMethodToString(normalizedText: normalizedText, lang: lang, sentencizingMethod: sentencizingMethod)
+        return sentencesAsString
+    }
+    
+}
+
+//1.
+func applyNaiveTokenisation(language: Language, myString: String)-> [String]{
+    
+    let input: String = myString
+//    var outputStrings: [String] = []
+    var step1: [Substring] = []
+    if [.FR, .FRO, .FRM].contains(language) {
+        
+        let replacements: [String: String] = [
+            "jourd'hui": "jourdhui",
+            "rud'homm": "rudhomm",
+            "'":"' "
+        ]
+        let unreplacements: [String: String] = [
+            "jourdhui": "jourd'hui",
+            "rudhomm": "rud'homm"
+        ]
+
+        let unreplacePattern = unreplacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        let regexUnreplace = try! Regex(unreplacePattern)
+
+        let literalPattern = replacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        let fullPattern = "(\(literalPattern))|([.?!]$)|([,;:])"
+        let regex = try! Regex(fullPattern)
+
+        
+        let frResult = myString.replacing(regex) { match in
+            let matchedText = String(match.0)
+            if matchedText == "." && match.0 == myString.suffix(1) {
+                return " ."
+            }
+            if let replacement = replacements[matchedText] {
+                return replacement
+            }
+            // must be punctuation needing a leading space
+            return " " + matchedText
+        }
+        var preSplit = frResult.replacingOccurrences(of: "  ", with: " ")
+        
+        preSplit = preSplit.replacing(regexUnreplace) { match in
+            unreplacements[String(match.0)] ?? String(match.0)
+        }
+        step1 = preSplit.split(whereSeparator: { $0 == " " })
+    } // end FR
+    
+    if language == .EN {
+        step1 = input.split(whereSeparator: { $0 == " "})
+    }
+
+//    outputStrings =
+    return step1.map {String($0)}
+}
+
+
 //4
+
 func stringSentsToHashableSents(tokenizingMethod: TokenizingMethod, sents: [String], lang: Language, pipeline: UDPipeline) throws -> [HashableSentence]{
 
     var internalSentList: [HashableSentence] = []
@@ -424,14 +623,16 @@ func stringSentsToHashableSents(tokenizingMethod: TokenizingMethod, sents: [Stri
 
     case .nltokeniser:
         print("calling getTokSents @ line 85")
-        internalSentList = getTokenisedSentences(sents: sents, lang: lang)
+        internalSentList = _getTokenisedSentences(sents: sents, lang: lang)
         
         print("nltokeniser")
     case .trained:
         // retokenize everything with model
         // MARK: can change this IN to be testSentences
+        //    let pipeline = try UDPipeline(languageCode: languageCode.rawValue, treebank: "gsd")
+
+        print("sentencizing with trained")
         for sentence in sents {
-            print("sentencizing with trained")
             internalSentList.append(contentsOf: try pipeline.tokenize(sentence))
         }
     }
@@ -439,8 +640,8 @@ func stringSentsToHashableSents(tokenizingMethod: TokenizingMethod, sents: [Stri
 }
 
 
-//5
-func getTokenisedSentences(sents: [String], lang: Language) -> [HashableSentence]{
+//5 -- this is a tokenisation function :: tokenise wiht NL
+func _getTokenisedSentences(sents: [String], lang: Language) -> [HashableSentence]{
         let tagger = NLTagger(tagSchemes: [.tokenType]) // unit == tokenType ::>> TOKENISATION
         let nlLang: NLLanguage
         switch lang {
@@ -476,19 +677,44 @@ func getTokenisedSentences(sents: [String], lang: Language) -> [HashableSentence
         }
         return sentsOut
     }
-    
+
+//6 ultra simple tokenisation : spaces = only boundary
+func applySimplexTokenisation(inputText: String) -> [String] {
+
+    let tokensRaw = inputText.split(separator: " ")
+    var tidyTokens: [String] = []
+    for token in tokensRaw {
+        if token != ""{
+            tidyTokens.append(String(token))
+        }
+    }
+    return tidyTokens
+}
+
+
+
 //6
 func textFileToHashableSents(inputURL: URL?, sentencizingMethod: SentencizingMethod, tokenizingMethod: TokenizingMethod, lang: Language, pipeline: UDPipeline) throws -> [HashableSentence]{
     var internalSentList: [HashableSentence] = []
     
-    let sentencesAsStrings = textFileToSentStrings(
+    let sentencesAsStrings = try textFileToSentStrings(
         inputURL: inputURL,
         sentencizingMethod: sentencizingMethod,
-        lang: lang
+        lang: lang, tokenizerPipeline: pipeline
     )
-    print("Got sents as strings")
+//    print("Got sents as strings")
     internalSentList = try stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: sentencesAsStrings, lang: lang, pipeline: pipeline)
-    print("got internal sentlist")
+//    print("got internal sentlist")
+    
+    internalSentList = internalSentList.filter { sentence in
+        // We only want to keep sentences that have at least one token
+        // whose 'form' property contains non-whitespace characters.
+        let hasValidContent = sentence.tokens.contains { token in
+            let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !trimmed.isEmpty
+        }
+        return hasValidContent
+    }
     return internalSentList
 }
 
@@ -712,76 +938,6 @@ func saveFileToChosenLocation(exportContent: String, saveInputMetas: SaveInputMe
 }
 
 
-//func saveFileToChosenLocationV1(exportContent: String, saveInputMetas: SaveInputMetas, runExplicit: Bool = false) -> RunMetas {
-//    // function called via UI to run main dump to file
-//    var savedURL: URL
-//    var exportStatusMessage: String
-//    guard let folderURL = saveInputMetas.targetFolderURL else {
-//        if runExplicit {
-//            print("Guard 292 fail")
-//        }
-//        return RunMetas(
-//            lang: saveInputMetas.lang.rawValue,
-//            sourceFileURL: saveInputMetas.inputURL,
-//            sourceFileName: saveInputMetas.displayName,
-//            outputFileName: saveInputMetas.saveName,
-//            treebank: saveInputMetas.treebank.short,
-//            exportFormat: saveInputMetas.exportFormat,
-//            unread: true,
-//            savedURL: nil,
-//            message: "Guard failure in save file to chosen location",
-//            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
-//            includeConllSentText: saveInputMetas.includeConllSentText
-//        )
-//        
-//    }
-//    if runExplicit {
-//        print("Guard 292 passed")
-//    }
-//    do {
-//        savedURL = try ExporterService.exportDataToFile(
-//            exportContent: exportContent,
-//            customName: "\(saveInputMetas.saveName)_\(saveInputMetas.treebank.short)_\(saveInputMetas.exportFormat.rawValue)",
-//            targetFolderURL: folderURL,
-//            exportFormat: saveInputMetas.exportFormat
-//        )
-//        exportStatusMessage = "Successfully exported to \(savedURL.lastPathComponent)"
-//        if runExplicit { print(exportStatusMessage) }
-//        
-//        return RunMetas(
-//            lang: saveInputMetas.lang.rawValue,
-//            sourceFileURL: saveInputMetas.inputURL,
-//            sourceFileName: saveInputMetas.displayName,
-//            outputFileName: saveInputMetas.saveName,
-//            treebank: saveInputMetas.treebank.short,
-//            exportFormat: saveInputMetas.exportFormat,
-//            unread: true,
-//            savedURL: savedURL,
-//            message: exportStatusMessage,
-//            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
-//            includeConllSentText: saveInputMetas.includeConllSentText
-//        )
-//    } catch {
-//        exportStatusMessage = "Export failed: \(error.localizedDescription)"
-//        if runExplicit { print(exportStatusMessage) }
-//        
-//        return RunMetas(
-//            lang: saveInputMetas.lang.rawValue,
-//            sourceFileURL: saveInputMetas.inputURL,
-//            sourceFileName: saveInputMetas.displayName,
-//            outputFileName: saveInputMetas.saveName,
-//            treebank: saveInputMetas.treebank.short,
-//            exportFormat: saveInputMetas.exportFormat,
-//            unread:  true,
-//            savedURL: nil,
-//            message: exportStatusMessage,
-//            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
-//            includeConllSentText: saveInputMetas.includeConllSentText
-//        )
-//    }
-//        // make here
-//}
-
 func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
     try writeStringDump(lines)
     try writeStringDump(rawLines)
@@ -934,312 +1090,6 @@ func makeTidyRunOutput(outSents: [Sentence], saveInputMetas: SaveInputMetas, saf
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
 
-//1.  apply naive tokenisation - spaces = token boundaries
-//2. make hashable sent from manually redefinable tokens
-//3. Make string of Sent for View, with red / as token boundary
-
-
-func getTokensFromText(inputText: String) -> [String] {
-
-    let tokensRaw = inputText.split(separator: " ")
-    var tidyTokens: [String] = []
-    for token in tokensRaw {
-        if token != ""{
-            tidyTokens.append(String(token))
-        }
-    }
-    return tidyTokens
-}
-
-
-//1.
-func applyNaiveTokenisation(language: Language, myString: String)-> [TempToken]{
-    
-    let input: String = myString
-    var tempTokens: [TempToken] = []
-    var step1: [Substring] = []
-    if [.FR, .FRO, .FRM].contains(language) {
-        
-        let replacements: [String: String] = [
-            "jourd'hui": "jourdhui",
-            "rud'homm": "rudhomm",
-            "'":"' "
-        ]
-        let unreplacements: [String: String] = [
-            "jourdhui": "jourd'hui",
-            "rudhomm": "rud'homm"
-        ]
-
-        let unreplacePattern = unreplacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-        let regexUnreplace = try! Regex(unreplacePattern)
-
-        let literalPattern = replacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-        let fullPattern = "(\(literalPattern))|([.?!]$)|([,;:])"
-        let regex = try! Regex(fullPattern)
-
-        
-        let frResult = myString.replacing(regex) { match in
-            let matchedText = String(match.0)
-            if matchedText == "." && match.0 == myString.suffix(1) {
-                return " ."
-            }
-            if let replacement = replacements[matchedText] {
-                return replacement
-            }
-            // must be punctuation needing a leading space
-            return " " + matchedText
-        }
-        var preSplit = frResult.replacingOccurrences(of: "  ", with: " ")
-        
-        preSplit = preSplit.replacing(regexUnreplace) { match in
-            unreplacements[String(match.0)] ?? String(match.0)
-        }
-        step1 = preSplit.split(whereSeparator: { $0 == " " })
-    } // end FR
-    
-    if language == .EN {
-        step1 = input.split(whereSeparator: { $0 == " "})
-    }
-
-    for (_, item) in step1.enumerated() {
-        tempTokens.append(
-            TempToken(form: String(item))
-        )
-    }
-    return tempTokens
-}
-
-//2.
-//func makeHashableSentFromTestToks(tempTokens: [TempToken])-> HashableSentence?{
-//    guard tempTokens.count > 0 else {return nil}
-//    var keepTokens: [String] = []
-//    for item in tempTokens{
-//        if item.form != ""{
-//            keepTokens.append(item.form)
-//        }
-//    }
-//    let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens, conllMetas: [])
-//    for x in returnObject.tokens{
-//        print(x)
-//    }
-//    return returnObject
-//    }
-////3.
-func markupTokenisationInSent(hashableSent: HashableSentence) -> AttributedString{
-        
-        var result = AttributedString()
-        for (index, word) in hashableSent.tokens.enumerated() {
-            result.append(AttributedString(word))
-            if index < hashableSent.tokens.count - 1 {
-                var separator = AttributedString("/")
-                separator.foregroundColor = .red // Make separator red
-                separator.font = .system(size: 17, weight: .bold)
-                result.append(separator)
-            }
-        }
-        
-    return result
-}
-
-//func applyNaiveTokenisationToString(inputText: String) -> [String]{
-//    return inputText.components(separatedBy: " ")
-//}
-//func getTokens(languageCode: String, method: TokenisationMethod, inputFile: String = "", targetString: String = "") -> [[String]]{
-//    var internalList: [[String]] = []
-//    switch method {
-//    case .conll:
-//        print("Use conll input as tokenisation")
-//        return makeConllLinesFromFile(inputFile: inputFile)
-//
-//    case .retokenise:
-//        print("Use tokeniser to predict")
-//        do {
-//            let pipeline = try UDPipeline(languageCode: languageCode, treebank: "gsd")
-//            let hashableSentences = try pipeline.tokenize(targetString)
-//            print("printing chunks")
-//            print(hashableSentences)
-//            print("End chunks")
-//
-//            for sent in hashableSentences{
-//                internalList.append(sent.tokens)
-//            }
-//        }
-//        catch {
-//            let errorDesc = error.localizedDescription
-//            print("error in get tokens function with pipeline")
-//            print(errorDesc)
-//        }
-//        return internalList
-//    }
-//}
-//
-
-
-//MARK: tokenisation
-
-///Tokenisation -> core tokeniser from moonshot:
-// COPY
-//struct RegexLangPatternToLangMap: Identifiable{
-//    var id = UUID()
-//    let string: String
-//    let langValue: Language
-//    var asRegex: Regex<Substring>{
-//        try! Regex(string)
-//    }
-//}
-//let myMaps: [RegexLangPatternToLangMap] = [
-//    RegexLangPatternToLangMap(string: #"[_\.]fr|^fr_"#, langValue: .FR),
-
-//END_COPY
-//TODO : regexMap like RegexLangPatternToLangMap
-func run_tokeniser_core(thisText: String, lang: String, hyphen_join_value:Bool) -> String{
-    var thisText: String = thisText
-    thisText = thisText.replacingOccurrences(of: #"[\x{0D}\x{A0}\r\n\t\\]"#, with: " ", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #"(  )+"#, with: " ", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:"  ", with: " ", options: .regularExpression)
-    
-    thisText = thisText.replacingOccurrences(of: #"\.\.\."#, with:" … ", options: .regularExpression)
-
-    thisText = thisText.replacingOccurrences(of: #"et al"#, with:#"et_al"#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #"et\. al"#, with:#"et_al"#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #"et\. al\."#, with:#"et_al"#, options: .regularExpression)
-    // UPDATE : thisText = thisText.replacingOccurrences(of: #"\bet\.? al\.?"#, with: "et_al",options: .regularExpression)
-
-    thisText = thisText.replacingOccurrences(of: #"e\.g\."#, with:#"e_g_"#, options: .regularExpression)
-    // UPDATE : thisText = thisText = thisText.replacingOccurrences(of: #"\be\.?\s?g\b\.?"#,     with: "e_g", options: [.regularExpression, .caseInsensitive])
-
-    thisText = thisText.replacingOccurrences(of: #"i\.e\."#, with:#"i_e_"#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #"i\.e\."#, with:#"i_e_"#, options: .regularExpression)
-    
-    thisText = thisText.replacingOccurrences(of: #"i\. e \. ,"#, with:#"i_e_"#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #"i\. e \."#, with:#"i_e_"#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #",\.$"#, with:#"."#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #",\. "#, with:#". "#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #"\.,"#, with:#". "#, options: .regularExpression)
-
-    thisText = thisText.replacingOccurrences(of: #"(htt(p|ps)://.+?($| ))"# ,with:" _URL_ ", options: .regularExpression)
-    
-    if ["fr", "FR"].contains(lang) {
-        thisText = thisText.replacingOccurrences(of: #"[’''’]"#, with:"' ", options: .regularExpression)
-        thisText = runFRonlyReplacements(thisText: thisText)
-    }
-    if ["en", "EN"].contains(lang) {
-        thisText = thisText.replacingOccurrences(of: #"[’''’]"#, with:"' ", options: .regularExpression)
-        thisText = thisText.replacingOccurrences(of: #"[“”]"#, with:#"""#, options: .regularExpression)
-    }
-    
-    thisText = thisText.replacingOccurrences(of: #"([,\]\[;:\-&\(\)?!\.«»“”"])"#, with:#" $1 "#, options: .regularExpression)
-    
-    if hyphen_join_value {
-        thisText = thisText.replacingOccurrences(of: #" (-) "#, with:#"$1"#, options: .regularExpression)
-        thisText = thisText.replacingOccurrences(of: #" (–) "#, with:#"\1"#, options: .regularExpression)
-    }   else {
-        thisText = thisText.replacingOccurrences(of: #"(–)"#, with:#" $1 "#, options: .regularExpression)
-        thisText = thisText.replacingOccurrences(of: #"(-)"#, with:#" $1 "#, options: .regularExpression)
-    }
-    
-    thisText = thisText.replacingOccurrences(of: #"\. "#, with:#" . "#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:"  ",with:" ", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:"  ",with:" ", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:"  ",with:" ", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:"  ",with:" ", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:#"\n"#, with:#" \n "#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:#"(  )+"#, with:" ", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:#"  "#, with:" ", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:#"\t\t"#, with:#"\t"#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:#"(\n\n)+"#, with:#"\n"#, options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of:#"^ | $"#, with:"", options: .regularExpression)
-    return thisText
-    
-}
-
-func runFRonlyReplacements(thisText: String) -> String{
-    var thisText: String = thisText.replacingOccurrences(of: #"rud' homm"#, with: "rud'homm", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #"aujourd' hui"#, with: "aujourd'hui", options: .regularExpression)
-    thisText = thisText.replacingOccurrences(of: #"(-je|-tu|-il|-elle|-on|-ça|-cela|-nous|-vous|-ils|-elles|-moi|-toi|-lui|-leur|-en|-y|-ilz)"#,
-                                            with: " $1",
-                                            options: .regularExpression)
-    return thisText
-}
-func tokeniseEN(inputString: String, selectedLang: Language) -> [Substring]{
-    var enResult = inputString.replacingOccurrences(of: #"[\[\]()!?;:,\.\"]"#, with: " $0 ", options: .regularExpression)
-    enResult = enResult.replacingOccurrences(of: #"'s|s'"#, with: "$0 ", options: .regularExpression)
-    enResult = enResult.trimmingCharacters(in: .whitespacesAndNewlines)
-    return enResult.split(whereSeparator: {$0 == " "})
-}
-
-func tokeniseFR(inputString: String, selectedLang: Language) -> [Substring] {
-    let replacements: [String: String] = [
-        "jourd'hui": "jourdhui",
-        "rud'homm": "rudhomm",
-    ]
-    let unreplacements: [String: String] = [
-        "jourdhui": "jourd'hui",
-        "rudhomm": "rud'homm"
-    ]
-    
-    let unreplacePattern = unreplacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-    let regexUnreplace = try! Regex(unreplacePattern)
-    let literalPattern = replacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-    let regex = try! Regex(literalPattern)
-    
-    var frResult = inputString.replacing(regex) { match in
-        let matchedText = String(match.0)
-        if let replacement = replacements[matchedText] {
-            return replacement      // return match
-        }
-        return matchedText          // need somethign to return if regex settings set to, eg case insensitive, and dict not perfectly aligned to these
-    }
-    frResult = frResult.replacingOccurrences(of: #"[\[\]()!?;:,\.\"]"#, with: " $0 ", options: .regularExpression)
-
-    frResult = frResult.replacingOccurrences(of: #"([cdjlmnrst]|qu)'"#, with: "$0 ", options: .regularExpression)
-    
-    // if french, add space after ' when preceded by ()
-    frResult = frResult.replacingOccurrences(of: #"[^\S\n]+{2,}"#, with:" " , options: .regularExpression)
-    
-    var preSplit = frResult.trimmingCharacters(in: .whitespacesAndNewlines)
-    
-    preSplit = preSplit.replacing(regexUnreplace) { match in
-        unreplacements[String(match.0)] ?? String(match.0)
-    }
-    // NOTE : here, \n\n still present as LB/EOP
-    return preSplit.split(whereSeparator: {$0 == " "})
-}
-
-// testing tokenisations
-let foobar = "Il y a deux prud' hommes qui sont là aujourd' hui. Que doit-on leur dire ?"
-let modified = runFRonlyReplacements(thisText: foobar)
-//print(modified)
-
-let veryModified = run_tokeniser_core(thisText: foobar, lang: "fr", hyphen_join_value: false)
-let rawLength = inputText.count
-let rawSplitLength = inputText.split(separator: " ").count
-let modInput = run_tokeniser_core(thisText: inputText, lang: "fr", hyphen_join_value: false)
-let thisModifiedText = getTokensFromText(inputText: modInput)
-let thisCount = thisModifiedText.count
-
-//print("Input chars: \(rawLength)")
-//print("Input words: \(rawSplitLength)")
-//print("Mod length: \(modInput.count)")
-//print("Mod words: \(thisCount)")
-
-
-let testFileRaw = "/Users/Adam/Library/CloudStorage/Dropbox/swiftprojects/project7moonshot/old_data/textSample.txt"
-
-let myURL = URL(fileURLWithPath: testFileRaw)
-var inputText: String = ""
-//do {
-//
-//    inputText = try String(contentsOf: myURL, encoding: .utf8)
-//
-//} catch {
-//
-//    print(error)
-//
-//}
-
-
-
 
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
@@ -1260,278 +1110,7 @@ func makeHashableSentFromTestToks(tempTokens: [TempToken])-> HashableSentence?{
         print(x)
     }
     return returnObject
-}
-//func prepareBuiltSentFromTemp(tempTokens: [TempToken]) -> BuiltSentHolder? {
-//    guard tempTokens.count > 0 else {return nil}
-//    guard let hashableSent = makeHashableSentFromTestToks(tempTokens: tempTokens) else {return nil}
-//    let showString = markupTokenisationInSent(hashableSent: hashableSent)
-//    let thisSentence = BuiltSentHolder(
-//        hashableSent: hashableSent,
-//        showString: showString,
-//        tempToks: tempTokens
-//    )
-//    return thisSentence
-//}
-
-
-//func untokenisedInputToSents(text: [String], languageCode: Language) throws -> [[String]]{
-//    var returnItem: [[String]] = []
-//    let pipeline = try UDPipeline(languageCode: languageCode.rawValue, treebank: "gsd")
-//    for (_, sent) in text.enumerated(){
-//        let currentSent = try  pipeline.tokenize(sent)
-//        for chunk in currentSent{
-//            returnItem.append(chunk.tokens)
-//        }
-//    }
-//    return returnItem
-//}
-
-
-//func predictedSentsToTokenisedSents(input: [[String]]) -> [TokenisedSentence]{
-//    var returnItem: [TokenisedSentence] = []
-//    var count: Int = 0
-//    print(input)
-//
-//    //    actions
-//    for predictedSent in input{
-//        count += 1
-//        let tidyToks = predictedSent
-//        let newSent = HashableSentence(id: String(count), tokens: tidyToks)
-//        returnItem.append(newSent)
-//    }
-//    return returnItem
-//}
-//
-//
-//# use lang argument to load language specific abbreviations
-func markEosEnds(selectedLanguage: Language, tokListIn: [Substring])-> [EosTok]{
-    guard [.FR, .EN].contains(selectedLanguage) else {
-        return []
     }
-    // common lists
-    let punctList = [";","-",","]
-    let eosList = ["!", "?", ".", "\n"]
-    let rightEls = ["”","’", "»","\"", "}", ")"]
-    let excList = ["1","2","3","4","5","6","7","8","9","0", "com", "net", "L","M", "R"]
-    
-    // get abbrev list
-    var abrevList: [String]
-    switch selectedLanguage {
-    case .EN:
-        abrevList = ["Mr", "Mrs","Dr","Bt"]
-    case .FR:
-        abrevList = ["M", "Mme","Dr"]
-    default:
-        return []
-    }
-
-    let compoundList1: [String] = punctList + abrevList
-    let compoundList2: [String] = punctList + excList
-    
-    var outputList: [EosTok] = []
-    var prevTok: String = "__"
-    var nextTok: String = "__"
-    //# iterate over all but the last w block, which will be marked EOS
-    
-    let tokList = tokListIn.map {String($0)}
-    for (wnum, tok) in tokList.enumerated(){
-        if wnum+1 < tokList.count {  // get next block if exists
-            nextTok = tokList[wnum+1]
-            if eosList.contains(tok){
-                    outputList.append(EosTok(form: tok, isEOS: "true", reason: "Rights"))
-            } else {
-            outputList.append(EosTok(form: tok, isEOS: "false", reason: "notExc"))
-            }
-            
-        } else {
-            outputList.append(EosTok(form: tok, isEOS: "true", reason: "end of list"))
-        }
-    }
-    return outputList
-    //[Token(tokid: 1, form: "placeholder", lemma: "_", upos: "_", xpos: "_", feats: "_", head: "_", deprel: "_", col8: "_", col9: "_")]
-}
-
-// mark sent ends- current tok approach
-func markSentEnds(tokens: [String], lang: String) -> [Item] {
-    // current-token approach
-    guard !tokens.isEmpty else {
-        return []
-    }
-    // 1. Setup Configuration
-    let eosList = ["!", "?", ".", "\n"]
-    let punctList = [";", "-", ","]
-    let rightEls = ["”", "’", "»", "\"", "}"]
-    let exclList = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "com", "net", "L", "M", "R"]
-    
-    // 2. Define language-specific abbreviations
-    var abbrevList: [String] = []
-    if lang == "en" {
-        abbrevList = ["Mr", "Mrs", "Dr", "Bt"]
-    } else if lang == "fr" {
-        abbrevList = ["M", "Mme", "Dr"]
-    }
-    
-    // 3. Construct compound lists (Optimized for O(1) lookup if converted to Sets)
-    // We use Sets for compound lists because lookups like .contains() are much faster.
-    let compoundList1 = Set(exclList + abbrevList)
-    let compoundList2 = Set(punctList + exclList)
-    
-    var results = [Item]()
-    
-    
-    
-    // 4. Main Processing Loop
-    // We use tokens.count - 1 to replicate the Python [:-1] behavior
-    // (skipping the very last token for special processing)
-    if tokens.count > 1 {
-        for i in 0..<(tokens.count - 1) {
-            let currentTok = tokens[i]
-            let prevTok = i > 0 ? tokens[i-1] : "__"
-            let nextTok = tokens[i+1]
-            
-            var newItem = Item(text: currentTok)
-            
-            // Identify if current is an EOS character and previous is not abbreviation
-            // if current it usually an EOS char, and the previous tok doesn't tell us we're dealing with an abbreviation
-            if eosList.contains(currentTok) && !abbrevList.contains(prevTok) {
-                // if the next token is a Right sent boundary, it's the se
-                if rightEls.contains(nextTok){
-                    newItem.isEOS = true
-                    newItem.varReason = "rights"
-                }
-                
-                else if !compoundList2.contains(nextTok) && !nextTok.isLower {
-                    newItem.isEOS = true
-                    newItem.varReason = "notExc"
-                }
-            }
-            results.append(newItem)
-        }
-        
-        // Handle the very last token (the one skipped by the loop)
-        // This matches the logic where the final block is handled separately.
-        if let lastTok = tokens.last {
-            results.append(
-                Item(text: lastTok, isEOS: true, varReason: "FINAL"))
-        }
-    } else if let firstTok = tokens.first {
-        // Handle single token edge case
-        var item = Item(text: firstTok)
-        if eosList.contains(firstTok)  {
-            item.isEOS = true
-            item.varReason = "inEOSlist"
-        }
-        results.append(item)
-    }
-
-    // deduplication pass
-
-    // If we have two EOS marks in a row, keep only the one that is the "Right" boundary
-    for i in 0..<(results.count - 1) {
-        if results[i].isEOS && results[i+1].isEOS {
-            // If the current one is just a punctuation and the next one is the "Right" boundary
-            // or the next one is the "true" EOS, we can potentially flip the current one.
-//            if results[i].varReason == "rights" {// do i want ?? !! > no, only 2nd is EOS ::
-                results[i].isEOS = false
-//            }
-        }
-    }
-
-    
-    return results
-}
-
-// uses next token approach :: worth hassle? use this or current-approach and final loop to take latter of consecutive True values
-func markSentEndsNextTokApproach(tokens: [String], lang: String) -> [Item] {
-    // 1. Setup Constants
-    let eosList = ["!", "?", ".", "\n"]
-    let punctList = [";", "-", ","]
-    let rightEls = ["”", "’", "»", "\"", "}"]
-    let exclList = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "com", "net", "L", "M", "R"]
-    
-    var abbrevList: [String] = []
-    if lang == "en" {
-        abbrevList = ["Mr", "Mrs", "Dr", "Bt"]
-    } else if lang == "fr" {
-        abbrevList = ["M", "Mme", "Dr"]
-    }
-    
-    let compoundList1 = Set(exclList + abbrevList)
-    let compoundList2 = Set(punctList + exclList)
-    
-    // 2. Initialize Flags
-    // We create a boolean array to track which indices are ends of sentences
-    // and a string array to track the reasons.
-    var isEosFlags = [Bool](repeating: false, count: tokens.count)
-    var reasonFlags = [String?](repeating: nil, count: tokens.count)
-    
-    // 3. The "Next Token" Logic Loop
-    // We iterate up to the second-to-last token because the last token
-    // can't have a "next" token to influence.
-    if tokens.count > 1 {
-        for i in 0..<(tokens.count - 1) {
-            let currentTok = tokens[i]
-            let prevTok = i > 0 ? tokens[i-1] : "__"
-            let nextTok = tokens[i+1]
-            
-            // If current token is an EOS character and previous was not an abbreviation
-            if eosList.contains(currentTok) && !abbrevList.contains(prevTok) {
-                
-                // CASE A: The next token is a "Right" boundary (e.g., "!")
-                if rightEls.contains(nextTok) {
-                    isEosFlags[i + 1] = true
-                    reasonFlags[i + 1] = "rights"
-                }
-                // CASE B: The next token is a new sentence (not in compound list and capitalized)
-                else if !compoundList2.contains(nextTok) && !nextTok.isLower {
-                    isEosFlags[i] = true
-                    reasonFlags[i] = "notExc"
-                }
-            }
-        }
-        
-        // 4. Handle the final token separately (no "next" token exists)
-        if let lastTok = tokens.last {
-            if eosList.contains(lastTok) {
-                isEosFlags[tokens.count - 1] = true
-                reasonFlags[tokens.count - 1] = "eos_list"
-            }
-        }
-    } else if let firstTok = tokens.first {
-        // Handle single-token list
-        if eosList.contains(firstTok) {
-            isEosFlags[0] = true
-            reasonFlags[0] = "eos_list"
-        }
-    }
-    
-    // 5. Construct the final result
-    var results = [Item]()
-    for i in 0..<tokens.count {
-        var item = Item(text: tokens[i])
-        item.isEOS = isEosFlags[i]
-        item.varReason = reasonFlags[i]
-        results.append(item)
-    }
-    
-    return results
-}
-
-// dev helpers
-struct Item {
-    var text: String
-    var isEOS: Bool = false
-    var varReason: String? = nil
-}
-
-// Your provided extension
-extension String {
-    var isLower: Bool {
-        self == self.lowercased() && self != self.uppercased()
-    }
-}
-
-
 
 
 
@@ -1541,58 +1120,7 @@ extension String {
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
 
-func detectLangInFilename(inputURL: URL?)-> Language?{
-    // actions
-    guard let urlExists = inputURL else { return nil }
-    let targetPartOfString = urlExists.lastPathComponent.lowercased()
-    var langGuess: Language? = nil
-    var matchCount: Int = 0
-    let myMaps: [RegexLangPatternToLangMap] = [
-        RegexLangPatternToLangMap(string: #"[_\.]fr|^fr_"#, langValue: .FR),
-        RegexLangPatternToLangMap(string: #"[_\.]fro|^fro_"#, langValue: .FRO),
-        RegexLangPatternToLangMap(string: #"[_\.]frm|^frm_"#, langValue: .FRM),
-        RegexLangPatternToLangMap(string: #"[_\.]de|^de_"#, langValue: .DE),
-        RegexLangPatternToLangMap(string: #"[_\.]en|^en_"#, langValue: .EN),
-        RegexLangPatternToLangMap(string: #"[_\.]ang|^ang_"#, langValue: .ANG),
-    ]
-    for thisItem in myMaps {
-        if targetPartOfString.contains(thisItem.asRegex){
-            langGuess = thisItem.langValue
-            matchCount += 1
-            print("\(langGuess?.rawValue) for \(targetPartOfString)")
-        }
-    }
-    if matchCount > 0 {
-        return langGuess
-    } else {
-        return nil
-    }
-}
-
-//----------------------------------------------------------------------------------------------------------------------------
-//----------------------------------------------------------------------------------------------------------------------------
-
-func testInstantiatePipeline(languageCode: String, treebank: String)   -> String {
-    // test instantiation of pipeline class based on params chosen
-    var outputString: String = ""
-    
-    Task{
-        do {
-            let testPipeline = try UDPipeline(languageCode: languageCode, treebank: treebank)
-            await MainActor.run {
-                outputString = "Success"
-            }
-        } catch{
-            await MainActor.run {
-                outputString = "Fail : \(error.localizedDescription)"
-            }
-        }
-    }
-    return outputString
-}
-
-
-//                                                  end of main functions; experimental below
+//                                                  end of main functions; experimental moved to function_dev
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
 // MARK: - Other
@@ -1639,6 +1167,3 @@ func getNLTags(text: String) -> NLParseResults{
     let lemmaReturn: NLParseReturn = NLParseReturn(tag: "lemma", nlReturn: lemmas)
     return NLParseResults(posReturn: posReturn, lemmaReturn: lemmaReturn)
 }
-//MARK: functions not called
-
-

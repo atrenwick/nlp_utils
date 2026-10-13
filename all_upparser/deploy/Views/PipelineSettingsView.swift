@@ -23,6 +23,9 @@ struct PipelineSettingsView: View {
     @AppStorage("selectedTreebankDefault") var selectedTreebankDefault: Language.Treebank = .frTB3
     @AppStorage("tokenizingMethodDefault") var tokenizingMethodDefault: TokenizingMethod = .nltokeniser
     @AppStorage("sentencizingMethodDefault")  var sentencizingMethodDefault: SentencizingMethod = .nlSentencizer
+    @AppStorage("runRetokeniserDefault") var runRetokeniserDefault: Bool = false
+    @AppStorage("runResentenciserDefault")  var runResentenciserDefault: Bool = false
+
     @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
     @AppStorage("insertNewTokPositionDefault") var insertNewTokPositionDefault: InsertPosition = .after
 
@@ -49,10 +52,14 @@ struct PipelineSettingsView: View {
     @State var runRetokeniser: Bool = false
     @State var tokenizingMethod: TokenizingMethod = .nltokeniser
     @State var sentencizingMethod: SentencizingMethod = .nlSentencizer
+    @State var runResentenciser: Bool = false
     @State var insertNewTokPosition: InsertPosition = .after
     
     @State var tempTokens: [TempToken] = []
     @State var selectedRetokenisationType: RetokenisationType = .predict
+    
+    
+
     
     // export settings
     @State var fileName: String = "Filename"
@@ -220,7 +227,11 @@ struct PipelineSettingsView: View {
                             maxActiveStep: $maxPipelineStep,
                             inputFileType: $inputFileType,
                             runRetokeniser: $runRetokeniser,
-                            tokenizingMethod: $tokenizingMethod
+                            tokenizingMethod: $tokenizingMethod,
+                            runResentenciser: $runResentenciser,
+                            sentencizingMethod: $sentencizingMethod
+
+                            
                         )
                     }.accessibilityIdentifier("ProcessorStepLink")
                 }//end section
@@ -342,6 +353,9 @@ struct PipelineSettingsView: View {
                     fileName = fileNameDefault
                     maxPipelineStep = maxPipelineStepDefault
                     insertNewTokPosition = insertNewTokPositionDefault
+                    sentencizingMethod = sentencizingMethodDefault
+                    runResentenciser = runResentenciserDefault
+                    
                     hasAppeared = true
                 }
             }
@@ -419,6 +433,7 @@ struct PipelineSettingsView: View {
                     
                     switch inputFileType {
                     case .conll:
+                        // resentencise internally in this function if set
                         allSentences = try conllFileToHashableSentForPipeline(
                             inputURL: saveInputMetas.inputURL
                         )
@@ -426,15 +441,18 @@ struct PipelineSettingsView: View {
                         allSentences = builtSents.compactMap {$0.toHashableSent(tempToks: $0.tempToks) }
                         
                     case .xml:
+                        // resentencise internally in this function if set
                         allSentences = try xmlToHashableSentForPipeline(
                             inputURL: saveInputMetas.inputURL
                         )
                     case .xmlConll:
+                        // resentencise internally in this function if set
                         allSentences = try xmlConllFileToHashableSentForPipeline(
                             inputURL: saveInputMetas.inputURL
                         )
                     case .txt:
                         // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
+                        
                         allSentences = try textFileToHashableSents(
                             inputURL: saveInputMetas.inputURL,
                             sentencizingMethod: sentencizingMethod,
@@ -484,6 +502,14 @@ struct PipelineSettingsView: View {
                         }
                         allSentences = retokenisedSents
                     }
+//                    if inputFileType != .txt && runResentenciser{
+//                        // do this to resentencise
+//                        let sentsAsInput = allSentences
+//                        
+//                        let allSentencesAsStrings = applySentencizingMethodToString(normalizedText: normalizedText, lang: selectedLanguage, sentencizingMethod: sentencizingMethod)
+//                        allSentences = stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: allSentencesAsStrings, lang: selectedLanguage, pipeline: UDPipeline)
+//                        
+//                    }
                     
                     // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
                     if runExplicit{

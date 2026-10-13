@@ -14,6 +14,11 @@ enum ConllLineContent {
     case blank
 }
 
+enum EosApproach{
+    case current
+    case next
+}
+
 enum ExportFormat: String, CaseIterable, Identifiable{
     var id: Self {self}
     case xml
@@ -262,6 +267,8 @@ enum SentencizingMethod: String, Identifiable, CaseIterable {
     var id: Self {self}
     case nlSentencizer
     case custom
+    case naive
+    case eosMark
     }
 
 enum TokenizingMethod : String, Identifiable, CaseIterable{

@@ -11,6 +11,10 @@ import Foundation
 
 
 extension String {
+    var isLower: Bool {
+        self == self.lowercased() && self != self.uppercased()
+    }
+
     var sanitizedFileName: String {
         let invalidCharacters = CharacterSet(charactersIn: "/\\?%*|\":<>")
             .union(.newlines)
@@ -29,10 +33,14 @@ extension String {
         return result
     }
 
+    var asTempToken: TempToken {
+            return TempToken(form: String(self))
+        }
+    
+
 }
 
 //MARK: sequence extensions extensions
-
 extension Sequence where Element == Sentence {
     /// Combines calculated properties across all structures
     func generateExportText() -> String {
@@ -54,7 +62,6 @@ extension Sequence where Element == Token {
     func makeSentenceXMLconll() -> String {
         return self.map { $0.conllRaw }.joined(separator: "\n")
     }
-
 }
 
 extension PipelineSettingsView {

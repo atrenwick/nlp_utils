@@ -15,18 +15,20 @@ struct SetDefaultsView: View {
     @AppStorage("inputTypeDefault") private var inputFileTypeDefault: InputFileType = .txt
 
     //import + parsing settings
-    @AppStorage("detectLangDefault") var detectLangDefault: Bool = false
+    @AppStorage("detectLangDefault") var detectLangDefault: Bool = true
     @AppStorage("selectedLanguageDefault") var selectedLanguageDefault: Language = .FR
     @AppStorage("selectedTreebankDefault") var selectedTreebankDefault: Language.Treebank = .frTB3
     @AppStorage("tokenizingMethodDefault") var tokenizingMethodDefault: TokenizingMethod = .nltokeniser
     @AppStorage("sentencizingMethodDefault")  var sentencizingMethodDefault: SentencizingMethod = .nlSentencizer
     @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
     @AppStorage("insertNewTokPositionDefault") var insertNewTokPositionDefault: InsertPosition = .after
+    @AppStorage("runRetokeniserDefault") var runRetokeniserDefault: Bool = false
+    @AppStorage("runResentenciserDefault")  var runResentenciserDefault: Bool = false
 
     //export
     @AppStorage("xmlAuthorDefault")  var xmlAuthorDefault: String = "XML Author"
     @AppStorage("xmlTitleDefault")  var xmlTitleDefault: String = "XML Title"
-    @AppStorage("fileNameDefault") var fileNameDefault: String = "fileName"
+    @AppStorage("fileNameDefault") var fileNameDefault: String = makeFilename() //"fileName"
     @AppStorage("selectedExportFormatDefault")  var selectedExportFormatDefault: ExportFormat = .xml
     @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
     @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
@@ -78,13 +80,19 @@ struct SetDefaultsView: View {
                             Text(method.rawValue)
                         }
                     }
-                    
+                    Toggle(isOn: $runRetokeniserDefault){
+                        Text("Retokenise by default")
+                    }
+
                     Picker("Sentencization method", selection: $sentencizingMethodDefault){
                         ForEach(SentencizingMethod.allCases){method in
                             Text(method.rawValue)
                         }
                     }
-                    
+                    Toggle(isOn: $runResentenciserDefault){
+                        Text("Resentencise by default")
+                    }
+
                     Picker("Insert new token position", selection: $insertNewTokPositionDefault){
                         ForEach(InsertPosition.allCases){position in
                             Text(position.rawValue)}
