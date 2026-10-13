@@ -5,10 +5,15 @@ Why do all this ? To learn a bit of Swift + SwiftUI while putting a bit of Py in
 
 
 <p>
-The all-up parser taking a user-refined tokenisation of text, then parsing and exporting to XML with POS tags, lemmas, morphological feats and dependency annotations, all predicted on-device.
+The all-up parser taking a user-refined tokenisation of text (below left) or a file (below right), then parsing and exporting to XML with POS tags, lemmas, morphological feats and dependency annotations, all predicted on-device.
 </p>
 <p align="center">
-  
-  <img src="./deploy/TaggerTokenisation.gif" alt="All-up parser demo" width="360" />
-</p>
+  <img src="./deploy/TaggerTokenisation.gif" alt="Parser demo from customised sentences + tokenisation" width="360" />
+   &nbsp;&nbsp;
+  <img src="./deploy/Tagger.gif" alt="Parser demo from file" width="360" />
+</p> 
 
+
+
+
+  
