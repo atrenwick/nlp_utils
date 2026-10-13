@@ -556,6 +556,84 @@ func textFileToSentStrings(inputURL: URL?, sentencizingMethod: SentencizingMetho
     
 }
 
+func desentenciseAndResentencise(sentsToDiscard: [HashableSentence], lang: Language, sentencizingMethod: SentencizingMethod) -> [String]{
+    
+    let initialString = (sentsToDiscard.map {$0.detokenised}).joined(separator: " ")
+    let normalizedText = initialString.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
+    let resentencizerOutputStrings = _applySentencizingMethodToString(normalizedText: normalizedText, lang: lang, sentencizingMethod: sentencizingMethod)
+
+    return resentencizerOutputStrings
+}
+
+
+
+func retokenisationEncapsulator(allSentences: [HashableSentence], tokenizingMethod: TokenizingMethod, lang: Language, pipeline: UDPipeline, runResentenciser: Bool, resentencizerOutputStrings: [String], taggingInProgress: Binding<Bool>) throws -> [HashableSentence]{
+    
+    var sentencesAsStrings: [String] = []
+    
+    if runResentenciser {
+        sentencesAsStrings = resentencizerOutputStrings
+    } else {
+        for sent in allSentences{
+            sentencesAsStrings.append(sent.detokenised)
+        }
+    }
+
+    let retokenisedSents = try stringSentsToHashableSents(
+        tokenizingMethod: tokenizingMethod,
+        sents: sentencesAsStrings,
+        lang: lang,
+        pipeline: pipeline
+    )
+    
+    guard !retokenisedSents.isEmpty else {
+        taggingInProgress.wrappedValue = false
+        throw ParseProcessingError.retokenisationError
+    }
+
+    return retokenisedSents
+}
+func ingestSentEncapsulator(inputFileType: InputFileType, saveInputMetas: SaveInputMetas, builtSents: [BuiltSentHolder], sentencizingMethod: SentencizingMethod, tokenizingMethod: TokenizingMethod, pipeline: UDPipeline) throws -> [HashableSentence] {
+    
+    var allSentences: [HashableSentence] = []
+    switch inputFileType {
+    case .conll:
+        // resentencise internally in this function if set
+        allSentences = try conllFileToHashableSentForPipeline(
+            inputURL: saveInputMetas.inputURL
+        )
+    case .manual:
+        allSentences = builtSents.compactMap {$0.toHashableSent(tempToks: $0.tempToks) }
+        
+    case .xml:
+        // resentencise internally in this function if set
+        allSentences = try xmlToHashableSentForPipeline(
+            inputURL: saveInputMetas.inputURL
+        )
+    case .xmlConll:
+        // resentencise internally in this function if set
+        allSentences = try xmlConllFileToHashableSentForPipeline(
+            inputURL: saveInputMetas.inputURL
+        )
+    case .txt:
+        // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
+        
+        allSentences = try textFileToHashableSents(
+            inputURL: saveInputMetas.inputURL,
+            sentencizingMethod: sentencizingMethod,
+            tokenizingMethod: tokenizingMethod,
+            lang: saveInputMetas.lang,
+            pipeline: pipeline
+        )
+        print("Mode a: \(allSentences.count) sents ")
+        
+    }
+    return allSentences
+}
+
+
+
+
 //1.
 func applyNaiveTokenisation(language: Language, myString: String)-> [String]{
     

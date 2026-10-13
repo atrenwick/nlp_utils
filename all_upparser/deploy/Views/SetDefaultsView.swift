@@ -7,6 +7,7 @@
 
 import SwiftUI
 import NaturalLanguage
+internal import UniformTypeIdentifiers
 
 struct SetDefaultsView: View {
     @AppStorage("runExplicitDefault")  var runExplicitDefault: Bool = false
@@ -32,9 +33,12 @@ struct SetDefaultsView: View {
     @AppStorage("selectedExportFormatDefault")  var selectedExportFormatDefault: ExportFormat = .xml
     @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
     @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
+    @AppStorage("outputDirDefault") var outputDirDefault: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    
     
     @State var sentences: [String] = []
-
+    @State var isSelectingFolder: Bool = false
+    
     var body: some View {
         
         VStack{
@@ -107,6 +111,15 @@ struct SetDefaultsView: View {
                 }
                 Section("Output file"){
                     TextField("Filename", text: $fileNameDefault)
+                    HStack{
+                        Text("Output dir")
+                            Spacer()
+                        Text(outputDirDefault.lastPathComponent ?? "Not Selected")
+                            .foregroundColor(.secondary)
+                        Button("Choose...") {
+                            isSelectingFolder = true
+                        }
+                    }
                     Picker("Export format", selection: $selectedExportFormatDefault){
                         ForEach(ExportFormat.allCases){format in
                             Text(format.rawValue)
@@ -122,6 +135,25 @@ struct SetDefaultsView: View {
                     }
 
                 }
+                .fileImporter(
+                    isPresented: $isSelectingFolder,
+                    allowedContentTypes: [.folder],
+                    allowsMultipleSelection: false
+                ) { result in
+                    switch result {
+                    case .success(let urls):
+                        if let url = urls.first {
+                            // Gain security access to folder
+                            if url.startAccessingSecurityScopedResource() {
+                                outputDirDefault = url
+                            }
+                        }
+                    case .failure(let error):
+                        print("Folder selection error: \(error.localizedDescription)")
+                    }
+                }
+            
+
             }
         }
     }

@@ -37,6 +37,7 @@ struct PipelineSettingsView: View {
 
     @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
     @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
+    @AppStorage("outputDirDefault") var outputDirDefault: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
 
     // input file
     @State var inputFileType: InputFileType = .conll
@@ -80,7 +81,6 @@ struct PipelineSettingsView: View {
     @State private var hasStarted = false
     
     // reporting
-    @State private var errorMessage: String?
     @State private var topLevelOutputList: [RunOutput] = []
     @State private var exportStatusMessage: String?
     @State var outputString: String = "not yet run"
@@ -103,7 +103,10 @@ struct PipelineSettingsView: View {
     var unreadCount: Int {
         topLevelOutputList.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
-    
+    #if DEBUG
+    let runfive = false //
+    #endif
+
     //TODO: funct exists to make same, but not called :: consider where, if, to use it
     var safeHeaderAttribs: XmlHeaderAttribs {
         let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
@@ -306,17 +309,37 @@ struct PipelineSettingsView: View {
                     {
                         ZStack {
                             HStack {
-                                Image(systemName: "play.fill")
+                                if xmlTitleDefault == "1"{
+                                Image(systemName: taggingInProgress ? "arrow.trianglehead.2.clockwise.rotate.90.circle.fill" : "play.fill")
+                                    .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)
+                                }
+                                    if xmlTitleDefault == "2" {
+                                        Image(systemName: taggingInProgress ? "gearshape.2" : "play.fill")
+                                            .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)
+                                    }//
+                                    if xmlTitleDefault == "3"{
+                                Image(systemName: taggingInProgress ? "progress.indicator" : "play.fill")
+                                    .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)}
                                 Text(taggingInProgress ? "Running" : "Run")
                                     .fontWeight(.semibold)
                             }
-                            .opacity(taggingInProgress ? 0.5 : 1)
+                            .opacity(taggingInProgress ? 1 :0.5)
                         }
                         .font(.headline)
+
                         .frame(maxWidth: .infinity)
                         .padding()
                     }
                     .buttonStyle(.borderedProminent)
+//                    .background(alignment: .leading)  {
+//                        ProgressView(
+//                            value: Double(max(0, processedCount)),
+//                            total: Double(max(1, totalCount))
+//                        )
+//                        .tint((Color.accentColor.opacity(1)))
+//                        .scaleEffect(x: 1.0, y: 3.0, anchor: .center)
+//                        }
+                    .clipShape(Capsule())
                     .controlSize(.large)
                     .disabled(taggingInProgress || !isPipelineReady)
                     .padding()
@@ -355,11 +378,13 @@ struct PipelineSettingsView: View {
                     insertNewTokPosition = insertNewTokPositionDefault
                     sentencizingMethod = sentencizingMethodDefault
                     runResentenciser = runResentenciserDefault
-                    
+                    targetFolderURL = outputDirDefault
                     hasAppeared = true
                 }
             }
             .accessibilityIdentifier("RunParsingButton")
+
+            // MARK: toolbar :
             .toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
@@ -399,9 +424,16 @@ struct PipelineSettingsView: View {
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
         taggingInProgress: Binding<Bool>) {
-            //MARK: parameters, initialisations for task
-            taggingInProgress.wrappedValue = true
             
+            // MARK: parameters, initialisations for task
+            taggingInProgress.wrappedValue = true
+            startTime = nil
+            hasStarted = true
+            processedCount = 0
+            totalCount = 0
+            var resentencizerOutputStrings: [String] = []
+            var outSents: [Sentence] = []
+
             let saveInputMetas = SaveInputMetas(
                 lang: selectedLanguage,
                 displayName: inputFileType == .manual ? "Manual Entry" : fileContainerModel.selectedFileName,
@@ -413,13 +445,7 @@ struct PipelineSettingsView: View {
                 safeHeaderAttribs: safeHeaderAttribs,
                 includeConllSentText: includeConllSentText
             )
-            errorMessage = nil
-            startTime = nil
-            hasStarted = true
-            processedCount = 0
-            totalCount = 0
-            
-            
+
             Task {
                 // MARK: tagging :
                 do {
@@ -429,78 +455,108 @@ struct PipelineSettingsView: View {
                         treebank: saveInputMetas.treebank.short)
                     var allSentences: [HashableSentence] = []
                     
-                    //MARK: INGEST SENTS ::
                     
-                    switch inputFileType {
-                    case .conll:
-                        // resentencise internally in this function if set
-                        allSentences = try conllFileToHashableSentForPipeline(
-                            inputURL: saveInputMetas.inputURL
-                        )
-                    case .manual:
-                        allSentences = builtSents.compactMap {$0.toHashableSent(tempToks: $0.tempToks) }
-                        
-                    case .xml:
-                        // resentencise internally in this function if set
-                        allSentences = try xmlToHashableSentForPipeline(
-                            inputURL: saveInputMetas.inputURL
-                        )
-                    case .xmlConll:
-                        // resentencise internally in this function if set
-                        allSentences = try xmlConllFileToHashableSentForPipeline(
-                            inputURL: saveInputMetas.inputURL
-                        )
-                    case .txt:
-                        // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
-                        
-                        allSentences = try textFileToHashableSents(
-                            inputURL: saveInputMetas.inputURL,
-                            sentencizingMethod: sentencizingMethod,
-                            tokenizingMethod: tokenizingMethod,
-                            lang: saveInputMetas.lang,
-                            pipeline: pipeline
-                        )
-                        //                    let sentencesAsStrings = textFileToSentStrings(
-                        //                        inputURL: saveInputMetas.inputURL,
-                        //                        sentencizingMethod: sentencizingMethod,
-                        //                        lang: selectedLanguage
-                        //                    )
-                        //                    switch tokenizingMethod{
-                        //                    case .custom:
-                        //                        print("using custom rules:: need to get Swift version of rules……")
-                        //                    case .nltokeniser:
-                        //                        allSentences = getTokenisedSentences(sents: sentencesAsStrings, lang: selectedLanguage)
-                        //
-                        //                        print("nltokeniser")
-                        //                    case .trained:
-                        //                        // retokenize everything with model
-                        //                        // MARK: can change this IN to be testSentences
-                        //                        for sentence in sentencesAsStrings {
-                        //                            allSentences.append(contentsOf: try pipeline.tokenize(sentence))
-                        //
-                        //                    }
-                        //                    }
-                        print("Mode a: \(allSentences.count) sents ")
-                        
-                    }
+                    //MARK: INGEST SENTS ::
+//                    switch inputFileType {
+//                    case .conll:
+//                        // resentencise internally in this function if set
+//                        allSentences = try conllFileToHashableSentForPipeline(
+//                            inputURL: saveInputMetas.inputURL
+//                        )
+//                    case .manual:
+//                        allSentences = builtSents.compactMap {$0.toHashableSent(tempToks: $0.tempToks) }
+//                        
+//                    case .xml:
+//                        // resentencise internally in this function if set
+//                        allSentences = try xmlToHashableSentForPipeline(
+//                            inputURL: saveInputMetas.inputURL
+//                        )
+//                    case .xmlConll:
+//                        // resentencise internally in this function if set
+//                        allSentences = try xmlConllFileToHashableSentForPipeline(
+//                            inputURL: saveInputMetas.inputURL
+//                        )
+//                    case .txt:
+//                        // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
+//                        
+//                        allSentences = try textFileToHashableSents(
+//                            inputURL: saveInputMetas.inputURL,
+//                            sentencizingMethod: sentencizingMethod,
+//                            tokenizingMethod: tokenizingMethod,
+//                            lang: saveInputMetas.lang,
+//                            pipeline: pipeline
+//                        )
+//                        //                    let sentencesAsStrings = textFileToSentStrings(
+//                        //                        inputURL: saveInputMetas.inputURL,
+//                        //                        sentencizingMethod: sentencizingMethod,
+//                        //                        lang: selectedLanguage
+//                        //                    )
+//                        //                    switch tokenizingMethod{
+//                        //                    case .custom:
+//                        //                        print("using custom rules:: need to get Swift version of rules……")
+//                        //                    case .nltokeniser:
+//                        //                        allSentences = getTokenisedSentences(sents: sentencesAsStrings, lang: selectedLanguage)
+//                        //
+//                        //                        print("nltokeniser")
+//                        //                    case .trained:
+//                        //                        // retokenize everything with model
+//                        //                        // MARK: can change this IN to be testSentences
+//                        //                        for sentence in sentencesAsStrings {
+//                        //                            allSentences.append(contentsOf: try pipeline.tokenize(sentence))
+//                        //
+//                        //                    }
+//                        //                    }
+//                        print("Mode a: \(allSentences.count) sents ")
+//                        
+//                    }
+                    allSentences = try ingestSentEncapsulator(
+                        inputFileType: inputFileType,
+                        saveInputMetas: saveInputMetas,
+                        builtSents: builtSents,
+                        sentencizingMethod: sentencizingMethod,
+                        tokenizingMethod: tokenizingMethod,
+                        pipeline: pipeline
+                    )
+                    //MARK: check we have sents
                     guard !allSentences.isEmpty else {
                         taggingInProgress.wrappedValue = false
                         throw ParseProcessingError.noSentencesLoaded
                     }
+                    //MARK: run resentenciser on request
+                    if ![InputFileType.txt, InputFileType.manual].contains(inputFileType) && runResentenciser{
+                        resentencizerOutputStrings = desentenciseAndResentencise(
+                            sentsToDiscard: allSentences,
+                            lang: selectedLanguage,
+                            sentencizingMethod: sentencizingMethod
+                        )
+                        runRetokeniser = true
+                    }
                     
-                    if inputFileType != .txt && runRetokeniser && [TokenizingMethod.nltokeniser, TokenizingMethod.trained].contains(tokenizingMethod)  {
+                    //MARK: run retokeniser if required/requested
+                    if inputFileType != .txt && runRetokeniser && [TokenizingMethod.nltokeniser, TokenizingMethod.trained].contains(tokenizingMethod) {
                         print("Retokenising")
-                        var sentencesAsStrings: [String] = []
-                        for sent in allSentences{
-                            sentencesAsStrings.append(sent.detokenised)
-                        }
-                        
-                        let retokenisedSents = try stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: sentencesAsStrings, lang: saveInputMetas.lang, pipeline: pipeline)
-                        guard !retokenisedSents.isEmpty else {
-                            taggingInProgress.wrappedValue = false
-                            throw ParseProcessingError.retokenisationError
-                        }
-                        allSentences = retokenisedSents
+//                        var sentencesAsStrings: [String] = []
+//                        if runResentenciser{
+//                            sentencesAsStrings = resentencizerOutputStrings
+//                        } else {
+//                            for sent in allSentences{
+//                                sentencesAsStrings.append(sent.detokenised)
+//                            }
+//                        }
+//                        let retokenisedSents = try stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: sentencesAsStrings, lang: saveInputMetas.lang, pipeline: pipeline)
+//                        guard !retokenisedSents.isEmpty else {
+//                            taggingInProgress.wrappedValue = false
+//                            throw ParseProcessingError.retokenisationError
+//                        }
+                        allSentences = try retokenisationEncapsulator(
+                            allSentences: allSentences,
+                            tokenizingMethod: tokenizingMethod,
+                            lang: selectedLanguage,
+                            pipeline: pipeline,
+                            runResentenciser: runResentenciser,
+                            resentencizerOutputStrings: resentencizerOutputStrings,
+                            taggingInProgress: taggingInProgress
+                        )
                     }
 //                    if inputFileType != .txt && runResentenciser{
 //                        // do this to resentencise
@@ -510,7 +566,6 @@ struct PipelineSettingsView: View {
 //                        allSentences = stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: allSentencesAsStrings, lang: selectedLanguage, pipeline: UDPipeline)
 //                        
 //                    }
-                    
                     // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
                     if runExplicit{
                         var nlInputTexts: [String] = []
@@ -518,24 +573,22 @@ struct PipelineSettingsView: View {
                             nlInputTexts.append(sent.tokens.joined(separator: " "))
                         }
                         for chunk in nlInputTexts{
-                            let rnReturn = getNLTags(text: chunk)
+                            let _ = getNLTags(text: chunk)
                         }
                     }
-                    print("Mysents count = \(allSentences.count)")
+//                    print("Mysents count = \(allSentences.count)")
                     await MainActor.run {
                         totalCount = allSentences.count
                         appleProgress = Progress(totalUnitCount: Int64(max(allSentences.count, 1)))
                         startTime = Date()
                     }
                     
-                    var outSents: [Sentence] = []
-                    // MARK: Step 2: iterate over sentences
+
+                    // MARK: Step 2: pass prepared data to parsing pipeline
 #if DEBUG
-                    let runfive = false
                     if runfive {
                         allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
 #endif
-                    
                     for sentence in allSentences {
                         let parsedTokens = try pipeline.runOnSentence(sentence, level: maxPipelineStep.rawValue)
                         if runExplicit {
@@ -547,9 +600,7 @@ struct PipelineSettingsView: View {
                             conllMetas:  []
                         )
                         outSents.append(mySent)
-                        
-                        
-                        
+
                         await MainActor.run {
                             processedCount += 1
                             appleProgress.completedUnitCount = Int64(processedCount)
@@ -587,7 +638,6 @@ struct PipelineSettingsView: View {
                     switch error {
                     case let parseProcessingError as ParseProcessingError:
                         alertMessage = parseProcessingError.errorDescription
-                        
                     case let nsError as NSError where nsError.domain == XMLParser.errorDomain:
                         alertMessage = "XML Parsing error : No valid XML to parse"
                     default:
