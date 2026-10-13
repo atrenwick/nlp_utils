@@ -65,8 +65,9 @@ struct ManualTokenisationView: View {
                         } else {
                             thisSentence = newSentence
                         }
-                        tempTokens = applyNaiveTokenisation(language: selectedLanguage, myString: thisSentence
-                        )
+                        let toksAsStrings = applyNaiveTokenisation(language: selectedLanguage, myString: thisSentence)
+                       tempTokens = toksAsStrings.map {$0.asTempToken}
+                        
                     } label: {
                         Text("Tokenise")
                     }
