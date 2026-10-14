@@ -172,11 +172,11 @@ enum Language: String, CaseIterable, Identifiable {
 
 
 enum ParseProcessingError: LocalizedError{
-    case missingURL
     case fileLoadError
-    case utf8DecodeError
     case fileNotInBundle
-    case parserCreationError
+    case missingURL
+    case parserCreationError(file: URL)
+    case utf8DecodeError
     case xmlParserFailure(line: Int, reason: String)
     case noSentencesLoaded
     case retokenisationError
@@ -188,9 +188,15 @@ enum ParseProcessingError: LocalizedError{
     case makeConllLinesFromURLError
     case makeExportContentError
     case badTempTokens
+    case languageMethodConflict(language: Language)
+    case inputFileFormatChoiceError
     
     var errorDescription: String? {
         switch self{
+        case .inputFileFormatChoiceError:
+            return "Not an XML format"
+        case .languageMethodConflict(let language):
+            return "Language \(language.rawValue) cannot be used with naive tokenisation"
         case .badTempTokens:
             return "Error makiing hashable sentence from temp tokens"
         case .fileLoadError:
@@ -205,8 +211,8 @@ enum ParseProcessingError: LocalizedError{
             return "No URL provided"
         case .noSentencesLoaded:
             return "No sentences found when switching on inputFileTYpe"
-        case .parserCreationError:
-            return "Couldn't create XML parser from URL"
+        case .parserCreationError(let file):
+            return "Couldn't create XML parser from \(file.lastPathComponent)"
         case .xmlParserFailure:
             return "Unknown XML parsing error with XML parser + delegate"
         case .retokenisationError:
@@ -253,6 +259,46 @@ enum PipelineStep: Int, CaseIterable, Identifiable, Comparable {
     static func < (lhs: PipelineStep, rhs: PipelineStep) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
+}
+
+enum RegexStash{
+    
+    enum blobToSents{
+        static let regex1 = try! Regex("\n\n")
+        static let regex2 = try! Regex("\n")
+        static let regex3 = try! Regex(#"\. ([A-Z])"#)
+        static let overzealousPattern = try! Regex("U.S._EOS_")
+    }
+    
+    enum tokeniseEN{
+        static let enPunctuation = try! Regex(#"[\[\]()!?;:,\.\"]"#)
+        static let apostopheCatcher = try! Regex(#"'s|s'"#)
+        static let singleQuoteCatcher = try! Regex(#"[’''’]"#)
+        static let doubleQuoteCatcher =  try! Regex(#"[“”]"#)
+    }
+
+    enum tokenisationGeneral{
+        static let dashWithSpace = try! Regex(#" (-) "#)
+        static let dashWithoutSpace = try! Regex(#"(–)"#)
+        static let urlCatcher = try! Regex(#"(htt(p|ps)://.+?($| ))"#)
+        static let ellipsisCatcher = try! Regex(#"..."#)
+        static let multiSpaces = try! Regex(#"[^\S]+{2,}"#)
+        static let multilinebreaks = try! Regex(#"[^\n]+{2,}"#)
+        static let allTabs = try! Regex(#"[^\t]+{1,}"#)
+        static let generalPunctuation = try! Regex(#"([,\]\[;:\-&\(\)?!\.«»“”"])"#)
+        static let badSentenceEndings = try! Regex(#",\. |,\.$|\.,"#)
+    }
+    
+    enum tokeniseFR{
+        static let punctRegexFR = try! Regex(#"[\[\]()!?;:,\.\"]"#)
+        static let contractionRegexFR = try! Regex(#"([cdjlmnrst]|qu)'"#)
+        static let pronounRegexFR = try! Regex(#"(-je|-tu|-il|-elle|-on|-ça|-cela|-nous|-vous|-ils|-elles|-moi|-toi|-lui|-leur|-en|-y|-ilz)"#)
+        static let eosBreakCatchRegexFR = try! Regex(#"[^\S\n]+{2,}"#)
+
+
+        
+    }
+    
 }
 
 enum RetokenisationType: String, Identifiable, CaseIterable{

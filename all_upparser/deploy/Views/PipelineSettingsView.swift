@@ -28,6 +28,7 @@ struct PipelineSettingsView: View {
 
     @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
     @AppStorage("insertNewTokPositionDefault") var insertNewTokPositionDefault: InsertPosition = .after
+    @AppStorage("progressBarStyleDefault") var progressBarStyleDefault: ProgressBarStyle = .apple
 
     //export
     @AppStorage("selectedExportFormatDefault") var selectedExportFormatDefault: ExportFormat = .xml
@@ -59,16 +60,12 @@ struct PipelineSettingsView: View {
     @State var tempTokens: [TempToken] = []
     @State var selectedRetokenisationType: RetokenisationType = .predict
     
-    
-
-    
     // export settings
     @State var fileName: String = "Filename"
     @State var targetFolderURL: URL? = nil
     @State var selectedExportFormat: ExportFormat = .xml
     @State var xmlAuthorName: String = "XML Author"
     @State var xmlTitle: String = "XML Title"
-    
     @State var includeConllSentIdLine: Bool = true
     @State var includeConllSentText: Bool = true
     
@@ -168,11 +165,7 @@ struct PipelineSettingsView: View {
 
                 // First Picker
                 Section("Parameters"){
-                    if inputFileType != .manual {
-                        Section{
-                            ImportFileViewSection(fileContainerModel: fileContainerModel, inputFileType: inputFileType )
-                        }
-                    } else {
+                    if inputFileType == .manual {
                         Section {
                             NavigationLink("Manual entry…"){
                                 ManualTokenisationView(
@@ -183,6 +176,10 @@ struct PipelineSettingsView: View {
                                     insertNewTokPosition: $insertNewTokPosition,
                                 )
                             }
+                        }
+                    } else {
+                        Section{
+                            ImportFileViewSection(fileContainerModel: fileContainerModel, inputFileType: inputFileType )
                         }
                     }
                     Toggle(isOn: $detectLanguage) {
@@ -233,11 +230,9 @@ struct PipelineSettingsView: View {
                             tokenizingMethod: $tokenizingMethod,
                             runResentenciser: $runResentenciser,
                             sentencizingMethod: $sentencizingMethod
-
-                            
                         )
                     }.accessibilityIdentifier("ProcessorStepLink")
-                }//end section
+                }
                
                 ExportConfigViewSection(
                     fileName: $fileName,
@@ -248,9 +243,7 @@ struct PipelineSettingsView: View {
                     includeConllSentIdLine: $includeConllSentIdLine,
                     includeConllSentText: $includeConllSentText
                 )
-                
 
-                
                 if runExplicit {
                     HStack{
                         Button {
@@ -276,7 +269,8 @@ struct PipelineSettingsView: View {
                         Text(outputString)
                     }
                 }
-                Section { // Go button
+                // MARK: the Go button
+                Section {
                     if !isPipelineReady {
                         HStack(spacing: 6) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -304,46 +298,29 @@ struct PipelineSettingsView: View {
                                 inputFileType: inputFileType,
                                 maxPipelineStep: maxPipelineStep,
                                 taggingInProgress: $taggingInProgress
-                            )
-                        })
+                            ) // close runTagging bracket
+                        } // close action brace
+                    ) // close button bracket
                     {
                         ZStack {
                             HStack {
-                                if xmlTitleDefault == "1"{
-                                Image(systemName: taggingInProgress ? "arrow.trianglehead.2.clockwise.rotate.90.circle.fill" : "play.fill")
-                                    .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)
-                                }
-                                    if xmlTitleDefault == "2" {
-                                        Image(systemName: taggingInProgress ? "gearshape.2" : "play.fill")
-                                            .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)
-                                    }//
-                                    if xmlTitleDefault == "3"{
                                 Image(systemName: taggingInProgress ? "progress.indicator" : "play.fill")
-                                    .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)}
+                                    .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)
                                 Text(taggingInProgress ? "Running" : "Run")
                                     .fontWeight(.semibold)
+                                //                            .opacity(taggingInProgress ? 1 : 1)
                             }
-                            .opacity(taggingInProgress ? 1 :0.5)
                         }
                         .font(.headline)
-
                         .frame(maxWidth: .infinity)
                         .padding()
                     }
                     .buttonStyle(.borderedProminent)
-//                    .background(alignment: .leading)  {
-//                        ProgressView(
-//                            value: Double(max(0, processedCount)),
-//                            total: Double(max(1, totalCount))
-//                        )
-//                        .tint((Color.accentColor.opacity(1)))
-//                        .scaleEffect(x: 1.0, y: 3.0, anchor: .center)
-//                        }
                     .clipShape(Capsule())
                     .controlSize(.large)
                     .disabled(taggingInProgress || !isPipelineReady)
                     .padding()
-                }
+                }//close Go button section
                 .alert(
                     " Error",
                     isPresented: Binding(
@@ -357,7 +334,6 @@ struct PipelineSettingsView: View {
                     Text(alertMessage ?? "")
                 }
             }
-
             // default values on appear
             .onAppear {
                 runExplicit = runExplicitDefault
@@ -379,6 +355,7 @@ struct PipelineSettingsView: View {
                     sentencizingMethod = sentencizingMethodDefault
                     runResentenciser = runResentenciserDefault
                     targetFolderURL = outputDirDefault
+                    progressBarStyle = progressBarStyleDefault
                     hasAppeared = true
                 }
             }
@@ -446,8 +423,8 @@ struct PipelineSettingsView: View {
                 includeConllSentText: includeConllSentText
             )
 
+            // MARK: tagging :
             Task {
-                // MARK: tagging :
                 do {
                     // get pipeline object
                     let pipeline = try UDPipeline(
@@ -455,67 +432,15 @@ struct PipelineSettingsView: View {
                         treebank: saveInputMetas.treebank.short)
                     var allSentences: [HashableSentence] = []
                     
-                    
                     //MARK: INGEST SENTS ::
-//                    switch inputFileType {
-//                    case .conll:
-//                        // resentencise internally in this function if set
-//                        allSentences = try conllFileToHashableSentForPipeline(
-//                            inputURL: saveInputMetas.inputURL
-//                        )
-//                    case .manual:
-//                        allSentences = builtSents.compactMap {$0.toHashableSent(tempToks: $0.tempToks) }
-//                        
-//                    case .xml:
-//                        // resentencise internally in this function if set
-//                        allSentences = try xmlToHashableSentForPipeline(
-//                            inputURL: saveInputMetas.inputURL
-//                        )
-//                    case .xmlConll:
-//                        // resentencise internally in this function if set
-//                        allSentences = try xmlConllFileToHashableSentForPipeline(
-//                            inputURL: saveInputMetas.inputURL
-//                        )
-//                    case .txt:
-//                        // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
-//                        
-//                        allSentences = try textFileToHashableSents(
-//                            inputURL: saveInputMetas.inputURL,
-//                            sentencizingMethod: sentencizingMethod,
-//                            tokenizingMethod: tokenizingMethod,
-//                            lang: saveInputMetas.lang,
-//                            pipeline: pipeline
-//                        )
-//                        //                    let sentencesAsStrings = textFileToSentStrings(
-//                        //                        inputURL: saveInputMetas.inputURL,
-//                        //                        sentencizingMethod: sentencizingMethod,
-//                        //                        lang: selectedLanguage
-//                        //                    )
-//                        //                    switch tokenizingMethod{
-//                        //                    case .custom:
-//                        //                        print("using custom rules:: need to get Swift version of rules……")
-//                        //                    case .nltokeniser:
-//                        //                        allSentences = getTokenisedSentences(sents: sentencesAsStrings, lang: selectedLanguage)
-//                        //
-//                        //                        print("nltokeniser")
-//                        //                    case .trained:
-//                        //                        // retokenize everything with model
-//                        //                        // MARK: can change this IN to be testSentences
-//                        //                        for sentence in sentencesAsStrings {
-//                        //                            allSentences.append(contentsOf: try pipeline.tokenize(sentence))
-//                        //
-//                        //                    }
-//                        //                    }
-//                        print("Mode a: \(allSentences.count) sents ")
-//                        
-//                    }
                     allSentences = try ingestSentEncapsulator(
                         inputFileType: inputFileType,
                         saveInputMetas: saveInputMetas,
                         builtSents: builtSents,
                         sentencizingMethod: sentencizingMethod,
                         tokenizingMethod: tokenizingMethod,
-                        pipeline: pipeline
+                        pipeline: pipeline,
+                        runExplicit: runExplicit
                     )
                     //MARK: check we have sents
                     guard !allSentences.isEmpty else {
@@ -524,10 +449,11 @@ struct PipelineSettingsView: View {
                     }
                     //MARK: run resentenciser on request
                     if ![InputFileType.txt, InputFileType.manual].contains(inputFileType) && runResentenciser{
-                        resentencizerOutputStrings = desentenciseAndResentencise(
+                        resentencizerOutputStrings = try desentenciseAndResentencise(
                             sentsToDiscard: allSentences,
                             lang: selectedLanguage,
-                            sentencizingMethod: sentencizingMethod
+                            sentencizingMethod: sentencizingMethod,
+                            runExplicit: runExplicit
                         )
                         runRetokeniser = true
                     }
@@ -535,19 +461,6 @@ struct PipelineSettingsView: View {
                     //MARK: run retokeniser if required/requested
                     if inputFileType != .txt && runRetokeniser && [TokenizingMethod.nltokeniser, TokenizingMethod.trained].contains(tokenizingMethod) {
                         print("Retokenising")
-//                        var sentencesAsStrings: [String] = []
-//                        if runResentenciser{
-//                            sentencesAsStrings = resentencizerOutputStrings
-//                        } else {
-//                            for sent in allSentences{
-//                                sentencesAsStrings.append(sent.detokenised)
-//                            }
-//                        }
-//                        let retokenisedSents = try stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: sentencesAsStrings, lang: saveInputMetas.lang, pipeline: pipeline)
-//                        guard !retokenisedSents.isEmpty else {
-//                            taggingInProgress.wrappedValue = false
-//                            throw ParseProcessingError.retokenisationError
-//                        }
                         allSentences = try retokenisationEncapsulator(
                             allSentences: allSentences,
                             tokenizingMethod: tokenizingMethod,
@@ -555,17 +468,11 @@ struct PipelineSettingsView: View {
                             pipeline: pipeline,
                             runResentenciser: runResentenciser,
                             resentencizerOutputStrings: resentencizerOutputStrings,
-                            taggingInProgress: taggingInProgress
+                            taggingInProgress: taggingInProgress,
+                            runExplicit: runExplicit
                         )
                     }
-//                    if inputFileType != .txt && runResentenciser{
-//                        // do this to resentencise
-//                        let sentsAsInput = allSentences
-//                        
-//                        let allSentencesAsStrings = applySentencizingMethodToString(normalizedText: normalizedText, lang: selectedLanguage, sentencizingMethod: sentencizingMethod)
-//                        allSentences = stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: allSentencesAsStrings, lang: selectedLanguage, pipeline: UDPipeline)
-//                        
-//                    }
+
                     // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
                     if runExplicit{
                         var nlInputTexts: [String] = []
@@ -576,13 +483,12 @@ struct PipelineSettingsView: View {
                             let _ = getNLTags(text: chunk)
                         }
                     }
-//                    print("Mysents count = \(allSentences.count)")
+
                     await MainActor.run {
                         totalCount = allSentences.count
                         appleProgress = Progress(totalUnitCount: Int64(max(allSentences.count, 1)))
                         startTime = Date()
                     }
-                    
 
                     // MARK: Step 2: pass prepared data to parsing pipeline
 #if DEBUG
@@ -609,7 +515,6 @@ struct PipelineSettingsView: View {
 #if DEBUG
                     dumpDetailsForRunExplicit(runExplicit: runExplicit, outSents: outSents, targetFolderURL: targetFolderURL, fileName: fileName)
 #endif
-                    
                     runOutput = makeTidyRunOutput(
                         outSents: outSents,
                         saveInputMetas: saveInputMetas,
