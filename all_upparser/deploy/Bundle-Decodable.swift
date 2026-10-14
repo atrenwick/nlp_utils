@@ -15,15 +15,12 @@ extension Bundle {
         let normalizedText: String
         guard let url = self.url(forResource: file, withExtension: nil) else {
             throw ParseProcessingError.fileNotInBundle
-//            fatalError("Failed to locate \(file) in the bundle")
         }
         guard let data = try? Data(contentsOf: url) else {
             throw ParseProcessingError.fileLoadError
-//            fatalError("Failed to load \(file)")
         }
         guard let text = String(data: data, encoding: .utf8) else {
             throw ParseProcessingError.utf8DecodeError
-//            fatalError("Failed to decode \(file) as UTF-8 text")
         }
         // BBEdit yields texts with tab = 4 spaces so send to \t here
         if format == "conllu" {

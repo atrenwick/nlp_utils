@@ -47,34 +47,44 @@ struct ExporterService {
         exportContent: String,
         customName: String,
         targetFolderURL: URL,
-        exportFormat: ExportFormat
+        exportFormat: ExportFormat,
+        runExplicit: Bool
         
     ) throws -> URL {
         let fileExtension = exportFormat.fileExtension
       
-        print("step1 success")
+        if runExplicit{
+            print("step1 success")
+        }
         // 2. Format sanitized filename
         var safeName = customName.sanitizedFileName
         if !safeName.hasSuffix(".\(fileExtension)") {
                     safeName += ".\(fileExtension)"
                 }
-        print("step2 success")
+        if runExplicit{
+            print("step2 success")
+        }
         // 3. Construct destination path inside the chosen directory
         let destinationFileURL = targetFolderURL.appendingPathComponent(safeName)
-        print("step3 success")
+        if runExplicit{
+            print("step3 success")
+        }
         // 4. Elevate security permissions for external directory write
         let gotAccess = targetFolderURL.startAccessingSecurityScopedResource()
         defer {
             if gotAccess {
                 targetFolderURL.stopAccessingSecurityScopedResource()
-                print("step4 success")
+                if runExplicit{
+                    print("step4 success")
+                }
             }
         }
         
         // 5. Write
         try exportContent.write(to: destinationFileURL, atomically: true, encoding: .utf8)
-        print("step5 success URL == \(destinationFileURL.path())")
-        
+        if runExplicit{
+            print("step5 success URL == \(destinationFileURL.path())")
+        }
         return destinationFileURL
     }
 }
@@ -234,9 +244,12 @@ struct Sentence : Identifiable {
         return lineStore.joined(separator: "\n")
     }
     var conll: String {
-        var testText = ["## thsi is a test"]
-        testText.append(contentsOf: conllData.map {$0.form})
-        return testText.joined(separator: "\n")
+//        var testText = [""]
+         (
+            conllData.map {$0.form}
+         ).joined(separator: "\n")
+//        testText.append(contentsOf: conllData.map {$0.form})
+//         testText.joined(separator: "\n")
     }
     
     var conllTidy: String {

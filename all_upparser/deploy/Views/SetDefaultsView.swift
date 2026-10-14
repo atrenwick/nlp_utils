@@ -25,7 +25,8 @@ struct SetDefaultsView: View {
     @AppStorage("insertNewTokPositionDefault") var insertNewTokPositionDefault: InsertPosition = .after
     @AppStorage("runRetokeniserDefault") var runRetokeniserDefault: Bool = false
     @AppStorage("runResentenciserDefault")  var runResentenciserDefault: Bool = false
-
+    @AppStorage("progressBarStyleDefault") var progressBarStyleDefault: ProgressBarStyle = .apple
+    
     //export
     @AppStorage("xmlAuthorDefault")  var xmlAuthorDefault: String = "XML Author"
     @AppStorage("xmlTitleDefault")  var xmlTitleDefault: String = "XML Title"
@@ -78,16 +79,28 @@ struct SetDefaultsView: View {
                     .onChange(of: selectedLanguageDefault) { _, newLang in
                         selectedTreebankDefault = newLang.defaultTB
                     }
-                    
+                    Picker("Max pipeline step", selection: $maxPipelineStepDefault){
+                        ForEach(PipelineStep.allCases){step in
+                            Text(step.title)
+                        }
+                    }
+
+                }
+                Section("Tokenisation"){
+                    Toggle(isOn: $runRetokeniserDefault){
+                        Text("Retokenise by default")
+                    }
                     Picker("Tokenisation method", selection: $tokenizingMethodDefault){
                         ForEach(TokenizingMethod.allCases){method in
                             Text(method.rawValue)
                         }
                     }
-                    Toggle(isOn: $runRetokeniserDefault){
-                        Text("Retokenise by default")
+                    Picker("Insert new token position", selection: $insertNewTokPositionDefault){
+                        ForEach(InsertPosition.allCases){position in
+                            Text(position.rawValue)}
                     }
-
+                }
+                Section("Sentencization"){
                     Picker("Sentencization method", selection: $sentencizingMethodDefault){
                         ForEach(SentencizingMethod.allCases){method in
                             Text(method.rawValue)
@@ -96,18 +109,14 @@ struct SetDefaultsView: View {
                     Toggle(isOn: $runResentenciserDefault){
                         Text("Resentencise by default")
                     }
-
-                    Picker("Insert new token position", selection: $insertNewTokPositionDefault){
-                        ForEach(InsertPosition.allCases){position in
-                            Text(position.rawValue)}
-                    }
                     
-                    Picker("Max pipeline step", selection: $maxPipelineStepDefault){
-                        ForEach(PipelineStep.allCases){step in
-                            Text(step.title)
+                }
+                Section("View"){
+                    Picker("Progress bar style", selection: $progressBarStyleDefault){
+                        ForEach(ProgressBarStyle.allCases){style in
+                            Text(style.rawValue).tag(style)
                         }
                     }
-                    
                 }
                 Section("Output file"){
                     TextField("Filename", text: $fileNameDefault)
@@ -152,8 +161,6 @@ struct SetDefaultsView: View {
                         print("Folder selection error: \(error.localizedDescription)")
                     }
                 }
-            
-
             }
         }
     }

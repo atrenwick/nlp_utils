@@ -57,7 +57,6 @@ class SWParser: NSObject, XMLParserDelegate {
     private var currentSID: String?
     private var currentTokens: [String] = []
     private var insideS = false
-
     private var insideW = false
     private var currentTokText: String = ""
 

@@ -95,7 +95,11 @@ final class UDPipeline {
     private let featsVocab: Vocab
     private let deprelVocab: Vocab
 //    private let lemmaRuleVocab: Vocab
-
+    // computed property of class to read from runExplicit every time a method runs
+    private var runExplicit: Bool {
+            UserDefaults.standard.bool(forKey: "runExplicit")
+        }
+    
     init(languageCode: String, treebank: String) throws {
         tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer_\(treebank)")
         taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser_\(treebank)")
@@ -121,9 +125,7 @@ final class UDPipeline {
     }
 
     // MARK: Step 1 -- character-level tokenizer / sentence segmenter
-
-    /// Runs raw text through the tokenizer model and returns one
-    /// `TokenisedSentence` per detected sentence, numbered from "1".
+    /// Run raw text through tokenizer model, returning 1x [HashableSent] per sent, numbered 1->
     func tokenize(_ text: String) throws -> [HashableSentence] {
         let chars = Array(text)
         guard !chars.isEmpty else { return [] }
@@ -170,7 +172,6 @@ final class UDPipeline {
     }
 
     // MARK: Step 2 -- run the tagger-parser
-
     /// Holds the raw tensors from 1 tagger_parser model call for 1 sent
     ///`seqLen` includes the synthetic ROOT index 0, so real words are indices 1,2....<seqLen.
     private struct TaggerRawOutput {
@@ -220,7 +221,9 @@ final class UDPipeline {
                 let shape = output.featureValue(for: name)?.multiArrayValue?.shape ?? []
                 return "\(name): \(shape)"
             }
-            print(info)
+            if runExplicit {
+                print(info)
+            }
             throw UDPipelineError.predictionFailed("missing expected model output type 310")
         }
         //need to get, decode UPOS so they can be passed to lemmatiser
@@ -237,15 +240,12 @@ final class UDPipeline {
             // new error type to add
             throw UDPipelineError.lemmatizationFailed("lemmatizer failed: \(error)")
         }
-    
         
         return TaggerRawOutput(
             sentence: sentence, seqLen: seqLen,
             uposLogits: uposLogits, xposLogits: xposLogits, featsLogits: featsLogits,
             decodedLemmas: lemmas, arcLogits: arcLogits, labelLogits: labelLogits
         )
-
-
     }
 
     // MARK: Step 2 (decode) -- UPOS
@@ -275,8 +275,8 @@ final class UDPipeline {
     // MARK: Step 3 (decode) -- lemmatisation with edit-script rule
     /// //NOTE: getLemmas uses the NEW lemmatizer.
     /// decodeLemmas function uses edit rules, and is here to enable easy roll-back, test, comparison
-    /// One lemma string per real word, reconstructed by applying the
-    /// predicted edit-script rule to that word's surface form.
+    /// 1x lemma string per real word, made by applying the predicted edit-script rule to word's raw form.
+    ///
 //    private func decodeLemmas(_ raw: TaggerRawOutput) -> [String] {
 //        zip(1..<raw.seqLen, raw.sentence.tokens).map { t, form in
 //            let id = parserArgmax(raw.lemmaLogits, prefix: [0, t], dimSize: lemmaRuleVocab.itos.count)
@@ -307,18 +307,17 @@ final class UDPipeline {
     }
 
     // MARK: Step 5 (decode) -- dependency parsing
-
-    /// One (head, deprel) pair per real word, decoded via Chu-Liu-Edmonds
-    /// (maximum spanning arborescence, rooted at node 0), which guarantees
-    /// a valid, cycle-free dependency tree with a single root -- unlike a
-    /// per-word greedy parserArgmax, which can produce cycles or multiple roots.
+    /// One (head, deprel) pair per real word, decoded via Chu-Liu-Edmonds (max spanning arborescence,
+    /// rooted at node 0), which guarantees a valid, cycle-free dependency tree with a single root --
+    /// unlike a per-word greedy parserArgmax, which can produce cycles or multiple roots.
     private func decodeDependencies(_ raw: TaggerRawOutput) -> [(head: Int, deprel: String)] {
         let n = raw.seqLen
-        print("Decoding deps:: raw seq len == \(n)")
-        // Dense head-score matrix: scoreMatrix[h][d] = score of dependent d
-        // attaching to head h. d == 0 (root can't be a dependent) and
-        // h == d (a word can't be its own head) are left at -infinity and
-        // are never read by the arc-selection loops below.
+        if runExplicit {
+            print("Decoding deps:: raw seq len == \(n)")
+        }
+        // Dense head-score matrix: scoreMatrix[h][d] = score of dependent d attaching to head h.
+        // d == 0 (root can't be a dependent) and h == d (a word can't be its own head) are left
+        // at -infinity and are never read by the arc-selection loops below.
         var scoreMatrix = [[Double]](repeating: [Double](repeating: -Double.infinity, count: n), count: n)
         for d in 1..<n {
             for h in 0..<n where h != d {
@@ -327,11 +326,12 @@ final class UDPipeline {
         }
 		//print("scoreMatrix == \(scoreMatrix)")
         let heads = solveArborescence(activeNodes: Array(0..<n), scoreMatrix: scoreMatrix)
-		//print("heads == \(heads)")
+        if runExplicit {
+            print("heads == \(heads)")
+        }
         return (1..<n).map { t in
-            // Every non-root node is guaranteed a parent by
-            // solveArborescence; the `?? 0` fallback is defensive only.
-            let head = heads[t] ?? 0
+            // Every non-root node is guaranteed a parent by solveArborescence;
+            let head = heads[t] ?? 0 // nil colalesce to be safe
 
             var bestDeprelId = 0
             var bestDeprelScore = -Double.infinity
@@ -339,26 +339,23 @@ final class UDPipeline {
                 let v = raw.labelLogits[[0, c, t, head] as [NSNumber]].doubleValue
                 if v > bestDeprelScore { bestDeprelScore = v; bestDeprelId = c }
             }
-            //print("Decode deps::\n head ==\(head); deprel===\(deprelVocab.decode(bestDeprelId))")
-
+            if runExplicit {
+                print("Decode deps::\n head ==\(head); deprel===\(deprelVocab.decode(bestDeprelId))")
+            }
             return (head: head, deprel: deprelVocab.decode(bestDeprelId))
         }
     }
 
     // MARK: Chu-Liu-Edmonds maximum spanning arborescence
-
-    /// Solves the maximum-weight spanning arborescence rooted at node 0
-    /// over exactly `activeNodes` (which must include 0), using
-    /// `scoreMatrix` for edge weights. Returns a map from every active node
-    /// except 0 to its chosen parent (also an active node).
+    /// Solves the maximum-weight spanning arborescence rooted at node 0 over exactly `activeNodes`
+    /// (which must include 0), using `scoreMatrix` for edge weights. Returns a map from every
+    /// active node except 0 to its chosen parent (also an active node).
     ///
-    /// This is a standard recursive implementation of Chu-Liu-Edmonds:
-    /// greedily pick each node's best incoming edge; if that produces a
-    /// cycle, contract the cycle into one representative node with
-    /// reweighted edges, recurse on the smaller graph, then expand the
-    /// result back out. Recursion terminates because each contraction
-    /// strictly reduces the number of active nodes, and a graph with no
-    /// cycle is returned immediately as-is.
+    /// This is a standard recursive implementation of Chu-Liu-Edmonds: greedily pick each node's
+    /// best incoming edge; if that produces a cycle, contract the cycle into one representative
+    /// node with reweighted edges, recurse on the smaller graph, then expand the result back out.
+    /// Recursion terminates because each contraction strictly reduces the number of active nodes,
+    /// and a graph with no cycle is returned immediately as-is.
     private func solveArborescence(activeNodes: [Int], scoreMatrix: [[Double]]) -> [Int: Int] {
         // Step 1: each non-root active node's single best incoming edge.
         var bestParent: [Int: Int] = [:]
@@ -377,15 +374,13 @@ final class UDPipeline {
             return bestParent
         }
 
-        // Step 2: contract the cycle into a single representative node
-        // (reusing the smallest node id in the cycle, rather than minting a
-        // new one, keeps every id a real, meaningful node throughout).
+        // Step 2: contract the cycle into a single representative node (reusing the smallest node id in
+        // the cycle, rather than minting a new one, keeps every id a real, meaningful node throughout)
         let cycleSet = Set(cycle)
         let representative = cycle.min()!
 
-        // Total weight of the cycle's own internal edges -- used below to
-        // work out the true cost of "breaking" the cycle at whichever node
-        // ends up accepting an external edge instead.
+        // Total weight of the cycle's own internal edges -- used below to work out true cost of "breaking"
+        // the cycle at whichever node ends up accepting an external edge instead.
         var cycleWeight = 0.0
         for v in cycle {
             cycleWeight += scoreMatrix[bestParent[v]!][v]
@@ -394,8 +389,7 @@ final class UDPipeline {
         let newActiveNodes = activeNodes.filter { !cycleSet.contains($0) || $0 == representative }
         var newScoreMatrix = scoreMatrix
 
-        // Bookkeeping so the contracted-graph result can be expanded back
-        // into real node ids afterward.
+        // Bookkeeping so the contracted-graph result can be expanded back into real node ids afterward
         var enterFrom: [Int: Int] = [:] // u -> which cycle node the (u -> representative) edge really targets
         var exitTo: [Int: Int] = [:]    // w -> which cycle node the (representative -> w) edge really originates from
 
@@ -405,15 +399,13 @@ final class UDPipeline {
             var bestOut = -Double.infinity
             var bestVOut = -1
             for v in cycle {
-                // Incoming: cost of accepting edge (u -> v) instead of v's
-                // current in-cycle edge, while keeping every other cycle
-                // edge intact.
+                // Incoming: cost of accepting edge (u -> v) instead of v's  current in-cycle edge, while
+                // keeping every other cycle edge intact.
                 let reweighted = scoreMatrix[u][v] - scoreMatrix[bestParent[v]!][v] + cycleWeight
                 if reweighted > bestIn { bestIn = reweighted; bestVIn = v }
 
-                // Outgoing: plain best edge leaving the cycle to u -- no
-                // reweighting needed, since which internal edge eventually
-                // gets broken doesn't affect edges leaving the cycle.
+                // Outgoing: plain best edge leaving the cycle to u -- no reweighting needed, since
+                // which internal edge eventually gets broken doesn't affect edges leaving the cycle.
                 let s = scoreMatrix[v][u]
                 if s > bestOut { bestOut = s; bestVOut = v }
             }
@@ -426,10 +418,9 @@ final class UDPipeline {
         // Step 3: recurse on the smaller, contracted graph.
         let contractedParents = solveArborescence(activeNodes: newActiveNodes, scoreMatrix: newScoreMatrix)
 
-        // Step 4: expand back. Every cycle node keeps its original in-cycle
-        // parent, except the one node where an external edge broke the
-        // cycle -- that node's real parent is whichever external node fed
-        // into the cycle at that point.
+        // Step 4: expand back. Every cycle node keeps its original in-cycle parent, except the one node
+        // where an external edge broke the cycle -- that node's real parent is whichever external node
+        // fed into the cycle at that point.
         var result = contractedParents
         result.removeValue(forKey: representative)
         for v in cycle {
@@ -439,15 +430,13 @@ final class UDPipeline {
             result[breakNode] = repParent
         }
 
-        // Any outside node whose contracted parent came out as the
-        // representative actually attaches to whichever real cycle node
-        // achieved that best exit edge.
+        // Any outside node whose contracted parent came out as the representative actually attaches to
+        // whichever real cycle node achieved that best exit edge.
         for (node, parent) in contractedParents where parent == representative {
             if let realParent = exitTo[node] {
                 result[node] = realParent
             }
         }
-
         return result
     }
 
@@ -477,8 +466,7 @@ final class UDPipeline {
     }
 
     // MARK: Per-sentence processing: for progress-reporting callers
-    /// Runs the same field-decoding logic as `run(text:level:mode:)`, but takes
-    /// 1 tokenised sentence at a time, returning decoded `Token`
+    /// same field-decoding logic as `run(text:level:mode:)`,with 1x tokenised sent a time ->Token
     func runOnSentence(_ sentence: HashableSentence, level: Int) throws -> [Token] {
         guard (1...5).contains(level) else {
             throw UDPipelineError.invalidLevel(level)
@@ -542,8 +530,7 @@ final class UDPipeline {
         }
     }
 
-    /// Formats tokens of one tagged sentence using the same `mode`
-    /// rules as `run(text:level:mode:)`for `runOnSentence`
+    /// Format tok of a tagged sent using `mode` like in `run(text:level:mode:)`for `runOnSentence`
     func formatSentence(_ tokens: [Token], mode: String) throws -> [String] {
         var lines: [ConllLineContent] = tokens.map { .row($0) }
         lines.append(.blank)
@@ -561,26 +548,18 @@ final class UDPipeline {
     }
 
     // MARK: Controller
-
-    /// Runs raw text through the pipeline up to (and including) `level`,
-    /// and returns CoNLL-U-style lines (blank line between sentences).
-    /// Fields beyond the requested level are left as "_", matching CoNLL-U
-    /// convention for unannotated columns.
-    ///
+    /// Runs raw text through the pipeline up to (and including) `level`, and returns CoNLL-U-style
+    /// lines (blank line between sentences). Fields beyond the requested level are _ per convention
     ///   1 = tokenize only
     ///   2 = + UPOS
     ///   3 = + lemma
     ///   4 = + FEATS
     ///   5 = + dependency parsing (HEAD, DEPREL)
-    ///
-    /// XPOS is always "_" -- it wasn't one of the requested levels. See the
-    /// file header if you want it added to a level.
+    /// XPOS is always "_" as not trained
     ///
     /// `mode` controls formatting, independent of `level`:
-    ///   "raw"  -- plain tab-separated CoNLL-U fields (what a .conllu file
-    ///             on disk actually looks like)
-    ///   "tidy" -- the same fields, but column-aligned with padding so they
-    ///             line up when displayed in a monospaced Text view
+    ///   "raw"  -- plain tab-separated CoNLL-U fields
+    ///   "tidy" -- the same fields, data, but column-aligned with padding
     func run(text: String, level: Int, mode: String) throws -> [String] {
         guard (1...5).contains(level) else {
             throw UDPipelineError.invalidLevel(level)
@@ -714,7 +693,4 @@ final class UDPipeline {
         }
         return best
     }
-
-
-
 }

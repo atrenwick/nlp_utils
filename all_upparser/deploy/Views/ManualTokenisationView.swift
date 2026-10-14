@@ -65,9 +65,13 @@ struct ManualTokenisationView: View {
                         } else {
                             thisSentence = newSentence
                         }
-                        let toksAsStrings = applyNaiveTokenisation(language: selectedLanguage, myString: thisSentence)
-                       tempTokens = toksAsStrings.map {$0.asTempToken}
-                        
+                        do {
+                            let toksAsStrings = try applyNaiveTokenisation(language: selectedLanguage, myString: thisSentence)
+                           tempTokens = toksAsStrings.map {$0.asTempToken}
+                        } catch {
+                            ParseProcessingError.retokenisationError
+                        }
+
                     } label: {
                         Text("Tokenise")
                     }
@@ -179,3 +183,7 @@ func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: I
     // We use the validOffsets to ensure we only touch existing indices.
     array.remove(atOffsets: validOffsets)
 }
+
+
+
+
