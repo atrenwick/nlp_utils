@@ -198,7 +198,7 @@ func _conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Senten
 
                 guard lineChunks.count == 10 else {
                     let errorstring = lineChunks.count == 0 ?  "no chunks " :lineChunks.joined(separator: "<TAB>")
-                    throw ParseProcessingError.ConllParsingError(
+                    throw ParseProcessingError.conllParsingError(
                         line: String("Sent:\(sentNum + 1) line \(lineNum + 1) :: \(errorstring)"),
                         filename: String(inputURL.lastPathComponent))
 
@@ -238,12 +238,12 @@ func _makeConllLinesFromURL(inputURL: URL?) throws -> [[String]]{
     do {
         let normalizedText = try readFromFile(inputURL: inputURL)
         guard  !normalizedText.isEmpty else {
-            throw ParseProcessingError.ReadFromSandboxError
+            throw ParseProcessingError.readFromSandboxError
         }
         
         let sentenceChunks: [String] = _conllBlobToChunks(conllBlob: normalizedText)
         guard !sentenceChunks.isEmpty else {
-            throw ParseProcessingError.ConllLineIdentificationError
+            throw ParseProcessingError.conllLineIdentificationError
         }
 
         let hashableTokenLists: [[String]] = _conllChunksToLines(conllChunks: sentenceChunks)
@@ -1253,6 +1253,62 @@ func getNLTags(text: String) -> NLParseResults{
     let namedEntitiesReturn: NLParseReturn = NLParseReturn(tag: "namedEntities", nlReturn: namedEntities)
     return NLParseResults(posReturn: posReturn, lemmaReturn: lemmaReturn, namedEntities: namedEntitiesReturn)
 }
+
+
+
+func postprocessSentence(sentence: HashableSentence, parsedTokens: [Token], runExplicit: Bool, maxPipelineStep: PipelineStep )->Sentence{
+    
+    if runExplicit {
+        print("max requested step == \(maxPipelineStep.rawValue)")
+    }
+    let mySent: Sentence = Sentence(
+        sentID: sentence.id,
+        conllData: parsedTokens,
+        conllMetas:  []
+    )
+    return mySent
+}
+
+
+
+
+
+
+
+
+
+
+
+//}
+//        if let inputFileType = inputFileType{
+//            self.inputFileType = inputFileType
+//        } else {
+
+//        func fooInit(inputFileType: InputFileType? = nil){
+//                if let inputFileType = inputFileType{
+//                    self.inputFileType = inputFileType
+//                } else {
+//                    if let foo = InputFileType(
+//                        rawValue: TaggerConfig.resolveString(passed: nil, key: "inputFileTypeDefault", default: InputFileType.txt.rawValue)
+//                    ){
+//                        self.inputFileType = foo
+//                    }
+//                }
+//        }
+func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: IndexSet) {
+    // 1. Guard against empty inputs
+    guard !offsets.isEmpty else { return }
+    
+    // 2. Filter the offsets to ensure they are actually within the current bounds.
+    let validOffsets = IndexSet(offsets.filter { $0 < array.count })
+    // If no offsets are valid (e.g., the user swiped on a deleted cell), just bail.
+    guard !validOffsets.isEmpty else { return }
+    
+    // 3. Perform the removal
+    // We use the validOffsets to ensure we only touch existing indices.
+    array.remove(atOffsets: validOffsets)
+}
+
 
 
 

@@ -84,12 +84,12 @@ extension PipelineSettingsView {
         }
         
         // Rule 2: Check custom output filename is typed
-        if fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if myConfig.exportConfig.fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             missing.append("Output Filename")
         }
         
         // Rule 3: Check target folder (or destination setting)
-        if targetFolderURL == nil {
+        if myConfig.exportConfig.targetFolderURL == nil {
             missing.append("Export Directory")
         }
         

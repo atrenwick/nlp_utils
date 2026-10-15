@@ -327,6 +327,178 @@ struct Sentence : Identifiable {
     }
 }
 
+
+
+struct TaggerConfig{
+    // MARK: vars to bring in substructs
+    var inputConfig: InputConfig
+    var parsingConfig: ParsingConfig
+    var exportConfig: ExportConfig
+    // var progressConfig: ProgressConfig
+    // var reportingConfig: ReportingConfig
+    // var visibilityConfig: VisibilityConfig
+    
+    struct InputConfig{
+        var inputFileType: InputFileType
+        var selectedInputFile: URL?
+        var detectLanguage: Bool
+        init(
+            inputFileType: InputFileType? = nil,
+            detectLanguage: Bool? = nil,
+            selectedInputFile: URL? = nil
+        ){
+            self.inputFileType = TaggerConfig.resolveRepresentable(passed: inputFileType, key: "inputFileTypeDefault", fallback: InputFileType.txt )
+            self.detectLanguage = TaggerConfig.resolveBool(passed: detectLanguage, key: "detectLangDefault", default: false)
+        }
+    }
+    
+    struct ParsingConfig{
+        var selectedLanguage: Language
+        var selectedTreebank: Language.Treebank
+        var maxPipelineStep: PipelineStep
+        var runResentenciser: Bool
+        var runRetokeniser: Bool
+        var tokenizingMethod: TokenizingMethod
+        var sentencizingMethod: SentencizingMethod
+        var insertNewTokPosition: InsertPosition
+        var selectedRetokenisationType: RetokenisationType
+        
+        // need to add = nil in init of it's to truly allow no parameters to be specified
+        init(
+            selectedLanguage: Language? = nil,
+            selectedTreebank: Language.Treebank? = nil,
+            maxPipelineStep: PipelineStep? = nil,
+            runResentenciser: Bool? = nil,
+            runRetokeniser: Bool? = nil,
+            tokenizingMethod: TokenizingMethod? = nil,
+            sentencizingMethod: SentencizingMethod? = nil,
+            insertNewTokPosition: InsertPosition? = nil,
+            selectedRetokenisationType: RetokenisationType? = nil
+        ){
+            self.selectedLanguage = TaggerConfig.resolveRepresentable(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
+            self.selectedTreebank = TaggerConfig.resolveRepresentable(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
+            self.runResentenciser = TaggerConfig.resolveBool(passed: runResentenciser, key: "runResentenciserDefault", default: false)
+            self.runRetokeniser = TaggerConfig.resolveBool(passed: runRetokeniser, key: "runRetokeniserDefault", default: false)
+            self.maxPipelineStep = TaggerConfig.resolveRepresentable(passed: maxPipelineStep, key: "maxPipelineStepDefault", fallback: .step5 )
+            self.tokenizingMethod = TaggerConfig.resolveRepresentable(passed: tokenizingMethod, key: "tokenizingMethodDefault", fallback: .nltokeniser )
+            self.sentencizingMethod = TaggerConfig.resolveRepresentable(passed: sentencizingMethod, key: "sentencizingMethodDefault", fallback: .nlSentencizer )
+            self.insertNewTokPosition = TaggerConfig.resolveRepresentable(passed: insertNewTokPosition, key: "insertNewTokPositionDefault", fallback: .after )
+            self.selectedRetokenisationType = TaggerConfig.resolveRepresentable(passed: selectedRetokenisationType, key: "retokenisationTypeDefault", fallback: .predict )
+        }
+    }
+    struct ExportConfig{
+        var fileName: String
+        var targetFolderURL: URL?
+        var selectedExportFormat: ExportFormat
+        var xmlAuthorName: String
+        var xmlTitle: String
+        var includeConllSentIdLine: Bool
+        var includeConllSentText: Bool
+        init(
+            fileName: String? = nil,
+            targetFolderURL: URL? = nil,
+            selectedExportFormat: ExportFormat? = nil,
+            xmlAuthorName: String? = nil,
+            xmlTitle: String? = nil,
+            includeConllSentIdLine: Bool? = nil,
+            includeConllSentText: Bool? = nil
+        ) {
+            self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileNameDefault")
+            
+            self.targetFolderURL = targetFolderURL
+            ?? URL(string: UserDefaults.standard.string(forKey: "outputDirDefault") ?? "")
+            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            
+            self.selectedExportFormat = TaggerConfig.resolveRepresentable(passed: selectedExportFormat, key: "selectedExportFormatDefault", fallback: .xml )
+            self.xmlAuthorName = TaggerConfig.resolveString(passed: xmlAuthorName, key: "xmlAuthorDefault" )
+            self.xmlTitle = TaggerConfig.resolveString(passed: xmlTitle, key: "xmlTitleDefault")
+            self.includeConllSentIdLine = TaggerConfig.resolveBool(passed: includeConllSentIdLine, key: "includeConllSentIdLineDefault", default: true )
+            self.includeConllSentText = TaggerConfig.resolveBool(passed: includeConllSentText, key: "includeConllSentTextDefault", default: true )
+        }
+    }
+    //    struct ProgressConfig{
+    //        let appleProgress: Progress
+    //        let progressBarStyle: ProgressBarStyle
+    //        let startTime: Date?
+    //        let processedCount: Int
+    //        let totalCount: Int
+    //        let hasStarted: Bool
+    //    }
+    //    struct ReportingConfig{
+    //        let topLevelOutputList: [RunOutput]
+    //        let exportStatusMessage: String?
+    //        let outputString: String
+    //        let runOutput: RunOutput?
+    //        let alertMessage: String?
+    //        let runExplicit: Bool
+    //    }
+    //    struct VisibilityConfig{
+    //        //controlling visibility
+    //        let taggingInProgress: Bool
+    //        let showImporter: Bool
+    //        let hasAppeared: Bool
+    //        let isSelectingFolder: Bool
+    //    }
+    //    // sentences ::
+    //    struct OutputData{
+    //        let builtSents: [BuiltSentHolder]
+    //        let sentsToRetokenise: [String]
+    //        let exportContent: String = ""
+    //
+    //    }
+    //
+    
+    // top level init
+    init(
+        parsingConfig: ParsingConfig = ParsingConfig(),
+        inputConfig: InputConfig = InputConfig(),
+        exportConfig: ExportConfig = ExportConfig()
+    ) {
+        self.parsingConfig = parsingConfig
+        self.inputConfig = inputConfig
+        self.exportConfig = exportConfig
+    }
+    
+    // MARK: - Centralized Static Solvers
+    static func resolveBool(passed: Bool?, key: String, default fallback: Bool = false) -> Bool {
+        if let value = passed { return value }
+        // Check if key exists, otherwise return the fallback default
+        return UserDefaults.standard.object(forKey: key) != nil ? UserDefaults.standard.bool(forKey: key) : fallback
+    }
+    // for strings,
+    static func resolveString(passed: String?, key: String, default fallback: String = "") -> String {
+        if let value = passed { return value }
+        return UserDefaults.standard.string(forKey: key) ?? fallback
+    }
+    // Overloaded resolvers for string and Int backed enums
+    static func resolveRepresentable<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == String {
+        if let value = passed { return value }
+        
+        // Try reading the raw string from UserDefaults and converting it back to the enum
+        if let savedString = UserDefaults.standard.string(forKey: key),
+           let enumValue = T(rawValue: savedString) {
+            return enumValue
+        }
+        return fallback
+    }
+    
+    //
+    static func resolveRepresentable<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == Int {
+        if let value = passed { return value }
+        
+        // Note: Using object(forKey:) as? Int avoids UserDefaults' default '0' bug
+        // if the key hasn't been saved yet.
+        if let savedInt = UserDefaults.standard.object(forKey: key) as? Int,
+           let enumValue = T(rawValue: savedInt) {
+            return enumValue
+        }
+        return fallback
+    }
+    
+}
+
+
+
 // struct for manually tokenised, modified inputs, before conversion to Token
 struct TempToken: Identifiable, Hashable {
     var id = UUID()

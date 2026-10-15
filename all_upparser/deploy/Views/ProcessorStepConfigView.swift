@@ -8,26 +8,35 @@
 import SwiftUI
 
 struct ProcessorStepConfigViewSection: View {
+    @Binding var myConfig: TaggerConfig
 
-    @Binding var maxActiveStep: PipelineStep
-    @Binding var inputFileType: InputFileType
-    @Binding var runRetokeniser: Bool
-    @Binding var tokenizingMethod: TokenizingMethod
-    
     var body: some View {
         Form{
             Section("Retokenisation"){
-                Toggle("1. Retokenisation", isOn: $runRetokeniser)
+                Toggle("0. Retokenisation", isOn: $myConfig.parsingConfig.runRetokeniser)
                 
                 Group{
-                    Picker("Tokenizing method", selection: $tokenizingMethod) {
+                    Picker("Tokenizing method", selection: $myConfig.parsingConfig.tokenizingMethod) {
                         ForEach(TokenizingMethod.allCases.dropLast()){tokMethod in
                             Text(tokMethod.rawValue)
                         }
                     }
                 }
-                .disabled(!runRetokeniser)
-                .foregroundStyle(runRetokeniser ? .primary : .secondary)
+                .disabled(!myConfig.parsingConfig.runRetokeniser)
+                .foregroundStyle(myConfig.parsingConfig.runRetokeniser ? .primary : .secondary)
+            }
+            Section("Sentencisation"){
+                Toggle("1. Resentencise", isOn: $myConfig.parsingConfig.runResentenciser)
+                
+                Group{
+                    Picker("Sentencising method", selection: $myConfig.parsingConfig.sentencizingMethod) {
+                        ForEach(SentencizingMethod.allCases){sentMethod in
+                            Text(sentMethod.rawValue)
+                        }
+                    }
+                }
+                .disabled(!myConfig.parsingConfig.runResentenciser)
+                .foregroundStyle(myConfig.parsingConfig.runResentenciser ? .primary : .secondary)
             }
             Section(header: Text("Pipeline Execution Steps")) {
                 ForEach(PipelineStep.allCases) { step in
@@ -42,7 +51,7 @@ struct ProcessorStepConfigViewSection: View {
         }
     }
     private func isStepActive(_ step: PipelineStep) -> Bool {
-        let maxStep = maxActiveStep
+        let maxStep = myConfig.parsingConfig.maxPipelineStep
         if maxStep >= step { return true }
         return false
     }
@@ -56,13 +65,13 @@ struct ProcessorStepConfigViewSection: View {
             set: { isTurningOn in
                 if isTurningOn {
                     // Enabling step 3 automatically turns on steps 1 & 2
-                    maxActiveStep = step
+                    myConfig.parsingConfig.maxPipelineStep = step
                 } else {
                     // Disabling step 2 drops max active step to step 1 (or nil if step 1 turned off)
                     if let previousStep = PipelineStep(rawValue: step.rawValue - 1) {
-                        maxActiveStep = previousStep
+                        myConfig.parsingConfig.maxPipelineStep = previousStep
                     } else {
-                        maxActiveStep = .step2
+                        myConfig.parsingConfig.maxPipelineStep = .step2
                     }
                 }
             }
@@ -71,15 +80,7 @@ struct ProcessorStepConfigViewSection: View {
 }
 
 #Preview {
-    @Previewable @State var maxActiveStep: PipelineStep = .step2
-    @Previewable @State var tokenizingMethod: TokenizingMethod = .nltokeniser
-    @Previewable @State var inputFileType: InputFileType = .conll
-    @Previewable @State var runRetokeniser: Bool = true
-    ProcessorStepConfigViewSection(
-        maxActiveStep: $maxActiveStep,
-        inputFileType: $inputFileType,
-        runRetokeniser: $runRetokeniser,
-        tokenizingMethod: $tokenizingMethod
-    )
+    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
+    ProcessorStepConfigViewSection(myConfig: $myConfig)
 }
 

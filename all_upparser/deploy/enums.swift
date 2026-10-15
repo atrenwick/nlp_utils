@@ -172,63 +172,63 @@ enum Language: String, CaseIterable, Identifiable {
 
 
 enum ParseProcessingError: LocalizedError{
+    case badTempTokens
+    case conllParsingError(line: String, filename:String)
+    case conllLineIdentificationError
+    case conllChunkToLineError
     case fileLoadError
     case fileNotInBundle
-    case missingURL
-    case parserCreationError(file: URL)
-    case utf8DecodeError
-    case xmlParserFailure(line: Int, reason: String)
-    case noSentencesLoaded
-    case retokenisationError
-    case noRunOutput
-    case ConllParsingError(line: String, filename:String)
-    case ReadFromSandboxError
-    case ConllLineIdentificationError
-    case conllChunkToLineError
+    case inputFileFormatChoiceError
+    case languageMethodConflict(language: Language)
     case makeConllLinesFromURLError
     case makeExportContentError
-    case badTempTokens
-    case languageMethodConflict(language: Language)
-    case inputFileFormatChoiceError
+    case missingURL
+    case noRunOutput
+    case noSentencesLoaded
+    case parserCreationError(file: URL)
+    case readFromSandboxError
+    case retokenisationError
+    case utf8DecodeError
+    case xmlParserFailure(line: Int, reason: String)
     
     var errorDescription: String? {
         switch self{
+        case .badTempTokens:
+            return "Error makiing hashable sentence from temp tokens"
+        case .conllParsingError(let lineNumber, let filename):
+            return "Error parsing conll lines : 10 fields not found in file \(filename) line \(lineNumber)"
+        case .conllLineIdentificationError:
+            return "Error getting finding sentence chunks in conll input"
+        case .conllChunkToLineError:
+            return "Error in conllChunkToLineError function"
+        case .fileLoadError:
+            return "Failed to load file from outside bundle"
+        case .fileNotInBundle:
+            return "File not in bundle"
         case .inputFileFormatChoiceError:
             return "Not an XML format"
         case .languageMethodConflict(let language):
             return "Language \(language.rawValue) cannot be used with naive tokenisation"
-        case .badTempTokens:
-            return "Error makiing hashable sentence from temp tokens"
-        case .fileLoadError:
-            return "Failed to load file from outside bundle"
-        case .utf8DecodeError:
-            return "Failed to decode as UTF-8"
-        case .fileNotInBundle:
-            return "File not in bundle"
-        case .noRunOutput:
-            return "No run output to return"
+        case .makeConllLinesFromURLError:
+            return "Error in makeConllLinesFromURL function"
+        case .makeExportContentError:
+            return "Error in makeExportContent function"
         case .missingURL:
             return "No URL provided"
+        case .noRunOutput:
+            return "No run output to return"
         case .noSentencesLoaded:
             return "No sentences found when switching on inputFileTYpe"
         case .parserCreationError(let file):
             return "Couldn't create XML parser from \(file.lastPathComponent)"
-        case .xmlParserFailure:
-            return "Unknown XML parsing error with XML parser + delegate"
         case .retokenisationError:
             return "Error retokenising: no sentences found"
-        case .ReadFromSandboxError:
+        case .readFromSandboxError:
             return "Error reading the file from the sandbox"
-        case .ConllParsingError(let lineNumber, let filename):
-            return "Error parsing conll lines : 10 fields not found in file \(filename) line \(lineNumber)"
-        case .ConllLineIdentificationError:
-            return "Error getting finding sentence chunks in conll input"
-        case .makeConllLinesFromURLError:
-            return "Error in makeConllLinesFromURL function"
-        case .conllChunkToLineError:
-            return "Error in conllChunkToLineError function"
-        case .makeExportContentError:
-            return "Error in makeExportContent function"
+        case .utf8DecodeError:
+            return "Failed to decode as UTF-8"
+        case .xmlParserFailure:
+            return "Unknown XML parsing error with XML parser + delegate"
         }
     }
 }
@@ -294,11 +294,7 @@ enum RegexStash{
         static let contractionRegexFR = try! Regex(#"([cdjlmnrst]|qu)'"#)
         static let pronounRegexFR = try! Regex(#"(-je|-tu|-il|-elle|-on|-ça|-cela|-nous|-vous|-ils|-elles|-moi|-toi|-lui|-leur|-en|-y|-ilz)"#)
         static let eosBreakCatchRegexFR = try! Regex(#"[^\S\n]+{2,}"#)
-
-
-        
     }
-    
 }
 
 enum RetokenisationType: String, Identifiable, CaseIterable{

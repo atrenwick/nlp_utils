@@ -9,15 +9,15 @@ import SwiftUI
 
 struct ManualTokenisationView: View {
     
+    @Binding var myConfig: TaggerConfig
+    @Binding var builtSents: [BuiltSentHolder]
     @Binding var tempTokens: [TempToken]
-    @Binding var selectedRetokenisationType: RetokenisationType
+
     @State var getsentNum: Int = 0
     @State private var newSentence: String = ""
     @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, parce que Bonn n'était assez bonne pour tous", "Alors que Paris est une grande ville, elle est plus petite que Tokyo", "Li chevaliers combattent les dragons."]
     
-    @Binding var selectedLanguage: Language
-    @Binding var builtSents: [BuiltSentHolder]
-    @Binding var insertNewTokPosition: InsertPosition
+
     @FocusState var isFocused
     @State var alertMessage: String?
     
@@ -28,10 +28,6 @@ struct ManualTokenisationView: View {
     var body: some View {
         NavigationStack{
             VStack(alignment: .leading, spacing: 16) {
-                Text("Manual entry")
-                    .font(.title2)
-                    .bold()
-                
                 ForEach(visibleSents, id:\.self){testSentence in
                     Text("Input: \"\(testSentence)\"")
                         .font(.subheadline)
@@ -49,7 +45,7 @@ struct ManualTokenisationView: View {
                 }
                 //MARK: pickers for language, tokenisation method, view
                 HStack{
-                    Picker("Language", selection: $selectedLanguage) {
+                    Picker("Language", selection: $myConfig.parsingConfig.selectedLanguage) {
                         ForEach(Language.allCases) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
@@ -66,7 +62,7 @@ struct ManualTokenisationView: View {
                             thisSentence = newSentence
                         }
                         do {
-                            let toksAsStrings = try applyNaiveTokenisation(language: selectedLanguage, myString: thisSentence)
+                            let toksAsStrings = try applyNaiveTokenisation(language: myConfig.parsingConfig.selectedLanguage, myString: thisSentence)
                            tempTokens = toksAsStrings.map {$0.asTempToken}
                         } catch {
                             ParseProcessingError.retokenisationError
@@ -123,16 +119,13 @@ struct ManualTokenisationView: View {
                     .tint(.green)
                     
                 }
-                TokenisationEditView(toks: $tempTokens, insertNewTokPosition: $insertNewTokPosition)
+                TokenisationEditView(toks: $tempTokens,  myConfig: $myConfig)
                 Spacer()
             }
             .toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        BuiltSentsViewer(
-                            builtSents: $builtSents,
-                            insertNewTokPosition: $insertNewTokPosition
-                        )
+                        BuiltSentsViewer(myConfig: $myConfig, builtSents: $builtSents)
                     } label: {
                         Image(systemName: "textformat.characters.dottedunderline")
                             .overlay(alignment: .topTrailing) {
@@ -149,41 +142,15 @@ struct ManualTokenisationView: View {
                 }
             }
             .padding()
+            .navigationTitle("Manual tokenisation")
         }
     }
 }
 
 #Preview {
-    @Previewable @State var selectedLanguage: Language = .FRM
+    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
     @Previewable @State var builtSents: [BuiltSentHolder] = []
-    @Previewable @State var insertNewTokPosition: InsertPosition = .after
     @Previewable @State var tempTokens: [TempToken] = []
-    @Previewable @State var selectedRetokenisationType: RetokenisationType = .predict
-    
-    ManualTokenisationView(
-        tempTokens: $tempTokens,
-        selectedRetokenisationType: $selectedRetokenisationType,
-        selectedLanguage: $selectedLanguage,
-        builtSents: $builtSents,
-        insertNewTokPosition: $insertNewTokPosition
-        
-    )
+    ManualTokenisationView(myConfig: $myConfig, builtSents: $builtSents, tempTokens: $tempTokens)
 }
-
-func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: IndexSet) {
-    // 1. Guard against empty inputs
-    guard !offsets.isEmpty else { return }
-    
-    // 2. Filter the offsets to ensure they are actually within the current bounds.
-    let validOffsets = IndexSet(offsets.filter { $0 < array.count })
-    // If no offsets are valid (e.g., the user swiped on a deleted cell), just bail.
-    guard !validOffsets.isEmpty else { return }
-    
-    // 3. Perform the removal
-    // We use the validOffsets to ensure we only touch existing indices.
-    array.remove(atOffsets: validOffsets)
-}
-
-
-
 
