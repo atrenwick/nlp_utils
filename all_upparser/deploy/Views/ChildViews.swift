@@ -69,13 +69,7 @@ struct ExportConfigViewSection: View {
                 }
             }
             NavigationLink {
-                ExportSettingsDetailView(
-                    selectedExportFormat: $myConfig.exportConfig.selectedExportFormat,
-                    xmlAuthorName: $myConfig.exportConfig.xmlAuthorName,
-                    xmlTitle: $myConfig.exportConfig.xmlTitle,
-                    includeConllSentIdLine: $myConfig.exportConfig.includeConllSentIdLine,
-                    includeConllSentText: $myConfig.exportConfig.includeConllSentText
-                )
+                ExportSettingsDetailView(myConfig: $myConfig)
             } label: {
                 Text( xmlSettingDisplayText)
             }
