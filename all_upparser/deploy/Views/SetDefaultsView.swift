@@ -26,7 +26,8 @@ struct SetDefaultsView: View {
     @AppStorage("runRetokeniserDefault") var runRetokeniserDefault: Bool = false
     @AppStorage("runResentenciserDefault")  var runResentenciserDefault: Bool = false
     @AppStorage("progressBarStyleDefault") var progressBarStyleDefault: ProgressBarStyle = .apple
-    
+    @AppStorage("retokenisationTypeDefault") var retokenisationTypeDefault: RetokenisationType = .predict
+
     //export
     @AppStorage("xmlAuthorDefault")  var xmlAuthorDefault: String = "XML Author"
     @AppStorage("xmlTitleDefault")  var xmlTitleDefault: String = "XML Title"
@@ -35,8 +36,7 @@ struct SetDefaultsView: View {
     @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
     @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
     @AppStorage("outputDirDefault") var outputDirDefault: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-    
-    
+        
     @State var sentences: [String] = []
     @State var isSelectingFolder: Bool = false
     
@@ -48,7 +48,6 @@ struct SetDefaultsView: View {
                     Toggle(isOn: $runExplicitDefault){
                         Text("Verbose Mode")
                     }
-                    
                 }
                 Section("Source file"){
                     Toggle(isOn: $detectLangDefault){
@@ -70,7 +69,6 @@ struct SetDefaultsView: View {
                             selectedTreebankDefault = first
                         }
                     }
-                    
                     Picker("Treebank", selection: $selectedTreebankDefault){
                         ForEach(selectedLanguageDefault.availableTBs){tb in
                             Text(tb.short).tag(tb)
@@ -84,7 +82,6 @@ struct SetDefaultsView: View {
                             Text(step.title)
                         }
                     }
-
                 }
                 Section("Tokenisation"){
                     Toggle(isOn: $runRetokeniserDefault){
@@ -109,7 +106,6 @@ struct SetDefaultsView: View {
                     Toggle(isOn: $runResentenciserDefault){
                         Text("Resentencise by default")
                     }
-                    
                 }
                 Section("View"){
                     Picker("Progress bar style", selection: $progressBarStyleDefault){
@@ -142,7 +138,6 @@ struct SetDefaultsView: View {
                     Toggle(isOn: $includeConllSentTextDefault){
                         Text("Include metaline # sent_text = ")
                     }
-
                 }
                 .fileImporter(
                     isPresented: $isSelectingFolder,

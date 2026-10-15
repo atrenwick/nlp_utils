@@ -9,12 +9,12 @@ import SwiftUI
 internal import UniformTypeIdentifiers
 
 struct BuiltSentsViewer: View {
+    @Binding var myConfig: TaggerConfig
     @Binding var builtSents:[BuiltSentHolder]
-    @Binding var insertNewTokPosition: InsertPosition
     var body: some View{
         Form{
             ForEach($builtSents, id:\.self.id) { $sent in
-                NavigationLink(destination: TokenisationEditView(toks: $sent.tempToks, insertNewTokPosition: $insertNewTokPosition)) {
+                NavigationLink(destination: TokenisationEditView(toks: $sent.tempToks, myConfig: $myConfig)) {
                     Text(sent.toShowString(tempToks: sent.tempToks))
                 }
                 .contentShape(Rectangle())
@@ -33,16 +33,9 @@ struct BuiltSentsViewer: View {
 struct ExportConfigViewSection: View {
     @State private var isSelectingFolder: Bool = false
     @State private var isProcessing: Bool = false
-    @Binding var fileName: String
-    @Binding var targetFolderURL: URL?
-    @Binding var selectedExportFormat: ExportFormat
-    @Binding var xmlAuthorName: String
-    @Binding var xmlTitle: String
-    @Binding var includeConllSentIdLine: Bool
-    @Binding var includeConllSentText: Bool
-
+    @Binding var myConfig: TaggerConfig
     var xmlSettingDisplayText: String{
-        switch selectedExportFormat {
+        switch myConfig.exportConfig.selectedExportFormat {
         case .xml:
             return "XML Settings"
         case .xmlConll:
@@ -56,20 +49,20 @@ struct ExportConfigViewSection: View {
 
     var body: some View {
         Section("Export Configuration") {
-            Picker("Export (sub)type", selection: $selectedExportFormat){
+            Picker("Export (sub)type", selection: $myConfig.exportConfig.selectedExportFormat){
                 ForEach(ExportFormat.allCases){ formatOption in
                     Text(formatOption.rawValue)
                     
                 }
             }
             // 1. User types the filename
-            FileNameInputViewSection(fileName: $fileName, selectedExportFormat: selectedExportFormat)
+            FileNameInputViewSection(myConfig: $myConfig)
             
             // 2. User chooses the target folder
             HStack {
                 Text("Destination:")
                 Spacer()
-                Text(targetFolderURL?.lastPathComponent ?? "Not Selected")
+                Text(myConfig.exportConfig.targetFolderURL?.lastPathComponent ?? "Not Selected")
                     .foregroundColor(.secondary)
                 Button("Choose...") {
                     isSelectingFolder = true
@@ -77,11 +70,11 @@ struct ExportConfigViewSection: View {
             }
             NavigationLink {
                 ExportSettingsDetailView(
-                    selectedExportFormat: $selectedExportFormat,
-                    xmlAuthorName: $xmlAuthorName,
-                    xmlTitle: $xmlTitle,
-                    includeConllSentIdLine: $includeConllSentIdLine,
-                    includeConllSentText: $includeConllSentText
+                    selectedExportFormat: $myConfig.exportConfig.selectedExportFormat,
+                    xmlAuthorName: $myConfig.exportConfig.xmlAuthorName,
+                    xmlTitle: $myConfig.exportConfig.xmlTitle,
+                    includeConllSentIdLine: $myConfig.exportConfig.includeConllSentIdLine,
+                    includeConllSentText: $myConfig.exportConfig.includeConllSentText
                 )
             } label: {
                 Text( xmlSettingDisplayText)
@@ -98,7 +91,7 @@ struct ExportConfigViewSection: View {
                 if let url = urls.first {
                     // Gain security access to folder
                     if url.startAccessingSecurityScopedResource() {
-                        self.targetFolderURL = url
+                        myConfig.exportConfig.targetFolderURL = url
                     }
                 }
             case .failure(let error):
@@ -111,22 +104,20 @@ struct ExportConfigViewSection: View {
 struct ChooseInputFileViewSection: View {
     // for choosing the source file to get, parse
     @State private var isSelectingFile: Bool = false
-    @Binding var selectedInputFile: URL?
+    @Binding var myConfig: TaggerConfig
     
     var body: some View {
-        
-            // User chooses the target folder
         HStack {
             Text("Source:")
             Spacer()
-            Text(selectedInputFile?.lastPathComponent ?? "Not Selected")
+            Text(myConfig.inputConfig.selectedInputFile?.lastPathComponent ?? "Not Selected")
                 .foregroundColor(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Button {
                 isSelectingFile = true
             } label: {
-                Image(systemName: selectedInputFile == nil ? "folder" : "arrow.triangle.2.circlepath")
+                Image(systemName: myConfig.inputConfig.selectedInputFile == nil ? "folder" : "arrow.triangle.2.circlepath")
             }
         }
         // Folder Selection System Sheet
@@ -156,20 +147,19 @@ struct ChooseInputFileViewSection: View {
 
 struct FileNameInputViewSection: View {
     // contains TextField for entering name of file to export
-    @Binding var fileName: String
+    @Binding var myConfig: TaggerConfig
     @FocusState private var isFocused: Bool
-    let selectedExportFormat: ExportFormat
     
     var body: some View {
         HStack{
-            TextField("File name", text: $fileName)
+            TextField("File name", text: $myConfig.exportConfig.fileName)
                 .textInputAutocapitalization(TextInputAutocapitalization.never)
                 .autocorrectionDisabled()
-                .onChange(of: fileName) { _, newValue in
+                .onChange(of: myConfig.exportConfig.fileName) { _, newValue in
                     // Strip any forbidden characters immediately as typed or pasted
-                    let cleaned = fileName.sanitizedFileName
+                    let cleaned = myConfig.exportConfig.fileName.sanitizedFileName
                     if cleaned != newValue {
-                        fileName = cleaned
+                        myConfig.exportConfig.fileName = cleaned
                     }
                 }
                 .focused($isFocused)
@@ -177,12 +167,12 @@ struct FileNameInputViewSection: View {
                 .onSubmit {
                     isFocused = false
                 }
-            Text(selectedExportFormat.fileExtension).foregroundStyle(.secondary)
+            Text(myConfig.exportConfig.selectedExportFormat.fileExtension).foregroundStyle(.secondary)
         }
     }
     func getFullURL(in folderURL: URL) -> URL {
         // 1. Fallback to a default name if user left it blank
-        let cleanName = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanName = myConfig.exportConfig.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = cleanName.isEmpty ? "Untitled" : cleanName
         
         // 2. Append the extension (e.g., .json or .txt)
@@ -255,9 +245,8 @@ struct PretokenisedSentViewSection : View {
 struct TokenisationEditView: View {
     @Binding var toks: [TempToken]
     @FocusState var isFocused
-    @Binding var insertNewTokPosition: InsertPosition
-    
-    var insertImage: String { (insertNewTokPosition == .before) ? "arrow.turn.left.up" : "arrow.turn.left.down"}
+    @Binding var myConfig: TaggerConfig
+    var insertImage: String { (myConfig.parsingConfig.insertNewTokPosition == .before) ? "arrow.turn.left.up" : "arrow.turn.left.down"}
     
     var body: some View {
         Form{
@@ -275,7 +264,7 @@ struct TokenisationEditView: View {
                 }
                 .swipeActions(edge: .leading){
                     Button{
-                        insertItem( insertNewTokPosition, relativeTo: token.id)
+                        insertItem( myConfig.parsingConfig.insertNewTokPosition, relativeTo: token.id)
                     } label: {
                         VStack{
                             Image(systemName: insertImage)

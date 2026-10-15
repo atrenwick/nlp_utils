@@ -11,7 +11,7 @@ internal import UniformTypeIdentifiers
 struct ImportFileViewSection: View {
     @Bindable var fileContainerModel: SourceFileContainerModel
     @State private var isSelectingFile = false
-    let inputFileType: InputFileType
+    @Binding var myConfig: TaggerConfig
     var body: some View {
         HStack(spacing: 16) {
             if let localURL = fileContainerModel.localSandboxFileURL {
@@ -23,7 +23,6 @@ struct ImportFileViewSection: View {
                 }
                 Spacer()
             }
-            
             Button {
                 isSelectingFile = true
             } label: {
@@ -50,11 +49,9 @@ struct ImportFileViewSection: View {
                         }
                     }
                     
-                    // copy to local sandbox, store sandbox URL
                     do {
                         let localURL = try SandboxImporter.importToSandbox(from: externalURL)
-                        
-                        // assign LOCAL sandbox URL to var in the observable class instance so everyone can see it
+                        // set LOCAL sandbox URL to var in the observable class instance so everyone can see it
                         fileContainerModel.localSandboxFileURL = localURL
                         print("Successfully ingested file to sandbox: \(localURL.path)")
                         
@@ -71,9 +68,9 @@ struct ImportFileViewSection: View {
 }
 
 #Preview {
-    @Previewable var inputFileType: InputFileType = .conll
+    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
     @Previewable var fileContainerModel = SourceFileContainerModel()
     fileContainerModel.localSandboxFileURL = URL(fileURLWithPath: "/tmp/sample.xml") // for this to work, need to add return ; if this is deactivated, remove return from next line
-    return ImportFileViewSection(fileContainerModel: fileContainerModel, inputFileType: inputFileType)
+    return ImportFileViewSection(fileContainerModel: fileContainerModel, myConfig: $myConfig)
 }
 

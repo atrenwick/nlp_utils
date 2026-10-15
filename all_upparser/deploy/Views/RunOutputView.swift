@@ -10,26 +10,17 @@ import SwiftUI
 struct RunOutputDetailView: View{
     @Environment(\.openURL) var openURL
 
-    @State var additionalExportFormat: ExportFormat = .conll
-//    @State var exportStatusMessage: String = ""
+    @Binding var myConfig: TaggerConfig
+    @Binding var topLevelOutput: [RunOutput]
+    @Binding var run: RunOutput
+    @Binding var builtSents: [BuiltSentHolder]
+    @Binding var tempTokens: [TempToken]
     @State var runOutputFileList: [URL] = []
     @State var hasAppeared: Bool = false
     @State var fileToView: URL? =   nil
     @State var alertMessage: String?
-    
-    @Binding var topLevelOutput: [RunOutput]
-    @Binding var run: RunOutput
-    @Binding var xmlTitle: String
-    @Binding var xmlAuthor: String
-    @Binding var selectedLanguage: Language
-    @Binding var targetFolderURL: URL?
-    @Binding var fileName: String
-    @Binding var selectedTreebank: Language.Treebank
-    @Binding var builtSents: [BuiltSentHolder]
-    @Binding var inputFileType: InputFileType
-    @Binding var tempTokens: [TempToken]
-    @Binding var insertNewTokPosition: InsertPosition
-    
+    @State var additionalExportFormat: ExportFormat = .conll
+
     let safeHeaderAttribs: XmlHeaderAttribs
     let runExplicit = true
     
@@ -39,7 +30,7 @@ struct RunOutputDetailView: View{
         
     var exportFormatShowCases: [ExportFormat]{
         ExportFormat.allCases.filter { format in
-            format != run.runMetas.exportFormat
+            format != myConfig.exportConfig.selectedExportFormat
         }
     }
     
@@ -47,12 +38,8 @@ struct RunOutputDetailView: View{
         NavigationStack{
             Form{
                 Section("Run \(shortUUID)"){
-                    if inputFileType == .manual{
-                        NavigationLink(destination:
-                                        BuiltSentsViewer(
-                                            builtSents: $builtSents,
-                                            insertNewTokPosition: $insertNewTokPosition
-                                        )
+                    if myConfig.inputConfig.inputFileType == .manual{
+                        NavigationLink(destination: BuiltSentsViewer(myConfig: $myConfig, builtSents: $builtSents)
                         ){
                             Text("Input sents")
                         }
@@ -92,8 +79,8 @@ struct RunOutputDetailView: View{
                                 let runOutput = try additionalExportRunner(
                                     run: run,
                                     additionalExportFormat: additionalExportFormat,
-                                    selectedLanguage: selectedLanguage,
-                                    selectedTreebank: selectedTreebank
+                                    selectedLanguage: myConfig.parsingConfig.selectedLanguage,
+                                    selectedTreebank: myConfig.parsingConfig.selectedTreebank
                                 )
                                 if let hasURL = runOutput.runMetas.savedURL{
                                     runOutputFileList.append(hasURL)
@@ -183,23 +170,13 @@ struct RunOutputDetailView: View{
 
 
 struct RunOutputView: View {
-    
-//    @State var exportStatusMessage: String = ""
+    @Binding var myConfig: TaggerConfig
     @Binding var runs: [RunOutput]
-    @Binding var xmlTitle: String
-    @Binding var selectedLanguage: Language
-    @Binding var xmlAuthor: String
-    @Binding var targetFolderURL: URL?
-    @Binding var fileName: String
-    @Binding var selectedTreebank: Language.Treebank
+    let safeHeaderAttribs: XmlHeaderAttribs
     @Binding var builtSents: [BuiltSentHolder]
-    @Binding var inputFileType: InputFileType
     @Binding var tempTokens: [TempToken]
-    @Binding var insertNewTokPosition: InsertPosition
 
     let runExplicit = true
-    let safeHeaderAttribs: XmlHeaderAttribs
-
     var body: some View {
         if runs.count == 0 {
             Text("Not much to see here")
@@ -209,18 +186,11 @@ struct RunOutputView: View {
                     ForEach(runs.enumerated(), id:\.offset){num,run in
                         NavigationLink {
                             RunOutputDetailView(
+                                myConfig: $myConfig,
                                 topLevelOutput: $runs,
                                 run: bindingFor(run),
-                                xmlTitle: $xmlTitle,
-                                xmlAuthor: $xmlAuthor,
-                                selectedLanguage: $selectedLanguage,
-                                targetFolderURL: $targetFolderURL,
-                                fileName: $fileName,
-                                selectedTreebank: $selectedTreebank,
                                 builtSents: $builtSents,
-                                inputFileType: $inputFileType,
                                 tempTokens: $tempTokens,
-                                insertNewTokPosition: $insertNewTokPosition,
                                 safeHeaderAttribs: safeHeaderAttribs
                             )
                         } label: {
