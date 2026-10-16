@@ -110,22 +110,36 @@ struct RegexLangPatternToLangMap: Identifiable{
 }
 
 struct RunMetas: Identifiable{
-    var id = UUID()
-    let lang: String
-    let sourceFileURL: URL?
-    let sourceFileName: String
-    let outputFileName: String
-    let treebank : String
+    //mod
+    let id = UUID()
+    let runID: String
     let exportFormat: ExportFormat
-    var unread: Bool = true
-    let savedURL: URL?
-    let message: String
-    let safeHeaderAttribs: XmlHeaderAttribs
+    let includeConllSentIdLine: Bool
     let includeConllSentText: Bool
+    let inputFileType: InputFileType
+    let lang: String
+    let maxPipelineStep: PipelineStep
+    let message: String
+    let outputFileName: String
+    let processedCount: Int
+    let runResentenciser: Bool
+    let runRetokeniser: Bool
+    let safeHeaderAttribs: XmlHeaderAttribs
+    let savedURL: URL?
+    let selectedRetokenisationType: RetokenisationType
+    let sentencizingMethod: SentencizingMethod
+    let sourceFileName: String
+    let sourceFileURL: URL?
+    let targetFolderURL: URL?
+    let tokenizingMethod: TokenizingMethod
+    let totalCount: Int
+    let treebank : String
+    var unread: Bool = true
 }
 
 struct RunData: Identifiable{
     var id = UUID()
+    let runID: String
     let sents: [Sentence]
     let exportContent: String
     var tokCount: Int {
@@ -136,6 +150,7 @@ struct RunData: Identifiable{
 
 struct RunOutput: Identifiable {
     var id = UUID()
+    let runID: String
     let runData: RunData
     var runMetas: RunMetas
 }
