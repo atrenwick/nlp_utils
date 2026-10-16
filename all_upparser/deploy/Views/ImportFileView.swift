@@ -53,6 +53,8 @@ struct ImportFileViewSection: View {
                         let localURL = try SandboxImporter.importToSandbox(from: externalURL)
                         // set LOCAL sandbox URL to var in the observable class instance so everyone can see it
                         fileContainerModel.localSandboxFileURL = localURL
+                        myConfig.inputConfig.selectedInputFile = localURL
+                        myConfig.inputConfig.displayName = localURL.lastPathComponent
                         print("Successfully ingested file to sandbox: \(localURL.path)")
                         
                     } catch {

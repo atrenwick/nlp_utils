@@ -53,22 +53,11 @@ struct SetDefaultsView: View {
                     Toggle(isOn: $detectLangDefault){
                         Text("Autodetect lang in filename")
                     }
-                    Picker("InputFiletype", selection: $inputFileTypeDefault){
-                        ForEach(InputFileType.allCases){type in
-                            Text(type.rawValue)}
-                    }
+                    DefaultPickerView(title: "InputFiletype method", selection: $inputFileTypeDefault)
                 }
                 Section("Processing"){
-                    Picker("Default language", selection: $selectedLanguageDefault){
-                        ForEach(Language.allCases){lang in
-                            Text(lang.displayName.uppercased())
-                        }
-                    }
-                    .onChange(of: selectedLanguageDefault) { _, newLang in
-                        if let first = newLang.availableTBs.first {
-                            selectedTreebankDefault = first
-                        }
-                    }
+                    ConstrainedLanguagePickerView(title: "testpicker", selectedTreebankDefault: $selectedTreebankDefault, selection: $selectedLanguageDefault)
+                    
                     Picker("Treebank", selection: $selectedTreebankDefault){
                         ForEach(selectedLanguageDefault.availableTBs){tb in
                             Text(tb.short).tag(tb)
@@ -77,6 +66,7 @@ struct SetDefaultsView: View {
                     .onChange(of: selectedLanguageDefault) { _, newLang in
                         selectedTreebankDefault = newLang.defaultTB
                     }
+                    
                     Picker("Max pipeline step", selection: $maxPipelineStepDefault){
                         ForEach(PipelineStep.allCases){step in
                             Text(step.title)
@@ -87,32 +77,17 @@ struct SetDefaultsView: View {
                     Toggle(isOn: $runRetokeniserDefault){
                         Text("Retokenise by default")
                     }
-                    Picker("Tokenisation method", selection: $tokenizingMethodDefault){
-                        ForEach(TokenizingMethod.allCases){method in
-                            Text(method.rawValue)
-                        }
-                    }
-                    Picker("Insert new token position", selection: $insertNewTokPositionDefault){
-                        ForEach(InsertPosition.allCases){position in
-                            Text(position.rawValue)}
-                    }
+                    DefaultPickerView(title: "Tokenisation method", selection: $tokenizingMethodDefault)
+                    DefaultPickerView(title: "Insert new token position", selection: $insertNewTokPositionDefault)
                 }
                 Section("Sentencization"){
-                    Picker("Sentencization method", selection: $sentencizingMethodDefault){
-                        ForEach(SentencizingMethod.allCases){method in
-                            Text(method.rawValue)
-                        }
-                    }
+                    DefaultPickerView(title: "Sentencization method", selection: $sentencizingMethodDefault)
                     Toggle(isOn: $runResentenciserDefault){
                         Text("Resentencise by default")
                     }
                 }
                 Section("View"){
-                    Picker("Progress bar style", selection: $progressBarStyleDefault){
-                        ForEach(ProgressBarStyle.allCases){style in
-                            Text(style.rawValue).tag(style)
-                        }
-                    }
+                    DefaultPickerView(title: "Progress bar style", selection: $progressBarStyleDefault)
                 }
                 Section("Output file"){
                     TextField("Filename", text: $fileNameDefault)

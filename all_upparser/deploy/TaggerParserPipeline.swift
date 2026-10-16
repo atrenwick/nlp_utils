@@ -99,8 +99,11 @@ final class UDPipeline {
     private var runExplicit: Bool {
             UserDefaults.standard.bool(forKey: "runExplicit")
         }
-    
-    init(languageCode: String, treebank: String) throws {
+    init(myConfig: TaggerConfig) throws {
+//    init(languageCode: String, treebank: String) throws {
+        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
+        let treebank = myConfig.parsingConfig.selectedTreebank.short
+        
         tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer_\(treebank)")
         taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser_\(treebank)")
 
