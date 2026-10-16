@@ -78,9 +78,7 @@ struct RunOutputDetailView: View{
                             do{
                                 let runOutput = try additionalExportRunner(
                                     run: run,
-                                    additionalExportFormat: additionalExportFormat,
-                                    selectedLanguage: myConfig.parsingConfig.selectedLanguage,
-                                    selectedTreebank: myConfig.parsingConfig.selectedTreebank
+                                    additionalExportFormat: additionalExportFormat
                                 )
                                 if let hasURL = runOutput.runMetas.savedURL{
                                     runOutputFileList.append(hasURL)
@@ -131,22 +129,16 @@ struct RunOutputDetailView: View{
     func additionalExportRunner(
         run:RunOutput,
         additionalExportFormat: ExportFormat,
-        selectedLanguage: Language,
-        selectedTreebank: Language.Treebank
     ) throws -> RunOutput {
         
-        let exportContent = makeExportContent(
-            sentences: run.runData.sents,
-            exportFormat: additionalExportFormat,
-            safeHeaderAttribs:run.runMetas.safeHeaderAttribs,
-            includeConllSentText: run.runMetas.includeConllSentText
-        )
+        let exportContent = makeExportContentFromMetas(run: run, additionalExportFormat: additionalExportFormat)
         
         guard !exportContent.isEmpty else {
             throw ParseProcessingError.makeExportContentError
         }
         
         let runData = RunData(
+            runID: run.runID,
             sents: run.runData.sents,
             exportContent: exportContent
         )
@@ -161,8 +153,8 @@ struct RunOutputDetailView: View{
 //            safeHeaderAttribs: run.runMetas.safeHeaderAttribs,
 //            includeConllSentText:run.runMetas.includeConllSentText
 //        )
-        let runMetas = saveFileToChosenLocation(myConfig: myConfig)
-        let runOutput = RunOutput(runData: runData, runMetas: runMetas)
+        let runMetas = saveFileToChosenLocation(myConfig: myConfig, exportContent: exportContent, runID: run.runID,)
+        let runOutput = RunOutput(runID: run.runID, runData: runData, runMetas: runMetas)
 
         return runOutput
     }

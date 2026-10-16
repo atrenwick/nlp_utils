@@ -33,7 +33,7 @@ struct PipelineSettingsView: View {
     #if DEBUG
     let runfive = false //
     #endif
-  
+    
     var body: some View {
         NavigationStack{
             Form {
@@ -142,7 +142,7 @@ struct PipelineSettingsView: View {
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
         taggingInProgress: Binding<Bool>) {
-            
+            myConfig.parsingConfig.runExplicit = true
             // MARK: parameters, initialisations for task
             taggingInProgress.wrappedValue = true
 //            startTime = nil
@@ -225,20 +225,10 @@ struct PipelineSettingsView: View {
                             myConfig.progressConfig.appleProgress.completedUnitCount = Int64(myConfig.progressConfig.totalCount)
                         }
                     }
-                    dumpDetailsForRunExplicit(myConfig: myConfig)
-                    runOutput = makeTidyRunOutput(
-                        outSents: myConfig.outputData.outSents, myConfig: myConfig,
-                        safeHeaderAttribs: myConfig.outputData.safeHeaderAttribs
-                    )
-                    
-                    if myConfig.parsingConfig.runExplicit {
-                        guard let runOutput else {
-                            taggingInProgress.wrappedValue = false
-                            throw ParseProcessingError.noRunOutput
-                        }
-                        print(runOutput.runData.sents.generateExportText())
-                    }
-                    
+
+                    try dumpDetailsForRunExplicit(myConfig: myConfig, taggingInProgress: $taggingInProgress)
+                    runOutput = makeTidyRunOutput(myConfig: myConfig)
+
                     try await MainActor.run {
                         taggingInProgress.wrappedValue = false
                         guard let runOutput else {

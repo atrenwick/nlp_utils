@@ -804,6 +804,22 @@ func makeExportContent(myConfig: TaggerConfig) -> String{
     return returnString
 }
 
+
+func makeExportContentFromMetas(run: RunOutput, additionalExportFormat: ExportFormat) -> String {
+    var returnString: String = ""
+    switch additionalExportFormat {
+    case .conll, .conllTxt:
+        returnString = run.runData.sents.generateExportText()
+    case .conllTidy:
+        returnString = run.runData.sents.generateExportTextTidy()
+    case .xml, .xmlConll:
+        returnString = sentListToXMLFromMetas(run: run, additionalExportFormat: additionalExportFormat)
+    }
+    return returnString
+
+    
+}
+
 // MARK: - XML making
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
@@ -920,6 +936,66 @@ func sentListToXML(myConfig: TaggerConfig) -> String {
     return outputStore.joined(separator: "\n")
     
 }
+func sentListToXMLFromMetas(run: RunOutput, additionalExportFormat: ExportFormat) -> String {
+    
+    let safeHeaderAttribs = run.runMetas.safeHeaderAttribs
+    let sentences = run.runData.sents
+    let sentCount = String(sentences.count)
+    let tokCount = String(sentences.generateTokCount())
+    var outputStore: [String] = []
+
+    let xmlHeader = """
+        <?xml version="1.0" encoding="utf-8"?>
+          <TEI.2>
+          <teiHeader>
+            <fileDesc>
+            <titleStmt>
+            <title>\(safeHeaderAttribs.xmlTitle)</title>
+            <author>\(safeHeaderAttribs.xmlAuthorName)</author>
+            </titleStmt>
+            <publicationStmt>
+            <publisher />
+            <date />
+            <pubDate />
+            </publicationStmt>
+                <sourceDesc model="\(safeHeaderAttribs.lang.lowercased())" treebank="\(safeHeaderAttribs.treebank)" tagging_date="\(safeHeaderAttribs.taggingDate)" sourcefile="\(safeHeaderAttribs.sourceFile)" runID="\(safeHeaderAttribs.runID)" maxPipelineStep="\(safeHeaderAttribs.maxPipelineStep)" runRetokeniser="\(safeHeaderAttribs.runRetokeniser)" tokenizingMethod="\(safeHeaderAttribs.tokenizingMethod)" sentencizingMethod="\(safeHeaderAttribs.sentencizingMethod)" sentCount="\(sentCount)" tokenCount="\(tokCount)">
+                </sourceDesc>
+            </fileDesc>
+            <profileDesc>
+                <langUsage>
+                <language ident="\(safeHeaderAttribs.lang)"/>
+                </langUsage>
+            <textDesc thema=\"\" type="unk" sub_genre=\"\" />
+            </profileDesc>
+        </teiHeader>
+        <text>
+        <body>
+        <p>        
+        """
+    let xmlFooter = """
+        </p>
+        </body>
+        </text>
+        </TEI.2>
+        """
+
+    outputStore.append(xmlHeader)
+    for sentence in sentences {
+        let addConllMetas: Bool = true
+        if addConllMetas{
+            outputStore.append(contentsOf: sentence.conllMetas)
+        }
+        outputStore.append(sentence.makeXMLsent(
+            exportFormat: additionalExportFormat,
+            includeConllSentText: run.runMetas.includeConllSentText
+            )
+        )
+    }
+    outputStore.append(xmlFooter)
+    
+    return outputStore.joined(separator: "\n")
+    
+}
 // MARK: - Writing
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
@@ -933,7 +1009,7 @@ func sentListToXML(myConfig: TaggerConfig) -> String {
 
 
 // write string to location
-func saveFileToChosenLocation(myConfig: TaggerConfig) -> RunMetas{
+func saveFileToChosenLocation(myConfig: TaggerConfig, exportContent: String, runID: String) -> RunMetas{
     var savedURL: URL?
     var exportStatusMessage: String
     // deal with bad URL case
@@ -941,25 +1017,38 @@ func saveFileToChosenLocation(myConfig: TaggerConfig) -> RunMetas{
         if myConfig.parsingConfig.runExplicit{ print("Guard 661 fail") }
         exportStatusMessage = "Guard failure in save file to chosen location"
         return RunMetas(
-            lang: myConfig.parsingConfig.selectedLanguage.rawValue,
-            sourceFileURL: myConfig.inputConfig.selectedInputFile,
-            sourceFileName: myConfig.inputConfig.displayName,
-            outputFileName: myConfig.exportConfig.fileName,
-            treebank: myConfig.parsingConfig.selectedTreebank.short,
+            runID: runID,
             exportFormat: myConfig.exportConfig.selectedExportFormat,
-            unread:  true,
-            savedURL: nil,
+            includeConllSentIdLine: myConfig.exportConfig.includeConllSentIdLine,
+            includeConllSentText: myConfig.exportConfig.includeConllSentText,
+            inputFileType: myConfig.inputConfig.inputFileType,
+            lang: myConfig.parsingConfig.selectedLanguage.rawValue,
+            maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
             message: exportStatusMessage,
+            outputFileName: myConfig.exportConfig.fileName,
+            processedCount: myConfig.progressConfig.processedCount,
+            runResentenciser: myConfig.parsingConfig.runResentenciser,
+            runRetokeniser: myConfig.parsingConfig.runRetokeniser,
             safeHeaderAttribs: myConfig.outputData.safeHeaderAttribs,
-            includeConllSentText: myConfig.exportConfig.includeConllSentText
+            savedURL: savedURL ??  nil,
+            selectedRetokenisationType: myConfig.parsingConfig.selectedRetokenisationType,
+            sentencizingMethod: myConfig.parsingConfig.sentencizingMethod,
+            sourceFileName: myConfig.inputConfig.displayName,
+            sourceFileURL: myConfig.inputConfig.selectedInputFile,
+            targetFolderURL: myConfig.exportConfig.targetFolderURL,
+            tokenizingMethod: myConfig.parsingConfig.tokenizingMethod,
+            totalCount: myConfig.progressConfig.totalCount,
+            treebank: myConfig.parsingConfig.selectedTreebank.short,
+            unread:  true,
+
         )
     }
     if myConfig.parsingConfig.runExplicit{ print("Guard 661 pass")  }
     
     do {
         savedURL = try ExporterService.exportDataToFile(
-            exportContent: myConfig.outputData.exportContent,
-            customName: "\(myConfig.inputConfig.displayName)_\(myConfig.parsingConfig.selectedTreebank.short)_\(myConfig.exportConfig.selectedExportFormat.rawValue)",
+            exportContent: exportContent,
+            customName: "\(myConfig.exportConfig.fileName)_\(myConfig.parsingConfig.selectedTreebank.short)_\(myConfig.exportConfig.selectedExportFormat.rawValue)",
             targetFolderURL: folderURL,
             exportFormat: myConfig.exportConfig.selectedExportFormat,
             runExplicit: myConfig.parsingConfig.runExplicit,
@@ -986,17 +1075,29 @@ func saveFileToChosenLocation(myConfig: TaggerConfig) -> RunMetas{
     }
     
     return RunMetas(
-        lang: myConfig.parsingConfig.selectedLanguage.rawValue,
-        sourceFileURL: myConfig.inputConfig.selectedInputFile,
-        sourceFileName: myConfig.inputConfig.displayName,
-        outputFileName: myConfig.exportConfig.fileName,
-        treebank: myConfig.parsingConfig.selectedTreebank.short,
+        runID: runID,
         exportFormat: myConfig.exportConfig.selectedExportFormat,
-        unread:  true,
-        savedURL: savedURL ??  nil,
+        includeConllSentIdLine: myConfig.exportConfig.includeConllSentIdLine,
+        includeConllSentText: myConfig.exportConfig.includeConllSentText,
+        inputFileType: myConfig.inputConfig.inputFileType,
+        lang: myConfig.parsingConfig.selectedLanguage.rawValue,
+        maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
         message: exportStatusMessage,
+        outputFileName: myConfig.exportConfig.fileName,
+        processedCount: myConfig.progressConfig.processedCount,
+        runResentenciser: myConfig.parsingConfig.runResentenciser,
+        runRetokeniser: myConfig.parsingConfig.runRetokeniser,
         safeHeaderAttribs: myConfig.outputData.safeHeaderAttribs,
-        includeConllSentText: myConfig.exportConfig.includeConllSentText
+        savedURL: savedURL,
+        selectedRetokenisationType: myConfig.parsingConfig.selectedRetokenisationType,
+        sentencizingMethod: myConfig.parsingConfig.sentencizingMethod,
+        sourceFileName: myConfig.inputConfig.displayName,
+        sourceFileURL: myConfig.inputConfig.selectedInputFile,
+        targetFolderURL: myConfig.exportConfig.targetFolderURL,
+        tokenizingMethod: myConfig.parsingConfig.tokenizingMethod,
+        totalCount: myConfig.progressConfig.totalCount,
+        treebank: myConfig.parsingConfig.selectedTreebank.short,
+        unread:  true,
     )
 }
 
@@ -1093,13 +1194,15 @@ func printFromConllSents(outsents: [Sentence]) throws -> URL{
 }
 
 //3
-func dumpDetailsForRunExplicit(myConfig: TaggerConfig) {
-    // print conll lines to terminal
+func dumpDetailsForRunExplicit(myConfig: TaggerConfig, taggingInProgress:Binding<Bool>) throws  {
+    guard myConfig.outputData.outSents.count > 0 else {
+            taggingInProgress.wrappedValue = false
+            throw ParseProcessingError.noRunOutput
+    }
+
     if myConfig.parsingConfig.runExplicit {
         print("Printing conllRaw")
-        for sentence in myConfig.outputData.outSents {
-            print(sentence.conll)
-        }
+        print(myConfig.outputData.outSents.generateExportText())
         if let printPath = myConfig.exportConfig.targetFolderURL?.path(){
             print(printPath)
         } else {
@@ -1120,25 +1223,29 @@ func dumpDetailsForRunExplicit(myConfig: TaggerConfig) {
 
 //MARK: settings updaters
 func makeTidyRunOutput(myConfig: TaggerConfig ) -> RunOutput {
-    
+    let runID = UUID().uuidString
     let exportContent = makeExportContent(myConfig: myConfig)
-    
     let runData: RunData = RunData(
+        runID: runID,
         sents: myConfig.outputData.outSents,
         exportContent: exportContent
     )
     
     let runMetas = saveFileToChosenLocation(
-        myConfig: myConfig
+        myConfig: myConfig, exportContent: exportContent,
+        runID: runID
     )
     
     let runOutput = RunOutput(
+        runID: runID,
         runData: runData,
         runMetas: runMetas
     )
  
     return runOutput
 }
+
+
 
 //MARK: tokenisation functions
 //----------------------------------------------------------------------------------------------------------------------------
