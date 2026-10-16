@@ -8,6 +8,7 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
+
 struct BuiltSentsViewer: View {
     @Binding var myConfig: TaggerConfig
     @Binding var builtSents:[BuiltSentHolder]
@@ -25,71 +26,6 @@ struct BuiltSentsViewer: View {
                         Label("Delete", systemImage: "trash")
                     }
                 }
-            }
-        }
-    }
-}
-
-struct ExportConfigViewSection: View {
-    @State private var isSelectingFolder: Bool = false
-    @State private var isProcessing: Bool = false
-    @Binding var myConfig: TaggerConfig
-    var xmlSettingDisplayText: String{
-        switch myConfig.exportConfig.selectedExportFormat {
-        case .xml:
-            return "XML Settings"
-        case .xmlConll:
-            return "XML-CoNLL settings"
-        case .conll, .conllTxt, .conllTidy:
-            return "CoNLL settings"
-        default:
-            return "Settings"
-        }
-    }
-
-    var body: some View {
-        Section("Export Configuration") {
-            Picker("Export (sub)type", selection: $myConfig.exportConfig.selectedExportFormat){
-                ForEach(ExportFormat.allCases){ formatOption in
-                    Text(formatOption.rawValue)
-                    
-                }
-            }
-            // 1. User types the filename
-            FileNameInputViewSection(myConfig: $myConfig)
-            
-            // 2. User chooses the target folder
-            HStack {
-                Text("Destination:")
-                Spacer()
-                Text(myConfig.exportConfig.targetFolderURL?.lastPathComponent ?? "Not Selected")
-                    .foregroundColor(.secondary)
-                Button("Choose...") {
-                    isSelectingFolder = true
-                }
-            }
-            NavigationLink {
-                ExportSettingsDetailView(myConfig: $myConfig)
-            } label: {
-                Text( xmlSettingDisplayText)
-            }
-        }
-        // Folder Selection System Sheet
-        .fileImporter(
-            isPresented: $isSelectingFolder,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    // Gain security access to folder
-                    if url.startAccessingSecurityScopedResource() {
-                        myConfig.exportConfig.targetFolderURL = url
-                    }
-                }
-            case .failure(let error):
-                print("Folder selection error: \(error.localizedDescription)")
             }
         }
     }
@@ -139,6 +75,70 @@ struct ChooseInputFileViewSection: View {
 }
 
 
+struct ExportConfigViewSection: View {
+    @State private var isSelectingFolder: Bool = false
+    @State private var isProcessing: Bool = false
+    @Binding var myConfig: TaggerConfig
+    var xmlSettingDisplayText: String{
+        switch myConfig.exportConfig.selectedExportFormat {
+        case .xml:
+            return "XML Settings"
+        case .xmlConll:
+            return "XML-CoNLL settings"
+        case .conll, .conllTxt, .conllTidy:
+            return "CoNLL settings"
+        default:
+            return "Settings"
+        }
+    }
+
+    var body: some View {
+        Section("Export Configuration") {
+            Picker("Export (sub)type", selection: $myConfig.exportConfig.selectedExportFormat){
+                ForEach(ExportFormat.allCases){ formatOption in
+                    Text(formatOption.rawValue)
+                }
+            }
+            // 1. User types the filename
+            FileNameInputViewSection(myConfig: $myConfig)
+            
+            // 2. User chooses the target folder
+            HStack {
+                Text("Destination:")
+                Spacer()
+                Text(myConfig.exportConfig.targetFolderURL?.lastPathComponent ?? "Not Selected")
+                    .foregroundColor(.secondary)
+                Button("Choose...") {
+                    isSelectingFolder = true
+                }
+            }
+            NavigationLink {
+                ExportSettingsDetailView(myConfig: $myConfig)
+            } label: {
+                Text( xmlSettingDisplayText)
+            }
+        }
+        // Folder Selection System Sheet
+        .fileImporter(
+            isPresented: $isSelectingFolder,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    // Gain security access to folder
+                    if url.startAccessingSecurityScopedResource() {
+                        myConfig.exportConfig.targetFolderURL = url
+                    }
+                }
+            case .failure(let error):
+                print("Folder selection error: \(error.localizedDescription)")
+            }
+        }
+    }
+}
+
 struct FileNameInputViewSection: View {
     // contains TextField for entering name of file to export
     @Binding var myConfig: TaggerConfig
@@ -173,6 +173,30 @@ struct FileNameInputViewSection: View {
         return folderURL
             .appendingPathComponent(finalName)
             .appendingPathExtension("json")
+    }
+}
+
+struct InputFileViewEncapsulator: View {
+    @Binding var myConfig: TaggerConfig
+    @Binding var builtSents: [BuiltSentHolder]
+    @Binding var tempTokens: [TempToken]
+    let fileContainerModel: SourceFileContainerModel
+    var body: some View{
+        if myConfig.inputConfig.inputFileType == .manual {
+            Section {
+                NavigationLink("Manual entry…"){
+                    ManualTokenisationView(
+                        myConfig: $myConfig,
+                        builtSents: $builtSents,
+                        tempTokens: $tempTokens
+                    )
+                }
+            }
+        } else {
+            Section{
+                ImportFileViewSection(fileContainerModel: fileContainerModel, myConfig: $myConfig )
+            }
+        }
     }
 }
 
@@ -212,7 +236,6 @@ struct OutputLinesViewSection: View {
     }
 }
 
-
 struct PretokenisedSentViewSection : View {
     @Binding var pretokSentsOut: [HashableSentence]
     var body: some View{
@@ -235,6 +258,9 @@ struct PretokenisedSentViewSection : View {
         pretokSentsOut.remove(atOffsets: offsets)
     }
 }
+
+
+
 
 struct TokenisationEditView: View {
     @Binding var toks: [TempToken]
@@ -283,5 +309,147 @@ struct TokenisationEditView: View {
         toks.insert(newItem, at: insertionIndex)
     }
 }
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////         VIEW ELEMENTS AND SUBPARTS       ///////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
+struct BigGoButtonReadinessView: View{
+    let isPipelineReady: Bool
+    let missingReqsMessage: String
+    var body: some View{
+        VStack{
+            if !isPipelineReady {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text(missingReqsMessage)
+                }
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.orange)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        
+    }
+}
+
+struct InputTypeEncapsulatorView: View{
+    @Binding var myConfig: TaggerConfig
+    @Binding var fileContainerModel: SourceFileContainerModel
+    var body: some View{
+        
+        Picker("Inputtype", selection: $myConfig.inputConfig.inputFileType){
+            ForEach(InputFileType.allCases){fType in
+                Text(fType.rawValue)}
+        }
+        .onChange(of: myConfig.inputConfig.inputFileType) { _, newFileType in
+            switch newFileType{
+            case .txt:
+                myConfig.parsingConfig.runRetokeniser = true
+            case .manual:
+                myConfig.parsingConfig.runRetokeniser = false
+            case .conll, .xml, .xmlConll:
+                if myConfig.inputConfig.detectLanguage {
+                    if let detectedLang = detectLangInFilename(inputURL: fileContainerModel.localSandboxFileURL) {
+                        myConfig.parsingConfig.selectedLanguage = detectedLang
+                    }
+                }
+            }
+        }
+
+    }
+}
+
+
+struct RunExplicitButtonView: View{
+    @Binding var myConfig: TaggerConfig
+    @State var outputString: String = "not yet run"
+    
+    
+    var body: some View{
+        if myConfig.parsingConfig.runExplicit{
+            HStack{
+                Button {
+                    outputString = testInstantiatePipeline(myConfig: myConfig)
+                } label: {
+                    Text("Test load")
+                }
+                .tint(.orange)
+                .buttonStyle(.borderedProminent)
+                
+                Button {
+                    outputString = "reset"
+                } label: {
+                    Text("reset")
+                }
+                .tint(.blue)
+                .buttonStyle(.borderedProminent)
+                
+                Text("Use \(myConfig.parsingConfig.selectedLanguage.displayName) \(myConfig.parsingConfig.selectedTreebank.short)")
+                Text(outputString)
+            }
+        }
+    }
+}
+
+
+
+struct TaggingProgressButtonView: View{
+    let taggingInProgress: Bool
+    let isPipelineReady: Bool
+    var body: some View {
+        Group {
+            ZStack {
+                HStack {
+                    Image(systemName: taggingInProgress ? "progress.indicator" : "play.fill")
+                        .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)
+                    Text(taggingInProgress ? "Running" : "Run")
+                        .fontWeight(.semibold)
+                    //                            .opacity(taggingInProgress ? 1 : 1)
+                }
+            }
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding()
+        }
+    }
+}
+
+
+struct ToolbarLinkToOutputView: View {
+    @Binding var myConfig: TaggerConfig
+    @Binding var topLevelOutputList: [RunOutput]
+    @Binding var builtSents: [BuiltSentHolder]
+    @Binding var tempTokens: [TempToken]
+    let unreadCount: Int
+    let safeHeaderAttribs: XmlHeaderAttribs
+    
+    var body: some View{
+        
+        NavigationLink{
+            RunOutputView(
+                myConfig: $myConfig,
+                runs: $topLevelOutputList,
+                safeHeaderAttribs: safeHeaderAttribs,
+                builtSents: $builtSents,
+                tempTokens: $tempTokens,
+            )
+        } label: {
+            Image(systemName: "book.pages.fill")
+                .overlay(alignment: .topTrailing) {
+                    if unreadCount > 0 {
+                        Text(String(unreadCount))
+                            .font(.caption2)
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(Circle().fill(.red))
+                            .offset(x: 8, y: -8)
+                    }
+                }
+        }
+    }
+}

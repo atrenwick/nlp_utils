@@ -32,9 +32,7 @@ struct ProgressBarStylePicker: View {
 
 /// tqdm-style text line. uses  caller to track processed/total/startTime
 struct TqdmProgressView: View {
-    let processed: Int
-    let total: Int
-    let startTime: Date?
+    @Binding var myConfig: TaggerConfig
 
     var body: some View {
         Text(tqdmLine())
@@ -44,30 +42,31 @@ struct TqdmProgressView: View {
     }
 
     private func tqdmLine(width: Int = 20) -> String {
-        let fraction = total > 0 ? Double(processed) / Double(total) : 0
+        let fraction = myConfig.progressConfig.totalCount > 0 ? Double(myConfig.progressConfig.processedCount) / Double(myConfig.progressConfig.totalCount) : 0
         let filled = Int(fraction * Double(width))
         let bar = String(repeating: "█", count: filled)
             + String(repeating: "-", count: max(0, width - filled))
         let percent = Int(fraction * 100)
 
         var rateSuffix = ""
-        if let startTime, processed > 0 {
-            let elapsed = Date().timeIntervalSince(startTime)
-            let rate = Double(processed) / max(elapsed, 0.001)
-            let remaining = rate > 0 ? Double(total - processed) / rate : 0
+        if let unwrappedStartTime = myConfig.progressConfig.startTime, myConfig.progressConfig.processedCount > 0 {
+            let elapsed = Date().timeIntervalSince(unwrappedStartTime)
+            let rate = Double(myConfig.progressConfig.processedCount) / max(elapsed, 0.001)
+            let remaining = rate > 0 ? Double(myConfig.progressConfig.totalCount - myConfig.progressConfig.processedCount) / rate : 0
             rateSuffix = String(format: ", %.1fit/s, ETA %ds", rate, Int(remaining))
         }
 
-        return "\(percent)%|\(bar)| \(processed)/\(total)\(rateSuffix)"
+        return "\(percent)%|\(bar)| \(myConfig.progressConfig.processedCount)/\(myConfig.progressConfig.totalCount)\(rateSuffix)"
     }
 }
 
 struct AppleProgressView: View {
-    let progress: Progress
+
+    @Binding var myConfig: TaggerConfig
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ProgressView(progress)
+            ProgressView(myConfig.progressConfig.appleProgress)
 //            if let description = progress.localizedDescription {
 //                Text(description)
 //                    .font(.caption2)
@@ -78,18 +77,16 @@ struct AppleProgressView: View {
 }
 
 struct PipelineProgressView: View {
-    let style: ProgressBarStyle
-    let processed: Int
-    let total: Int
-    let startTime: Date?
-    let appleProgress: Progress
-
+    @Binding var myConfig: TaggerConfig
     var body: some View {
-        switch style {
-        case .tqdm:
-            TqdmProgressView(processed: processed, total: total, startTime: startTime)
-        case .apple:
-            AppleProgressView(progress: appleProgress)
+        
+        if myConfig.progressConfig.hasStarted{
+            switch myConfig.progressConfig.progressBarStyle {
+            case .tqdm:
+                TqdmProgressView(myConfig: $myConfig)
+            case .apple:
+                AppleProgressView(myConfig: $myConfig)
+            }
         }
     }
 }

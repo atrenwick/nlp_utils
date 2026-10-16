@@ -150,18 +150,18 @@ struct RunOutputDetailView: View{
             sents: run.runData.sents,
             exportContent: exportContent
         )
-        let updatedInputMetas = SaveInputMetas(
-            lang: selectedLanguage,
-            displayName: run.runMetas.sourceFileName,
-            inputURL: run.runMetas.sourceFileURL,
-            saveName: run.runMetas.outputFileName,
-            targetFolderURL: run.runMetas.savedURL?.deletingLastPathComponent(),
-            exportFormat: additionalExportFormat,
-            treebank: selectedTreebank ,
-            safeHeaderAttribs: run.runMetas.safeHeaderAttribs,
-            includeConllSentText:run.runMetas.includeConllSentText
-        )
-        let runMetas = saveFileToChosenLocation(exportContent: exportContent, saveInputMetas: updatedInputMetas)
+//        let updatedInputMetas = SaveInputMetas(
+//            lang: selectedLanguage,
+//            displayName: run.runMetas.sourceFileName,
+//            inputURL: run.runMetas.sourceFileURL,
+//            saveName: run.runMetas.outputFileName,
+//            targetFolderURL: run.runMetas.savedURL?.deletingLastPathComponent(),
+//            exportFormat: additionalExportFormat,
+//            treebank: selectedTreebank ,
+//            safeHeaderAttribs: run.runMetas.safeHeaderAttribs,
+//            includeConllSentText:run.runMetas.includeConllSentText
+//        )
+        let runMetas = saveFileToChosenLocation(myConfig: myConfig)
         let runOutput = RunOutput(runData: runData, runMetas: runMetas)
 
         return runOutput

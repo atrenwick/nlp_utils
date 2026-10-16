@@ -133,6 +133,7 @@ struct RunData: Identifiable{
         sents.reduce(0) { $0 + $1.conllData.count }
     }
 }
+
 struct RunOutput: Identifiable {
     var id = UUID()
     let runData: RunData
@@ -160,19 +161,18 @@ struct SandboxImporter {
     }
 }
 
-
-struct SaveInputMetas: Identifiable{
-    var id = UUID()
-    let lang: Language
-    let displayName: String
-    let inputURL: URL?
-    let saveName: String
-    let targetFolderURL: URL?
-    let exportFormat: ExportFormat
-    let treebank: Language.Treebank
-    let safeHeaderAttribs: XmlHeaderAttribs
-    let includeConllSentText: Bool
-}
+//struct SaveInputMetas: Identifiable{
+//    var id = UUID()
+//    let lang: Language
+//    let displayName: String
+//    let inputURL: URL?
+//    let saveName: String
+//    let targetFolderURL: URL?
+//    let exportFormat: ExportFormat
+//    let treebank: Language.Treebank
+//    let safeHeaderAttribs: XmlHeaderAttribs
+//    let includeConllSentText: Bool
+//}
 
 struct Sentence : Identifiable {
     var id = UUID()
@@ -327,32 +327,37 @@ struct Sentence : Identifiable {
     }
 }
 
-
-
 struct TaggerConfig{
     // MARK: vars to bring in substructs
+    var id = UUID()
     var inputConfig: InputConfig
     var parsingConfig: ParsingConfig
     var exportConfig: ExportConfig
-    // var progressConfig: ProgressConfig
+    var progressConfig: ProgressConfig
+    var inputData: InputData
+    var outputData : OutputData
     // var reportingConfig: ReportingConfig
     // var visibilityConfig: VisibilityConfig
     
     struct InputConfig{
         var inputFileType: InputFileType
         var selectedInputFile: URL?
+        var displayName: String
         var detectLanguage: Bool
         init(
             inputFileType: InputFileType? = nil,
             detectLanguage: Bool? = nil,
+            displayName: String? = nil,
             selectedInputFile: URL? = nil
         ){
             self.inputFileType = TaggerConfig.resolveRepresentable(passed: inputFileType, key: "inputFileTypeDefault", fallback: InputFileType.txt )
             self.detectLanguage = TaggerConfig.resolveBool(passed: detectLanguage, key: "detectLangDefault", default: false)
+            self.displayName = ""
         }
     }
     
     struct ParsingConfig{
+        
         var selectedLanguage: Language
         var selectedTreebank: Language.Treebank
         var maxPipelineStep: PipelineStep
@@ -362,6 +367,8 @@ struct TaggerConfig{
         var sentencizingMethod: SentencizingMethod
         var insertNewTokPosition: InsertPosition
         var selectedRetokenisationType: RetokenisationType
+        var runExplicit: Bool
+
         
         // need to add = nil in init of it's to truly allow no parameters to be specified
         init(
@@ -373,7 +380,8 @@ struct TaggerConfig{
             tokenizingMethod: TokenizingMethod? = nil,
             sentencizingMethod: SentencizingMethod? = nil,
             insertNewTokPosition: InsertPosition? = nil,
-            selectedRetokenisationType: RetokenisationType? = nil
+            selectedRetokenisationType: RetokenisationType? = nil,
+            runExplicit: Bool? = nil
         ){
             self.selectedLanguage = TaggerConfig.resolveRepresentable(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
             self.selectedTreebank = TaggerConfig.resolveRepresentable(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
@@ -384,6 +392,7 @@ struct TaggerConfig{
             self.sentencizingMethod = TaggerConfig.resolveRepresentable(passed: sentencizingMethod, key: "sentencizingMethodDefault", fallback: .nlSentencizer )
             self.insertNewTokPosition = TaggerConfig.resolveRepresentable(passed: insertNewTokPosition, key: "insertNewTokPositionDefault", fallback: .after )
             self.selectedRetokenisationType = TaggerConfig.resolveRepresentable(passed: selectedRetokenisationType, key: "retokenisationTypeDefault", fallback: .predict )
+            self.runExplicit = TaggerConfig.resolveBool(passed: runExplicit, key: "runExplicifDefault")
         }
     }
     struct ExportConfig{
@@ -404,7 +413,6 @@ struct TaggerConfig{
             includeConllSentText: Bool? = nil
         ) {
             self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileNameDefault")
-            
             self.targetFolderURL = targetFolderURL
             ?? URL(string: UserDefaults.standard.string(forKey: "outputDirDefault") ?? "")
             ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
@@ -416,47 +424,100 @@ struct TaggerConfig{
             self.includeConllSentText = TaggerConfig.resolveBool(passed: includeConllSentText, key: "includeConllSentTextDefault", default: true )
         }
     }
-    //    struct ProgressConfig{
-    //        let appleProgress: Progress
-    //        let progressBarStyle: ProgressBarStyle
-    //        let startTime: Date?
-    //        let processedCount: Int
-    //        let totalCount: Int
-    //        let hasStarted: Bool
-    //    }
-    //    struct ReportingConfig{
-    //        let topLevelOutputList: [RunOutput]
-    //        let exportStatusMessage: String?
-    //        let outputString: String
-    //        let runOutput: RunOutput?
-    //        let alertMessage: String?
-    //        let runExplicit: Bool
-    //    }
-    //    struct VisibilityConfig{
-    //        //controlling visibility
-    //        let taggingInProgress: Bool
-    //        let showImporter: Bool
-    //        let hasAppeared: Bool
-    //        let isSelectingFolder: Bool
-    //    }
+    struct ProgressConfig{
+        var appleProgress: Progress
+        var progressBarStyle: ProgressBarStyle
+        var startTime: Date?
+        var alertMessage: String?
+        var exportStatusMessage: String?
+        var processedCount: Int
+        var totalCount: Int
+        var hasStarted: Bool
+        init(
+            appleProgress: Progress? = nil,
+            progressBarStyle: ProgressBarStyle? = nil,
+            startTime: Date? = nil,
+            alertMessage: String? = nil,
+            exportStatusMessage: String? = nil,
+            processedCount: Int? = nil,
+            totalCount: Int? = nil,
+            hasStarted: Bool? = nil,
+        ){
+            self.appleProgress = Progress(totalUnitCount: 1)
+            self.progressBarStyle = TaggerConfig.resolveRepresentable(passed: progressBarStyle, key: "progressBarStyleDefault", fallback: .apple)
+            self.startTime = nil
+            self.alertMessage = nil
+            self.exportStatusMessage = nil
+            self.processedCount = 0
+            self.totalCount = 0
+            self.hasStarted = false
+        }
+    }
     //    // sentences ::
-    //    struct OutputData{
-    //        let builtSents: [BuiltSentHolder]
-    //        let sentsToRetokenise: [String]
-    //        let exportContent: String = ""
-    //
-    //    }
+    struct InputData{
+        var allSentences: [HashableSentence]
+        var builtSents: [BuiltSentHolder]
+        var sentsToRetokenise: [String]
+        var resentencizerOutputStrings: [String]
+        init(
+            allSentences: [HashableSentence]? = nil,
+            builtSents: [BuiltSentHolder]? = nil,
+            sentsToRetokenise: [String]? = nil,
+            resentencizerOutputStrings: [String]? = nil,
+        )
+        {
+            self.allSentences = []
+            self.builtSents = []
+            self.sentsToRetokenise = []
+            self.resentencizerOutputStrings = []
+        }
+    }
+    
+    struct OutputData{
+            var topLevelOutputList: [RunOutput]
+            var outputString: String
+            var runOutput: RunOutput?
+            var exportContent: String = ""
+            var safeHeaderAttribs: XmlHeaderAttribs
+            var outSents: [Sentence]
+            
+            init(
+            topLevelOutputList: [RunOutput]? = nil,
+            outputString: String? = nil,
+            runOutput: RunOutput? = nil,
+            builtSents: [BuiltSentHolder]? = nil,
+            sentsToRetokenise: [String]? = nil,
+            exportContent: String? = nil,
+            safeHeaderAttribs: XmlHeaderAttribs? = nil,
+            resentencizerOutputStrings: [String]? = nil,
+            outSents: [Sentence]? = nil
+            )
+            {
+                self.topLevelOutputList = []
+                self.outputString = ""
+                self.runOutput = nil
+                self.exportContent = ""
+                self.safeHeaderAttribs = XmlHeaderAttribs()
+                self.outSents = []
+            }
+        }
     //
     
     // top level init
     init(
         parsingConfig: ParsingConfig = ParsingConfig(),
         inputConfig: InputConfig = InputConfig(),
-        exportConfig: ExportConfig = ExportConfig()
+        exportConfig: ExportConfig = ExportConfig(),
+        progressConfig: ProgressConfig = ProgressConfig(),
+        inputData: InputData = InputData(),
+        outputData: OutputData = OutputData()
     ) {
         self.parsingConfig = parsingConfig
         self.inputConfig = inputConfig
         self.exportConfig = exportConfig
+        self.progressConfig = progressConfig
+        self.inputData = inputData
+        self.outputData = outputData
     }
     
     // MARK: - Centralized Static Solvers
@@ -497,14 +558,11 @@ struct TaggerConfig{
     
 }
 
-
-
 // struct for manually tokenised, modified inputs, before conversion to Token
 struct TempToken: Identifiable, Hashable {
     var id = UUID()
     var form: String
 }
-
 
 struct Token : Identifiable {
     var id = UUID()
@@ -544,16 +602,41 @@ struct XMLConllElement {
 }
 
 struct XmlHeaderAttribs{
-    let xmlTitle: String
-    let xmlAuthorName: String
-    let lang: String
-    let treebank: String
-    let taggingDate: String
-    let sourceFile: String
-    let runID: String
-    let maxPipelineStep: String
-    let runRetokeniser: String
-    let tokenizingMethod: String
-    let sentencizingMethod: String
+    var xmlTitle: String
+    var xmlAuthorName: String
+    var lang: String
+    var treebank: String
+    var taggingDate: String
+    var sourceFile: String
+    var runID: String
+    var maxPipelineStep: String
+    var runRetokeniser: String
+    var tokenizingMethod: String
+    var sentencizingMethod: String
+    init(
+        xmlTitle: String? = nil,
+        xmlAuthorName: String? = nil,
+        lang: String? = nil,
+        treebank: String? = nil,
+        taggingDate: String? = nil,
+        sourceFile: String? = nil,
+        runID: String? = nil,
+        maxPipelineStep: String? = nil,
+        runRetokeniser: String? = nil,
+        tokenizingMethod: String? = nil,
+        sentencizingMethod: String? = nil
+    ) {
+        self.xmlTitle = "xmlTitle"
+        self.xmlAuthorName = "xmlAuthorName"
+        self.lang = "lang"
+        self.treebank = "treebank"
+        self.taggingDate = "taggingDate"
+        self.sourceFile = "sourceFile"
+        self.runID = "runID"
+        self.maxPipelineStep = "maxPipelineStep"
+        self.runRetokeniser = "runRetokeniser"
+        self.tokenizingMethod = "tokenizingMethod"
+        self.sentencizingMethod = "sentencizingMethod"
+    }
 }
 

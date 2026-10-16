@@ -68,13 +68,13 @@ func detectLangInFilename(inputURL: URL?)-> Language?{
     }
 }
 //4
-func testInstantiatePipeline(languageCode: String, treebank: String)   -> String {
+func testInstantiatePipeline(myConfig: TaggerConfig)   -> String {
     // test instantiation of pipeline class based on params chosen
     var outputString: String = ""
     
     Task{
         do {
-            let _ = try UDPipeline(languageCode: languageCode, treebank: treebank)
+            let _ = try UDPipeline(myConfig: myConfig)
             await MainActor.run {
                 outputString = "Success"
             }
@@ -366,7 +366,7 @@ func xmlToHashableSentForPipeline(inputURL: URL?) throws  -> [HashableSentence]{
 //  6. textFileToHashableSets : use func3 to sentencise then 4 to tokenise      :: File -> Hashable
 
 //1
-func _blobToSents(blob: String, runExplicit: Bool) -> [String]{
+func _blobToSents(blob: String,  myConfig: TaggerConfig) -> [String]{
 //        var holding: [String] = []
         // break on \.\n\n
         var test2: String
@@ -384,7 +384,7 @@ func _blobToSents(blob: String, runExplicit: Bool) -> [String]{
         let chunks = test2.components(separatedBy: "_EOS_")
 
     let validChunks = chunks.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    if runExplicit{
+    if myConfig.parsingConfig.runExplicit{
         for (num, chunk) in validChunks.enumerated() {
             print("\(num) :: \(chunk)")
         }
@@ -395,15 +395,16 @@ func _blobToSents(blob: String, runExplicit: Bool) -> [String]{
     }
 //2
 
-func _getSentencesWithNL(text: String, lang: Language, runExplicit: Bool)-> [String]{
-        let tokenizer = NLTokenizer(unit: .sentence) // unit == sentences ::>> SENTENCISATION
-        let nlLang: NLLanguage
-        switch lang {
+func _getSentencesWithNL(text: String, myConfig: TaggerConfig)-> [String]{
+    let tokenizer = NLTokenizer(unit: .sentence) // unit == sentences ::>> SENTENCISATION
+    let nlLang: NLLanguage
+
+    switch myConfig.parsingConfig.selectedLanguage {
             case .ANG, .EN: nlLang = NLLanguage.english
             case .FR,.FRM, .FRO: nlLang = NLLanguage.french
             case .DE: nlLang = NLLanguage.german
         }
-    if runExplicit{
+    if myConfig.parsingConfig.runExplicit{
         print("sentencizing with nlSentencizer->192")
     }
         tokenizer.setLanguage(nlLang)
@@ -415,7 +416,7 @@ func _getSentencesWithNL(text: String, lang: Language, runExplicit: Bool)-> [Str
                 sentencesOut.append(itemToAppend)}
             return true
         }
-    if runExplicit{
+    if myConfig.parsingConfig.runExplicit{
         for (num, chunk) in sentencesOut.enumerated() {
             print("\(num) :: \(chunk)")
         }
@@ -426,36 +427,36 @@ func _getSentencesWithNL(text: String, lang: Language, runExplicit: Bool)-> [Str
         return sentencesOut
     }
 //2b
-func _applySentencizingMethodToString(normalizedText: String, lang: Language, sentencizingMethod: SentencizingMethod, runExplicit: Bool) throws -> [String] {
+func _applySentencizingMethodToString(normalizedText: String,  myConfig: TaggerConfig) throws -> [String] {
     
     var sentencesAsStrings: [String] = []
-    switch sentencizingMethod {
+    switch myConfig.parsingConfig.sentencizingMethod {
         // use NL or custom logic to get sentences as strings from an input blob
     case .nlSentencizer:
         // get sentences from input blob
-        if runExplicit{
+        if myConfig.parsingConfig.runExplicit{
             print("sentencizing with nlSentencizer")
         }
-        sentencesAsStrings = _getSentencesWithNL(text: normalizedText, lang: lang, runExplicit: runExplicit)
+        sentencesAsStrings = _getSentencesWithNL(text: normalizedText, myConfig: myConfig)
         
     case .eosMark:
-        if runExplicit{
+        if myConfig.parsingConfig.runExplicit{
             print("finish code from EOS marking wiht regex")
         }
         
     case .custom:
-        if runExplicit{
+        if myConfig.parsingConfig.runExplicit{
             print("sentencizing with custom")
         }
-        sentencesAsStrings = _blobToSents(blob: normalizedText, runExplicit: runExplicit)
+        sentencesAsStrings = _blobToSents(blob: normalizedText, myConfig: myConfig)
         
     case .naive:
-        if runExplicit{
+        if myConfig.parsingConfig.runExplicit{
             print("Using naive sentencizer based on toks")
         }
         
         do {
-            let toksAsStrings = try applyNaiveTokenisation(language: lang, myString: normalizedText)
+            let toksAsStrings = try applyNaiveTokenisation(language: myConfig.parsingConfig.selectedLanguage, myString: normalizedText)
             let tempTokList: [TempToken] = toksAsStrings.map {$0.asTempToken}
             
             var outputSents: [String] = []
@@ -505,60 +506,56 @@ func _applySentencizingMethodToString(normalizedText: String, lang: Language, se
 }
 
 //3
-func textFileToSentStrings(inputURL: URL?, sentencizingMethod: SentencizingMethod, lang: Language, tokenizerPipeline: UDPipeline, runExplicit: Bool) throws -> [String]{
-    guard let _ = inputURL else {
+func textFileToSentStrings(myConfig: TaggerConfig, tokenizerPipeline: UDPipeline) throws -> [String]{
+    guard let _ = myConfig.inputConfig.selectedInputFile else {
         print("guard let failed loading form file")
         return []
     }
-    if runExplicit{
+    if myConfig.parsingConfig.runExplicit{
         print("running text file to sent strings function")
     }
-    let inputString = try readFromFile(inputURL: inputURL)
+    let inputString = try readFromFile(inputURL: myConfig.inputConfig.selectedInputFile)
     guard !inputString.isEmpty else {
         throw ParseProcessingError.fileLoadError
     }
     do {
         let normalizedText = inputString.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
-        if runExplicit{
+        if myConfig.parsingConfig.runExplicit{
             print("first let success")
         }
-        // var sentenceList: [String] = []
-        //let inputBlob: String = load_from_file(args)
-        let sentencesAsString = try _applySentencizingMethodToString(normalizedText: normalizedText, lang: lang, sentencizingMethod: sentencizingMethod, runExplicit: runExplicit)
+        let sentencesAsString = try _applySentencizingMethodToString(normalizedText: normalizedText, myConfig: myConfig)
         return sentencesAsString
     }
     
 }
 
-func desentenciseAndResentencise(sentsToDiscard: [HashableSentence], lang: Language, sentencizingMethod: SentencizingMethod, runExplicit: Bool) throws -> [String]{
+func desentenciseAndResentencise(sentsToDiscard: [HashableSentence], myConfig: TaggerConfig) throws -> [String]{
     
     let initialString = (sentsToDiscard.map {$0.detokenised}).joined(separator: " ")
     let normalizedText = initialString.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
-    let resentencizerOutputStrings = try _applySentencizingMethodToString(normalizedText: normalizedText, lang: lang, sentencizingMethod: sentencizingMethod, runExplicit: runExplicit)
+    let resentencizerOutputStrings = try _applySentencizingMethodToString(normalizedText: normalizedText, myConfig: myConfig)
 
     return resentencizerOutputStrings
 }
 
 
 
-func retokenisationEncapsulator(allSentences: [HashableSentence], tokenizingMethod: TokenizingMethod, lang: Language, pipeline: UDPipeline, runResentenciser: Bool, resentencizerOutputStrings: [String], taggingInProgress: Binding<Bool>, runExplicit: Bool) throws -> [HashableSentence]{
+func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: UDPipeline, taggingInProgress: Binding<Bool>) throws -> [HashableSentence]{
     
     var sentencesAsStrings: [String] = []
     
-    if runResentenciser {
-        sentencesAsStrings = resentencizerOutputStrings
+    if myConfig.parsingConfig.runResentenciser {
+        sentencesAsStrings = myConfig.inputData.resentencizerOutputStrings
     } else {
-        for sent in allSentences{
+        for sent in myConfig.inputData.allSentences{
             sentencesAsStrings.append(sent.detokenised)
         }
     }
 
     let retokenisedSents = try stringSentsToHashableSents(
-        tokenizingMethod: tokenizingMethod,
+        myConfig: myConfig,
         sents: sentencesAsStrings,
-        lang: lang,
         pipeline: pipeline,
-        runExplicit: runExplicit
     )
     
     guard !retokenisedSents.isEmpty else {
@@ -568,49 +565,44 @@ func retokenisationEncapsulator(allSentences: [HashableSentence], tokenizingMeth
 
     return retokenisedSents
 }
-func ingestSentEncapsulator(inputFileType: InputFileType, saveInputMetas: SaveInputMetas, builtSents: [BuiltSentHolder], sentencizingMethod: SentencizingMethod, tokenizingMethod: TokenizingMethod, pipeline: UDPipeline, runExplicit: Bool) throws -> [HashableSentence] {
+func ingestSentEncapsulator(
+    myConfig: TaggerConfig,
+    pipeline: UDPipeline
+) throws -> [HashableSentence] {
     
     var allSentences: [HashableSentence] = []
-    switch inputFileType {
+    switch myConfig.inputConfig.inputFileType {
     case .conll:
         // resentencise internally in this function if set
         allSentences = try conllFileToHashableSentForPipeline(
-            inputURL: saveInputMetas.inputURL
+            inputURL: myConfig.inputConfig.selectedInputFile
         )
     case .manual:
-        allSentences = builtSents.compactMap {$0.toHashableSent(tempToks: $0.tempToks) }
+        let myBuiltSents = myConfig.inputData.builtSents
+        allSentences = myBuiltSents.compactMap {$0.toHashableSent(tempToks: $0.tempToks) }
         
     case .xml:
         // resentencise internally in this function if set
         allSentences = try xmlToHashableSentForPipeline(
-            inputURL: saveInputMetas.inputURL
+            inputURL: myConfig.inputConfig.selectedInputFile
         )
     case .xmlConll:
         // resentencise internally in this function if set
         allSentences = try xmlConllFileToHashableSentForPipeline(
-            inputURL: saveInputMetas.inputURL
+            inputURL: myConfig.inputConfig.selectedInputFile
         )
     case .txt:
         // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
         
-        allSentences = try textFileToHashableSents(
-            inputURL: saveInputMetas.inputURL,
-            sentencizingMethod: sentencizingMethod,
-            tokenizingMethod: tokenizingMethod,
-            lang: saveInputMetas.lang,
-            pipeline: pipeline,
-            runExplicit: runExplicit
-        )
-        if runExplicit{
+        allSentences = try textFileToHashableSents(myConfig: myConfig, pipeline: pipeline)
+
+        if myConfig.parsingConfig.runExplicit{
             print("Mode a: \(allSentences.count) sents ")
         }
         
     }
     return allSentences
 }
-
-
-
 
 //1.
 func applyNaiveTokenisation(language: Language, myString: String) throws -> [String]{
@@ -669,30 +661,30 @@ func applyNaiveTokenisation(language: Language, myString: String) throws -> [Str
 
 
 //4
-func stringSentsToHashableSents(tokenizingMethod: TokenizingMethod, sents: [String], lang: Language, pipeline: UDPipeline, runExplicit: Bool) throws -> [HashableSentence]{
+func stringSentsToHashableSents(myConfig: TaggerConfig, sents: [String], pipeline: UDPipeline) throws -> [HashableSentence]{
 
     var internalSentList: [HashableSentence] = []
-    switch tokenizingMethod {
+    switch myConfig.parsingConfig.tokenizingMethod {
         
     case .custom, .manual, .skip:
-        if runExplicit{
+        if myConfig.parsingConfig.runExplicit{
             print("using custom rules:: need to get Swift version of rules……")
         }
         break
 
     case .nltokeniser:
-        if runExplicit{
+        if myConfig.parsingConfig.runExplicit{
             print("calling getTokSents @ line 85")
             print("nltokeniser")
         }
-        internalSentList = _getTokenisedSentences(sents: sents, lang: lang, runExplicit: runExplicit)
+        internalSentList = _getTokenisedSentences(sents: sents, myConfig: myConfig)
         
     case .trained:
         // retokenize everything with model
         // MARK: can change this IN to be testSentences
         //    let pipeline = try UDPipeline(languageCode: languageCode.rawValue, treebank: "gsd")
 
-        if runExplicit{
+        if myConfig.parsingConfig.runExplicit{
             print("sentencizing with trained")
         }
         for sentence in sents {
@@ -704,10 +696,10 @@ func stringSentsToHashableSents(tokenizingMethod: TokenizingMethod, sents: [Stri
 
 
 //5 -- this is a tokenisation function :: tokenise wiht NL
-func _getTokenisedSentences(sents: [String], lang: Language, runExplicit: Bool) -> [HashableSentence]{
+func _getTokenisedSentences(sents: [String], myConfig: TaggerConfig) -> [HashableSentence]{
         let tagger = NLTagger(tagSchemes: [.tokenType]) // unit == tokenType ::>> TOKENISATION
         let nlLang: NLLanguage
-        switch lang {
+        switch myConfig.parsingConfig.selectedLanguage {
         case .ANG, .EN: nlLang = NLLanguage.english
         case .FR, .FRM, .FRO: nlLang = NLLanguage.french
         case .DE: nlLang = NLLanguage.german
@@ -730,7 +722,7 @@ func _getTokenisedSentences(sents: [String], lang: Language, runExplicit: Bool) 
             let doneSent = HashableSentence(id: String(snum), tokens: currentToks, conllMetas: [])
             sentsOut.append(doneSent)
         }
-    if runExplicit{
+    if myConfig.parsingConfig.runExplicit{
         for sent in sentsOut{
             let printArray = Array(repeating: "#", count: 133).joined(separator: "")
             print(printArray)
@@ -759,18 +751,25 @@ func applySimplexTokenisation(inputText: String) -> [String] {
 
 
 //6
-func textFileToHashableSents(inputURL: URL?, sentencizingMethod: SentencizingMethod, tokenizingMethod: TokenizingMethod, lang: Language, pipeline: UDPipeline, runExplicit: Bool) throws -> [HashableSentence]{
+func textFileToHashableSents(myConfig: TaggerConfig, pipeline: UDPipeline
+//    inputURL: URL?,
+//    sentencizingMethod: SentencizingMethod,
+//    tokenizingMethod: TokenizingMethod,
+//    lang: Language,
+//    pipeline: UDPipeline,
+//    runExplicit: Bool
+) throws -> [HashableSentence]{
     var internalSentList: [HashableSentence] = []
     
     let sentencesAsStrings = try textFileToSentStrings(
-        inputURL: inputURL,
-        sentencizingMethod: sentencizingMethod,
-        lang: lang,
+        myConfig: myConfig,
         tokenizerPipeline: pipeline,
-        runExplicit: runExplicit
     )
 //    print("Got sents as strings")
-    internalSentList = try stringSentsToHashableSents(tokenizingMethod: tokenizingMethod, sents: sentencesAsStrings, lang: lang, pipeline: pipeline, runExplicit: runExplicit)
+    internalSentList = try stringSentsToHashableSents(myConfig: myConfig,
+        sents: sentencesAsStrings,
+        pipeline: pipeline
+    )
 //    print("got internal sentlist")
     
     internalSentList = internalSentList.filter { sentence in
@@ -792,28 +791,15 @@ func textFileToHashableSents(inputURL: URL?, sentencizingMethod: SentencizingMet
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
 //1. convert sent to dumpable string for selected format
-func makeExportContent(sentences: [Sentence], exportFormat: ExportFormat, safeHeaderAttribs: XmlHeaderAttribs, includeConllSentText: Bool) -> String{
+func makeExportContent(myConfig: TaggerConfig) -> String{
     var returnString: String = ""
-    switch exportFormat {
+    switch myConfig.exportConfig.selectedExportFormat {
     case .conll, .conllTxt:
-        returnString = sentences.generateExportText()
+        returnString = myConfig.outputData.outSents.generateExportText()
     case .conllTidy:
-        returnString = sentences.generateExportTextTidy()
-    case .xml:
-        returnString = sentListToXML(
-            sentences: sentences,
-            selectedExportFormat: .xml,
-            safeHeaderAttribs: safeHeaderAttribs,
-            includeConllSentText: includeConllSentText
-            )
-    case .xmlConll:
-        //make xml conll
-        returnString = sentListToXML(
-            sentences: sentences,
-            selectedExportFormat: .xmlConll,
-            safeHeaderAttribs: safeHeaderAttribs,
-            includeConllSentText: includeConllSentText
-            )
+        returnString = myConfig.outputData.outSents.generateExportTextTidy()
+    case .xml, .xmlConll:
+        returnString = sentListToXML(myConfig: myConfig)
     }
     return returnString
 }
@@ -874,15 +860,14 @@ func makeSafeXmlHeaderAttribs(
 }
 
 //3.
-func sentListToXML(
-    sentences: [Sentence],
-    selectedExportFormat: ExportFormat,
-    safeHeaderAttribs: XmlHeaderAttribs,
-    includeConllSentText: Bool
-) -> String {
+func sentListToXML(myConfig: TaggerConfig) -> String {
+    
+    let safeHeaderAttribs = myConfig.outputData.safeHeaderAttribs
+    let sentences = myConfig.outputData.outSents
     let sentCount = String(sentences.count)
     let tokCount = String(sentences.generateTokCount())
-    
+    var outputStore: [String] = []
+
     let xmlHeader = """
         <?xml version="1.0" encoding="utf-8"?>
           <TEI.2>
@@ -917,14 +902,18 @@ func sentListToXML(
         </text>
         </TEI.2>
         """
-    var outputStore: [String] = []
+
     outputStore.append(xmlHeader)
     for sentence in sentences {
         let addConllMetas: Bool = true
         if addConllMetas{
             outputStore.append(contentsOf: sentence.conllMetas)
         }
-        outputStore.append(sentence.makeXMLsent(exportFormat: selectedExportFormat, includeConllSentText: includeConllSentText))
+        outputStore.append(sentence.makeXMLsent(
+            exportFormat: myConfig.exportConfig.selectedExportFormat,
+            includeConllSentText: myConfig.exportConfig.includeConllSentText
+            )
+        )
     }
     outputStore.append(xmlFooter)
     
@@ -944,70 +933,70 @@ func sentListToXML(
 
 
 // write string to location
-func saveFileToChosenLocation(exportContent: String, saveInputMetas: SaveInputMetas, runExplicit: Bool = false) -> RunMetas{
+func saveFileToChosenLocation(myConfig: TaggerConfig) -> RunMetas{
     var savedURL: URL?
     var exportStatusMessage: String
     // deal with bad URL case
-    guard let folderURL = saveInputMetas.targetFolderURL else {
-        if runExplicit{ print("Guard 661 fail") }
+    guard let folderURL = myConfig.exportConfig.targetFolderURL else {
+        if myConfig.parsingConfig.runExplicit{ print("Guard 661 fail") }
         exportStatusMessage = "Guard failure in save file to chosen location"
         return RunMetas(
-            lang: saveInputMetas.lang.rawValue,
-            sourceFileURL: saveInputMetas.inputURL,
-            sourceFileName: saveInputMetas.displayName,
-            outputFileName: saveInputMetas.saveName,
-            treebank: saveInputMetas.treebank.short,
-            exportFormat: saveInputMetas.exportFormat,
+            lang: myConfig.parsingConfig.selectedLanguage.rawValue,
+            sourceFileURL: myConfig.inputConfig.selectedInputFile,
+            sourceFileName: myConfig.inputConfig.displayName,
+            outputFileName: myConfig.exportConfig.fileName,
+            treebank: myConfig.parsingConfig.selectedTreebank.short,
+            exportFormat: myConfig.exportConfig.selectedExportFormat,
             unread:  true,
             savedURL: nil,
             message: exportStatusMessage,
-            safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
-            includeConllSentText: saveInputMetas.includeConllSentText
+            safeHeaderAttribs: myConfig.outputData.safeHeaderAttribs,
+            includeConllSentText: myConfig.exportConfig.includeConllSentText
         )
     }
-    if runExplicit{ print("Guard 661 pass")  }
+    if myConfig.parsingConfig.runExplicit{ print("Guard 661 pass")  }
     
     do {
         savedURL = try ExporterService.exportDataToFile(
-            exportContent: exportContent,
-            customName: "\(saveInputMetas.saveName)_\(saveInputMetas.treebank.short)_\(saveInputMetas.exportFormat.rawValue)",
+            exportContent: myConfig.outputData.exportContent,
+            customName: "\(myConfig.inputConfig.displayName)_\(myConfig.parsingConfig.selectedTreebank.short)_\(myConfig.exportConfig.selectedExportFormat.rawValue)",
             targetFolderURL: folderURL,
-            exportFormat: saveInputMetas.exportFormat,
-            runExplicit: runExplicit
+            exportFormat: myConfig.exportConfig.selectedExportFormat,
+            runExplicit: myConfig.parsingConfig.runExplicit,
         )
         exportStatusMessage = "Successfully exported to"
         if let savedURL {
             
-            if runExplicit{
+            if myConfig.parsingConfig.runExplicit{
                 print("Line 685: \(savedURL)")
             }
             exportStatusMessage += "\(savedURL.lastPathComponent)"
-            if runExplicit {print (exportStatusMessage) }
+            if myConfig.parsingConfig.runExplicit {print (exportStatusMessage) }
         }
     } catch {
         
         exportStatusMessage = "Export failed: \(error.localizedDescription)"
-        if runExplicit {
+        if myConfig.parsingConfig.runExplicit {
             print("return 690: \(exportStatusMessage)")
         }
     }
     // return for do-catch
-    if runExplicit{
+    if myConfig.parsingConfig.runExplicit{
         print("return 694: ")
     }
     
     return RunMetas(
-        lang: saveInputMetas.lang.rawValue,
-        sourceFileURL: saveInputMetas.inputURL,
-        sourceFileName: saveInputMetas.displayName,
-        outputFileName: saveInputMetas.saveName,
-        treebank: saveInputMetas.treebank.short,
-        exportFormat: saveInputMetas.exportFormat,
+        lang: myConfig.parsingConfig.selectedLanguage.rawValue,
+        sourceFileURL: myConfig.inputConfig.selectedInputFile,
+        sourceFileName: myConfig.inputConfig.displayName,
+        outputFileName: myConfig.exportConfig.fileName,
+        treebank: myConfig.parsingConfig.selectedTreebank.short,
+        exportFormat: myConfig.exportConfig.selectedExportFormat,
         unread:  true,
         savedURL: savedURL ??  nil,
         message: exportStatusMessage,
-        safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
-        includeConllSentText: saveInputMetas.includeConllSentText
+        safeHeaderAttribs: myConfig.outputData.safeHeaderAttribs,
+        includeConllSentText: myConfig.exportConfig.includeConllSentText
     )
 }
 
@@ -1104,19 +1093,19 @@ func printFromConllSents(outsents: [Sentence]) throws -> URL{
 }
 
 //3
-func dumpDetailsForRunExplicit(runExplicit: Bool, outSents: [Sentence], targetFolderURL: URL?, fileName: String) {
+func dumpDetailsForRunExplicit(myConfig: TaggerConfig) {
     // print conll lines to terminal
-    if runExplicit {
+    if myConfig.parsingConfig.runExplicit {
         print("Printing conllRaw")
-        for sentence in outSents {
+        for sentence in myConfig.outputData.outSents {
             print(sentence.conll)
         }
-        if let printPath = targetFolderURL?.path(){
+        if let printPath = myConfig.exportConfig.targetFolderURL?.path(){
             print(printPath)
         } else {
             print("Problem with print path from URL 274")
         }
-        print("output name = \(fileName)")
+        print("output name = \(myConfig.exportConfig.fileName)")
         print("Main actor done, running function 277")
     }
     //no returns
@@ -1130,23 +1119,17 @@ func dumpDetailsForRunExplicit(runExplicit: Bool, outSents: [Sentence], targetFo
 //----------------------------------------------------------------------------------------------------------------------------
 
 //MARK: settings updaters
-func makeTidyRunOutput(outSents: [Sentence], saveInputMetas: SaveInputMetas, safeHeaderAttribs: XmlHeaderAttribs) -> RunOutput {
+func makeTidyRunOutput(myConfig: TaggerConfig ) -> RunOutput {
     
-    let exportContent = makeExportContent(
-        sentences: outSents,
-        exportFormat: saveInputMetas.exportFormat,
-        safeHeaderAttribs: saveInputMetas.safeHeaderAttribs,
-        includeConllSentText: saveInputMetas.includeConllSentText
-    )
+    let exportContent = makeExportContent(myConfig: myConfig)
     
     let runData: RunData = RunData(
-        sents: outSents,
+        sents: myConfig.outputData.outSents,
         exportContent: exportContent
     )
     
     let runMetas = saveFileToChosenLocation(
-        exportContent: exportContent,
-        saveInputMetas: saveInputMetas
+        myConfig: myConfig
     )
     
     let runOutput = RunOutput(
@@ -1193,6 +1176,41 @@ func makeHashableSentFromTestToks(tempTokens: [TempToken])-> HashableSentence?{
 //                                                  encapsulation of run inputs, outputs
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
+func makeSafeHeaderAttribs(myConfig: TaggerConfig, fileContainerModel: SourceFileContainerModel) -> XmlHeaderAttribs {
+    let xmlSafeXMLAuthor = myConfig.exportConfig.xmlAuthorName.xmlEscaped != "" ? myConfig.exportConfig.xmlAuthorName.xmlEscaped : "author_unknown"
+    let xmlSafeXMLTitle = myConfig.exportConfig.xmlTitle.xmlEscaped != "" ? myConfig.exportConfig.xmlTitle.xmlEscaped : "title"
+    let xmlSafeLang = myConfig.parsingConfig.selectedLanguage.displayName.lowercased()
+    let xmlsafeTreebank = myConfig.parsingConfig.selectedTreebank.short.xmlEscaped
+    
+    let formatter = DateFormatter()
+    formatter.dateFormat = "y-MM-dd HH:mm"
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    let dateString = formatter.string(from:Date())
+    let xmlsafeDate = dateString.xmlEscaped
+    
+    let xmlsafeSourceFile = fileContainerModel.localSandboxFileURL?.path().xmlEscaped ?? "unk"
+    let runID = UUID().uuidString
+    
+    let maxPipelineStep = myConfig.parsingConfig.maxPipelineStep.title.xmlEscaped
+    let runRetokeniser = String(myConfig.parsingConfig.runRetokeniser).xmlEscaped
+    let tokenizingMethod = myConfig.parsingConfig.tokenizingMethod.rawValue.xmlEscaped
+    let sentencizingMethod = myConfig.parsingConfig.sentencizingMethod.rawValue.xmlEscaped
+    
+    let outputStruct = XmlHeaderAttribs(
+        xmlTitle: xmlSafeXMLTitle,
+        xmlAuthorName: xmlSafeXMLAuthor,
+        lang: xmlSafeLang,
+        treebank: xmlsafeTreebank,
+        taggingDate: xmlsafeDate,
+        sourceFile: xmlsafeSourceFile,
+        runID: runID,
+        maxPipelineStep: maxPipelineStep,
+        runRetokeniser: runRetokeniser,
+        tokenizingMethod: tokenizingMethod,
+        sentencizingMethod: sentencizingMethod,
+    )
+    return outputStruct
+}
 
 //                                                  end of main functions; experimental moved to function_dev
 //----------------------------------------------------------------------------------------------------------------------------
@@ -1256,10 +1274,10 @@ func getNLTags(text: String) -> NLParseResults{
 
 
 
-func postprocessSentence(sentence: HashableSentence, parsedTokens: [Token], runExplicit: Bool, maxPipelineStep: PipelineStep )->Sentence{
+func postprocessSentence(sentence: HashableSentence, parsedTokens: [Token], myConfig: TaggerConfig)->Sentence{
     
-    if runExplicit {
-        print("max requested step == \(maxPipelineStep.rawValue)")
+    if myConfig.parsingConfig.runExplicit {
+        print("max requested step == \(myConfig.parsingConfig.maxPipelineStep.rawValue)")
     }
     let mySent: Sentence = Sentence(
         sentID: sentence.id,
@@ -1308,7 +1326,4 @@ func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: I
     // We use the validOffsets to ensure we only touch existing indices.
     array.remove(atOffsets: validOffsets)
 }
-
-
-
 

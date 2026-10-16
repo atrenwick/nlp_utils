@@ -70,16 +70,16 @@ extension PipelineSettingsView {
         var missing: [String] = []
         
         // Rule 1: Check input file exists in sandbox
-        if fileContainerModel.localSandboxFileURL == nil && inputFileType != .manual{
+        if fileContainerModel.localSandboxFileURL == nil && myConfig.inputConfig.inputFileType != .manual{
             missing.append("Input File")
         }
 
         let ext = fileContainerModel.localSandboxFileURL?.pathExtension ?? "nil"
-        if  inputFileType.allowedReadExt.contains(ext) == false  && inputFileType != .manual {
+        if  myConfig.inputConfig.inputFileType.allowedReadExt.contains(ext) == false  && myConfig.inputConfig.inputFileType != .manual {
             missing.append("extension-InputType Mismatch")
         }
         
-        if inputFileType == .manual && builtSents.count == 0 {
+        if myConfig.inputConfig.inputFileType == .manual && builtSents.count == 0 {
             missing.append("No built sents found")
         }
         
@@ -113,3 +113,5 @@ extension PipelineSettingsView {
         }
     }
 }
+
+
