@@ -170,6 +170,34 @@ enum Language: String, CaseIterable, Identifiable {
     }
 }
 
+enum LemmaSource: String, CaseIterable, Identifiable{
+    var id: Self {self}
+    case rule
+    case hybrid
+    
+    var displayName: String {
+        switch self {
+        case .rule:
+            return "Rule"
+        case .hybrid:
+            return "Hybrid"
+        }
+    }
+    
+}
+
+enum ModelArchitecture: String, CaseIterable, Identifiable{
+    var id: Self { self }
+    case distilbert
+    case cnnBiLSTM
+    var displayName: String{
+        switch self{
+        case .distilbert: return "DistilBERT"
+        case .cnnBiLSTM: return "CNN-BiLSTM"
+        }
+    }
+    
+}
 
 enum ParseProcessingError: LocalizedError{
     case badTempTokens

@@ -27,6 +27,12 @@ struct SetDefaultsView: View {
     @AppStorage("runResentenciserDefault")  var runResentenciserDefault: Bool = false
     @AppStorage("progressBarStyleDefault") var progressBarStyleDefault: ProgressBarStyle = .apple
     @AppStorage("retokenisationTypeDefault") var retokenisationTypeDefault: RetokenisationType = .predict
+    @AppStorage("modelArchitectureDefault") var modelArchitectureDefault: ModelArchitecture = .cnnBiLSTM
+
+    @AppStorage("priLemSourceDefault") var priLemSourceDefault: LemmaSource = .hybrid
+    @AppStorage("secLemSourceDefault") var secLemSourceDefault: LemmaSource = .rule
+    @AppStorage("getSecLemsDefault") var getSecLemsDefault: Bool = false
+
 
     //export
     @AppStorage("xmlAuthorDefault")  var xmlAuthorDefault: String = "XML Author"
@@ -56,6 +62,13 @@ struct SetDefaultsView: View {
                     DefaultPickerView(title: "InputFiletype method", selection: $inputFileTypeDefault)
                 }
                 Section("Processing"){
+                    Picker("modelArchitectureDefault", selection: $modelArchitectureDefault){
+                        ForEach(ModelArchitecture.allCases){modArch in
+                            Text(modArch.displayName)
+                        }
+                    }
+
+                    
                     ConstrainedLanguagePickerView(title: "testpicker", selectedTreebankDefault: $selectedTreebankDefault, selection: $selectedLanguageDefault)
                     
                     Picker("Treebank", selection: $selectedTreebankDefault){
@@ -86,6 +99,37 @@ struct SetDefaultsView: View {
                         Text("Resentencise by default")
                     }
                 }
+                Section("Lemmatization"){
+                    Toggle(isOn: $getSecLemsDefault){
+                        Text("Get Secondary lemmas")
+                    }
+                    Picker("Primary method", selection: $priLemSourceDefault){
+                        ForEach(LemmaSource.allCases){lsource in
+                            Text(lsource.displayName)
+                        }
+                    }
+                    .onChange(of: secLemSourceDefault){_, newValue in
+                        if secLemSourceDefault == priLemSourceDefault {
+                            if let remaining = LemmaSource.allCases.filter({ format in format != secLemSourceDefault  }).first{
+                                priLemSourceDefault = remaining
+                            }
+                        }
+                    }
+                    Picker("Secondary method", selection: $secLemSourceDefault){
+                        ForEach(LemmaSource.allCases){lsource in
+                            Text(lsource.displayName)
+                        }
+                    }
+                    .onChange(of: priLemSourceDefault){_, newValue in
+                        if secLemSourceDefault == priLemSourceDefault {
+                            if let remaining = LemmaSource.allCases.filter({ format in format != priLemSourceDefault  }).first{
+                                secLemSourceDefault = remaining
+                            }
+                        }
+                    }
+
+                }
+
                 Section("View"){
                     DefaultPickerView(title: "Progress bar style", selection: $progressBarStyleDefault)
                 }

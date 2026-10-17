@@ -7,9 +7,12 @@
 
 import SwiftUI
 
+
 struct ProcessorStepConfigViewSection: View {
     @Binding var myConfig: TaggerConfig
-
+    @State var priLemSource: LemmaSource = .hybrid
+    @State var secLemSource: LemmaSource = .rule
+    @State var getSecLemmas: Bool = false
     var body: some View {
         Form{
             Section("Retokenisation"){
@@ -39,9 +42,53 @@ struct ProcessorStepConfigViewSection: View {
                 .foregroundStyle(myConfig.parsingConfig.runResentenciser ? .primary : .secondary)
             }
             Section(header: Text("Pipeline Execution Steps")) {
-                ForEach(PipelineStep.allCases) { step in
+                ForEach(PipelineStep.allCases.prefix(1)) { step in
                     let isActive = isStepActive(step)
-                    
+                    Toggle(isOn: toggleBinding(for: step)) {
+                        Text(step.title)
+                            .foregroundColor(isActive ? .primary : .secondary)
+                    }
+                }
+                Toggle(isOn: toggleBinding(for: PipelineStep.step3)){
+                    Text("3. Lemmatisation ")
+                }
+                .onChange(of: getSecLemmas){
+                    if isStepActive(PipelineStep.step3) == false && getSecLemmas == true {
+                        myConfig.parsingConfig.maxPipelineStep = PipelineStep.step3
+                    }
+                }
+                Toggle("    Get additional lemmas", isOn: $getSecLemmas)
+                    .onChange(of: isStepActive(PipelineStep.step3)){
+                        if isStepActive(PipelineStep.step3) == false {
+                        getSecLemmas = false}
+                    }
+                Picker("    Primary method", selection: $priLemSource){
+                    ForEach(LemmaSource.allCases){lsource in
+                        Text(lsource.displayName)
+                    }
+                }
+                .onChange(of: secLemSource){_, newValue in
+                    if secLemSource == priLemSource {
+                        if let remaining = LemmaSource.allCases.filter({ format in format != secLemSource  }).first{
+                            priLemSource = remaining
+                        }
+                    }
+                }
+                Picker("    Secondary method", selection: $secLemSource){
+                    ForEach(LemmaSource.allCases){lsource in
+                        Text(lsource.displayName)
+                    }
+                }
+                .onChange(of: priLemSource){_, newValue in
+                    if secLemSource == priLemSource {
+                        if let remaining = LemmaSource.allCases.filter({ format in format != priLemSource  }).first{
+                            secLemSource = remaining
+                        }
+                    }
+                }
+
+                ForEach(PipelineStep.allCases.suffix(2)) { step in
+                    let isActive = isStepActive(step)
                     Toggle(isOn: toggleBinding(for: step)) {
                         Text(step.title)
                             .foregroundColor(isActive ? .primary : .secondary)

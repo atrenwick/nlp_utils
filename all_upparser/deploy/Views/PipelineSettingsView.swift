@@ -4,10 +4,8 @@
 //
 //  Created by Adam on 08/09/2026.
 //
-// TOCHECK in downstream views
-//        var showImporter: Bool
-//        var hasAppeared: Bool
-//        var isSelectingFolder: Bool
+
+
 import SwiftUI
 internal import UniformTypeIdentifiers
 
@@ -26,7 +24,6 @@ struct PipelineSettingsView: View {
     @State var builtSents: [BuiltSentHolder] = []
     @State var sentsToRetokenise: [String] = []
     @State var exportContent: String = ""
-    
     var unreadCount: Int {
         topLevelOutputList.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
@@ -58,6 +55,11 @@ struct PipelineSettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("DetectLanguageToggle")
+                    Picker("architecture", selection: $myConfig.parsingConfig.modelArchitecture){
+                        ForEach(ModelArchitecture.allCases){modarch in
+                            Text(modarch.displayName)
+                        }
+                    }
                     
                     ConstrainedLanguagePickerView(title: "Language", selectedTreebankDefault: $myConfig.parsingConfig.selectedTreebank, selection: $myConfig.parsingConfig.selectedLanguage)
                         .onChange(of: fileContainerModel.localSandboxFileURL){
@@ -216,7 +218,7 @@ struct PipelineSettingsView: View {
                         allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
 #endif
                     for sentence in allSentences {
-                        let parsedTokens = try pipeline.runOnSentence(sentence, level: maxPipelineStep.rawValue)
+                        let parsedTokens = try pipeline.runOnSentence(sentence, myConfig: myConfig)
                         myConfig.outputData.outSents.append(
                             postprocessSentence(sentence: sentence, parsedTokens: parsedTokens, myConfig: myConfig)
                         )

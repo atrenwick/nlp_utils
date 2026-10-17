@@ -78,7 +78,8 @@ enum UDPipelineError: Error, LocalizedError {
 
 
 // MARK: - Pipeline
-
+//TODO: add choice of lemmatisation method - rule/hybrid for cnnbilstm :: choose primary lemmas as col2, option is sec lemma as col8
+///     :add option of multiple lemmas predicted on same run, send extra to spec column
 final class UDPipeline {
     static let rootToken = "<root>"
     static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
@@ -100,24 +101,43 @@ final class UDPipeline {
             UserDefaults.standard.bool(forKey: "runExplicit")
         }
     init(myConfig: TaggerConfig) throws {
-//    init(languageCode: String, treebank: String) throws {
+        //    init(languageCode: String, treebank: String) throws {
         let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
         let treebank = myConfig.parsingConfig.selectedTreebank.short
-        
-        tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer_\(treebank)")
-        taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser_\(treebank)")
 
-        tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
-        wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
-        taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
-        uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
-        //xposVocab = try Vocab.load(named: "\(languageCode)_xpos_vocab\(treebank)")
-        featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
-        deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
-//        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab\(treebank)")
-        self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
+        switch myConfig.parsingConfig.modelArchitecture {
+        case .cnnBiLSTM:
+            tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer_\(treebank)")
+            taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser_\(treebank)")
+            
+            tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
+            wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
+            taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
+            uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
+            //xposVocab = try Vocab.load(named: "\(languageCode)_xpos_vocab\(treebank)")
+            featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
+            deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
+            //        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab\(treebank)")
+            self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
+        case .distilbert:
+            //MARK: to update
+            // tokenizer model == not needed, as have struct method
+            tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer_\(treebank)")
+            // need to update this to new pattern
+            taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser_\(treebank)")
+            uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
+            //xposVocab = try Vocab.load(named: "\(languageCode)_xpos_vocab\(treebank)")
+            featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
+            deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
+            //        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab\(treebank)")
+            self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
+            
+            // not used
+            tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
+            wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
+            taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
+        }
     }
-    
 
     private static func loadModel(named name: String) throws -> MLModel {
         // Xcode compiles a bundled .mlpackage into a .mlmodelc at build
@@ -470,43 +490,45 @@ final class UDPipeline {
 
     // MARK: Per-sentence processing: for progress-reporting callers
     /// same field-decoding logic as `run(text:level:mode:)`,with 1x tokenised sent a time ->Token
-    func runOnSentence(_ sentence: HashableSentence, level: Int) throws -> [Token] {
+    func runOnSentence(_ sentence: HashableSentence,  myConfig: TaggerConfig) throws -> [Token] {
+        let level = myConfig.parsingConfig.maxPipelineStep.rawValue
         guard (1...5).contains(level) else {
             throw UDPipelineError.invalidLevel(level)
         }
 
         let n = sentence.tokens.count
+        
         var lemmas = Array(repeating: "_", count: n)
         var uposTags = Array(repeating: "_", count: n)
         var featsTags = Array(repeating: "_", count: n)
         var heads = Array(repeating: "_", count: n)
         var deprels = Array(repeating: "_", count: n)
         
-        var nlLemmas: [String] = [] //Array(repeating: "_", count: n)
-        var nlPos: [String] = []//Array(repeating: "_", count: n)
-        
-        let nlTagger = NLTagger(tagSchemes: [ .lemma, .lexicalClass])
-        let nlOptions: NLTagger.Options = [ .omitWhitespace]
-        let nlInputText = sentence.tokens.joined(separator: " ")
-        nlTagger.string = nlInputText
-        nlTagger.enumerateTags(in: nlInputText.startIndex..<nlInputText.endIndex, unit: .word, scheme: .lexicalClass, options: nlOptions) { tag,_  in
-            if let tag = tag {
-                nlPos.append( tag.rawValue)
-            }
-            else {
-                nlPos.append("Z")
-            }
-            return true // signal to enumerator to keep going with enumeration
-        }
-        nlTagger.enumerateTags(in: nlInputText.startIndex..<nlInputText.endIndex, unit: .word, scheme: .lemma, options: nlOptions) { tag,_  in
-            if let tag = tag {
-                nlLemmas.append( tag.rawValue)
-            }
-            else {
-                nlLemmas.append("X")
-            }
-            return true // signal to enumerator to keep going with enumeration
-        }
+//        var nlLemmas: [String] = [] //Array(repeating: "_", count: n)
+//        var nlPos: [String] = []//Array(repeating: "_", count: n)
+//        
+//        let nlTagger = NLTagger(tagSchemes: [ .lemma, .lexicalClass])
+//        let nlOptions: NLTagger.Options = [ .omitWhitespace]
+//        let nlInputText = sentence.tokens.joined(separator: " ")
+//        nlTagger.string = nlInputText
+//        nlTagger.enumerateTags(in: nlInputText.startIndex..<nlInputText.endIndex, unit: .word, scheme: .lexicalClass, options: nlOptions) { tag,_  in
+//            if let tag = tag {
+//                nlPos.append( tag.rawValue)
+//            }
+//            else {
+//                nlPos.append("Z")
+//            }
+//            return true // signal to enumerator to keep going with enumeration
+//        }
+//        nlTagger.enumerateTags(in: nlInputText.startIndex..<nlInputText.endIndex, unit: .word, scheme: .lemma, options: nlOptions) { tag,_  in
+//            if let tag = tag {
+//                nlLemmas.append( tag.rawValue)
+//            }
+//            else {
+//                nlLemmas.append("X")
+//            }
+//            return true // signal to enumerator to keep going with enumeration
+//        }
 
         if level >= 2 {
             let raw = try runTaggerParserModel(on: sentence)
@@ -528,27 +550,27 @@ final class UDPipeline {
             Token(
                 tokid: i + 1, form: sentence.tokens[i], lemma: lemmas[i],
                 upos: uposTags[i], xpos: "_", feats: featsTags[i],
-                head: heads[i], deprel: deprels[i], col8: nlLemmas[i], col9: nlPos[i]
+                head: heads[i], deprel: deprels[i], col8: "_", col9: "_"
             )
         }
     }
 
-    /// Format tok of a tagged sent using `mode` like in `run(text:level:mode:)`for `runOnSentence`
-    func formatSentence(_ tokens: [Token], mode: String) throws -> [String] {
-        var lines: [ConllLineContent] = tokens.map { .row($0) }
-        lines.append(.blank)
-
-        switch mode {
-        case "raw":
-            return formatRaw(lines)
-        case "tidy":
-            return formatTidy(lines)
-        default:
-            throw UDPipelineError.predictionFailed(
-                "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
-            )
-        }
-    }
+//    /// Format tok of a tagged sent using `mode` like in `run(text:level:mode:)`for `runOnSentence`
+//    func formatSentence(_ tokens: [Token], mode: String) throws -> [String] {
+//        var lines: [ConllLineContent] = tokens.map { .row($0) }
+//        lines.append(.blank)
+//
+//        switch mode {
+//        case "raw":
+//            return formatRaw(lines)
+//        case "tidy":
+//            return formatTidy(lines)
+//        default:
+//            throw UDPipelineError.predictionFailed(
+//                "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
+//            )
+//        }
+//    }
 
     // MARK: Controller
     /// Runs raw text through the pipeline up to (and including) `level`, and returns CoNLL-U-style
@@ -563,33 +585,34 @@ final class UDPipeline {
     /// `mode` controls formatting, independent of `level`:
     ///   "raw"  -- plain tab-separated CoNLL-U fields
     ///   "tidy" -- the same fields, data, but column-aligned with padding
-    func run(text: String, level: Int, mode: String) throws -> [String] {
-        guard (1...5).contains(level) else {
-            throw UDPipelineError.invalidLevel(level)
-        }
-
-        let sentences = try tokenize(text)
-        var allLines: [ConllLineContent] = []
-
-        for sentence in sentences {
-            let tokens = try runOnSentence(sentence, level: level)
-            for tok in tokens {
-                allLines.append(.row(tok))
-            }
-            allLines.append(.blank)
-        }
-
-        switch mode {
-        case "raw":
-            return formatRaw(allLines)
-        case "tidy":
-            return formatTidy(allLines)
-        default:
-            throw UDPipelineError.predictionFailed(
-                "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
-            )
-        }
-    }
+//    func run(text: String, myConfig: TaggerConfig) throws -> [String] {
+//        let level = myConfig.parsingConfig.maxPipelineStep.rawValue
+//        guard (1...5).contains(level) else {
+//            throw UDPipelineError.invalidLevel(level)
+//        }
+//
+//        let sentences = try tokenize(text)
+//        var allLines: [ConllLineContent] = []
+//
+//        for sentence in sentences {
+//            let tokens = try runOnSentence(sentence, myConfig: myConfig)
+//            for tok in tokens {
+//                allLines.append(.row(tok))
+//            }
+//            allLines.append(.blank)
+//        }
+//
+//        switch myConfig.exportConfig {
+//        case "raw":
+//            return formatRaw(allLines)
+//        case "tidy":
+//            return formatTidy(allLines)
+//        default:
+//            throw UDPipelineError.predictionFailed(
+//                "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
+//            )
+//        }
+//    }
 
     // MARK: - Output formatting
     private func formatRaw(_ lines: [ConllLineContent]) -> [String] {

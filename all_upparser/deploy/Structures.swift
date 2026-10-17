@@ -376,12 +376,16 @@ struct TaggerConfig{
         var selectedLanguage: Language
         var selectedTreebank: Language.Treebank
         var maxPipelineStep: PipelineStep
+        var modelArchitecture: ModelArchitecture
         var runResentenciser: Bool
         var runRetokeniser: Bool
         var tokenizingMethod: TokenizingMethod
         var sentencizingMethod: SentencizingMethod
         var insertNewTokPosition: InsertPosition
         var selectedRetokenisationType: RetokenisationType
+        var priLemSource: LemmaSource
+        var secLemSource: LemmaSource
+        var getSecLems: Bool
         var runExplicit: Bool
 
         
@@ -390,23 +394,31 @@ struct TaggerConfig{
             selectedLanguage: Language? = nil,
             selectedTreebank: Language.Treebank? = nil,
             maxPipelineStep: PipelineStep? = nil,
+            modelArchitecture: ModelArchitecture? = nil,
             runResentenciser: Bool? = nil,
             runRetokeniser: Bool? = nil,
             tokenizingMethod: TokenizingMethod? = nil,
             sentencizingMethod: SentencizingMethod? = nil,
             insertNewTokPosition: InsertPosition? = nil,
             selectedRetokenisationType: RetokenisationType? = nil,
+            priLemSource: LemmaSource? = nil,
+            secLemSource: LemmaSource? = nil,
+            getSecLems: Bool? = nil,
             runExplicit: Bool? = nil
         ){
             self.selectedLanguage = TaggerConfig.resolveRepresentable(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
             self.selectedTreebank = TaggerConfig.resolveRepresentable(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
             self.runResentenciser = TaggerConfig.resolveBool(passed: runResentenciser, key: "runResentenciserDefault", default: false)
             self.runRetokeniser = TaggerConfig.resolveBool(passed: runRetokeniser, key: "runRetokeniserDefault", default: false)
+            self.modelArchitecture = TaggerConfig.resolveRepresentable(passed: modelArchitecture, key: "modelArchitectureDefault", fallback: .cnnBiLSTM)
             self.maxPipelineStep = TaggerConfig.resolveRepresentable(passed: maxPipelineStep, key: "maxPipelineStepDefault", fallback: .step5 )
             self.tokenizingMethod = TaggerConfig.resolveRepresentable(passed: tokenizingMethod, key: "tokenizingMethodDefault", fallback: .nltokeniser )
             self.sentencizingMethod = TaggerConfig.resolveRepresentable(passed: sentencizingMethod, key: "sentencizingMethodDefault", fallback: .nlSentencizer )
             self.insertNewTokPosition = TaggerConfig.resolveRepresentable(passed: insertNewTokPosition, key: "insertNewTokPositionDefault", fallback: .after )
             self.selectedRetokenisationType = TaggerConfig.resolveRepresentable(passed: selectedRetokenisationType, key: "retokenisationTypeDefault", fallback: .predict )
+            self.priLemSource = TaggerConfig.resolveRepresentable(passed: priLemSource, key: "priLemSourceDefault", fallback: .hybrid )
+            self.secLemSource = TaggerConfig.resolveRepresentable(passed: secLemSource, key: "secLemSourceDefault", fallback: .rule )
+            self.getSecLems = TaggerConfig.resolveBool(passed: getSecLems, key: "getSecLemsDefault")
             self.runExplicit = TaggerConfig.resolveBool(passed: runExplicit, key: "runExplicifDefault")
         }
     }
