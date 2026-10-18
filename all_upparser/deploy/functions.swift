@@ -74,7 +74,7 @@ func testInstantiatePipeline(myConfig: TaggerConfig)   -> String {
     
     Task{
         do {
-            let _ = try UDPipeline(myConfig: myConfig)
+            let _ = try UDPipelineCNNBiLSTM(myConfig: myConfig)
             await MainActor.run {
                 outputString = "Success"
             }
@@ -506,7 +506,7 @@ func _applySentencizingMethodToString(normalizedText: String,  myConfig: TaggerC
 }
 
 //3
-func textFileToSentStrings(myConfig: TaggerConfig, tokenizerPipeline: UDPipeline) throws -> [String]{
+func textFileToSentStrings(myConfig: TaggerConfig, tokenizerPipeline: UDPipelineCNNBiLSTM) throws -> [String]{
     guard let _ = myConfig.inputConfig.selectedInputFile else {
         print("guard let failed loading form file")
         return []
@@ -540,7 +540,7 @@ func desentenciseAndResentencise(sentsToDiscard: [HashableSentence], myConfig: T
 
 
 
-func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: UDPipeline, taggingInProgress: Binding<Bool>) throws -> [HashableSentence]{
+func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: UDPipelineCNNBiLSTM, taggingInProgress: Binding<Bool>) throws -> [HashableSentence]{
     
     var sentencesAsStrings: [String] = []
     
@@ -567,7 +567,7 @@ func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: UDPipeline, ta
 }
 func ingestSentEncapsulator(
     myConfig: TaggerConfig,
-    pipeline: UDPipeline
+    pipeline: UDPipelineCNNBiLSTM
 ) throws -> [HashableSentence] {
     
     var allSentences: [HashableSentence] = []
@@ -661,7 +661,7 @@ func applyNaiveTokenisation(language: Language, myString: String) throws -> [Str
 
 
 //4
-func stringSentsToHashableSents(myConfig: TaggerConfig, sents: [String], pipeline: UDPipeline) throws -> [HashableSentence]{
+func stringSentsToHashableSents(myConfig: TaggerConfig, sents: [String], pipeline: UDPipelineCNNBiLSTM) throws -> [HashableSentence]{
 
     var internalSentList: [HashableSentence] = []
     switch myConfig.parsingConfig.tokenizingMethod {
@@ -751,7 +751,7 @@ func applySimplexTokenisation(inputText: String) -> [String] {
 
 
 //6
-func textFileToHashableSents(myConfig: TaggerConfig, pipeline: UDPipeline
+func textFileToHashableSents(myConfig: TaggerConfig, pipeline: UDPipelineCNNBiLSTM
 //    inputURL: URL?,
 //    sentencizingMethod: SentencizingMethod,
 //    tokenizingMethod: TokenizingMethod,
@@ -881,6 +881,7 @@ func sentListToXML(myConfig: TaggerConfig) -> String {
     let safeHeaderAttribs = myConfig.outputData.safeHeaderAttribs
     let sentences = myConfig.outputData.outSents
     let sentCount = String(sentences.count)
+    print("sentCount inside sentlist to xml = \(sentCount)")
     let tokCount = String(sentences.generateTokCount())
     var outputStore: [String] = []
 
@@ -932,8 +933,9 @@ func sentListToXML(myConfig: TaggerConfig) -> String {
         )
     }
     outputStore.append(xmlFooter)
-    
-    return outputStore.joined(separator: "\n")
+    let returnItem = outputStore.joined(separator: "\n")
+    print("returnItem 937 count = \(returnItem.count)")
+    return returnItem
     
 }
 func sentListToXMLFromMetas(run: RunOutput, additionalExportFormat: ExportFormat) -> String {
@@ -1046,6 +1048,8 @@ func saveFileToChosenLocation(myConfig: TaggerConfig, exportContent: String, run
     if myConfig.parsingConfig.runExplicit{ print("Guard 661 pass")  }
     
     do {
+        print("export content inside Exporter service count == \(exportContent.count)")
+
         savedURL = try ExporterService.exportDataToFile(
             exportContent: exportContent,
             customName: "\(myConfig.exportConfig.fileName)_\(myConfig.parsingConfig.selectedTreebank.short)_\(myConfig.exportConfig.selectedExportFormat.rawValue)",
@@ -1223,8 +1227,9 @@ func dumpDetailsForRunExplicit(myConfig: TaggerConfig, taggingInProgress:Binding
 
 //MARK: settings updaters
 func makeTidyRunOutput(myConfig: TaggerConfig ) -> RunOutput {
-    let runID = UUID().uuidString
+    let runID = myConfig.outputData.safeHeaderAttribs.runID
     let exportContent = makeExportContent(myConfig: myConfig)
+    print("export content as made @ 1228 :: count == \(exportContent.count)")
     let runData: RunData = RunData(
         runID: runID,
         sents: myConfig.outputData.outSents,
@@ -1394,32 +1399,6 @@ func postprocessSentence(sentence: HashableSentence, parsedTokens: [Token], myCo
     return mySent
 }
 
-
-
-
-
-
-
-
-
-
-
-//}
-//        if let inputFileType = inputFileType{
-//            self.inputFileType = inputFileType
-//        } else {
-
-//        func fooInit(inputFileType: InputFileType? = nil){
-//                if let inputFileType = inputFileType{
-//                    self.inputFileType = inputFileType
-//                } else {
-//                    if let foo = InputFileType(
-//                        rawValue: TaggerConfig.resolveString(passed: nil, key: "inputFileTypeDefault", default: InputFileType.txt.rawValue)
-//                    ){
-//                        self.inputFileType = foo
-//                    }
-//                }
-//        }
 func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: IndexSet) {
     // 1. Guard against empty inputs
     guard !offsets.isEmpty else { return }

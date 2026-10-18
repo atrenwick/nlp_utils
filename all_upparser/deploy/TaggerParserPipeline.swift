@@ -5,7 +5,7 @@ import NaturalLanguage
 
 // MARK: - Vocabulary
 //structure to decode the vocab data JSON file
-private struct VocabData: Decodable {
+struct VocabData: Decodable {
     let itos: [String]
     let pad: String
     let unk: String
@@ -18,7 +18,7 @@ final class Vocab {
     let unk: String
     
     //   //init method for the vocab class
-    fileprivate init(data: VocabData) {
+    init(data: VocabData) {
         itos = data.itos
         pad = data.pad
         unk = data.unk
@@ -58,7 +58,12 @@ enum UDPipelineError: Error, LocalizedError {
     case lemmatizationFailed(String)
     case predictionFailed(String)
     case invalidLevel(Int)
+    case emptyInput
+    case unexpectedOutput(String)
+    case invalidModelInputs(String)
 
+
+    
     var errorDescription: String? {
         switch self {
         case .missingResource(let name):
@@ -71,6 +76,13 @@ enum UDPipelineError: Error, LocalizedError {
             return "Prediction failed: \(msg)"
         case .invalidLevel(let level):
             return "Invalid pipeline level \(level): must be between 1 and 5."
+        case .invalidModelInputs(let detail):
+            return "Unexpected model inputs: \(detail)"
+
+        case .emptyInput:
+            return "no input found"
+        case .unexpectedOutput(_):
+            return "Unexpected output"
         }
     }
 }
@@ -80,7 +92,7 @@ enum UDPipelineError: Error, LocalizedError {
 // MARK: - Pipeline
 //TODO: add choice of lemmatisation method - rule/hybrid for cnnbilstm :: choose primary lemmas as col2, option is sec lemma as col8
 ///     :add option of multiple lemmas predicted on same run, send extra to spec column
-final class UDPipeline {
+final class UDPipelineCNNBiLSTM {
     static let rootToken = "<root>"
     static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
     
@@ -95,7 +107,7 @@ final class UDPipeline {
     //private let xposVocab: Vocab
     private let featsVocab: Vocab
     private let deprelVocab: Vocab
-//    private let lemmaRuleVocab: Vocab
+    private let lemmaRuleVocab: Vocab
     // computed property of class to read from runExplicit every time a method runs
     private var runExplicit: Bool {
             UserDefaults.standard.bool(forKey: "runExplicit")
@@ -117,25 +129,10 @@ final class UDPipeline {
             //xposVocab = try Vocab.load(named: "\(languageCode)_xpos_vocab\(treebank)")
             featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
             deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
-            //        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab\(treebank)")
+            lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab_\(treebank)")
             self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
-        case .distilbert:
-            //MARK: to update
-            // tokenizer model == not needed, as have struct method
-            tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer_\(treebank)")
-            // need to update this to new pattern
-            taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser_\(treebank)")
-            uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
-            //xposVocab = try Vocab.load(named: "\(languageCode)_xpos_vocab\(treebank)")
-            featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
-            deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
-            //        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab\(treebank)")
-            self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
-            
-            // not used
-            tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
-            wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
-            taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
+        default :
+            throw UDPipelineError.modelLoadFailed("Not a valid architecture choice")
         }
     }
 
@@ -203,7 +200,7 @@ final class UDPipeline {
         let uposLogits: MLMultiArray
         let xposLogits: MLMultiArray
         let featsLogits: MLMultiArray
-//        let lemmaLogits: MLMultiArray
+        let ruleLemmaLogits: MLMultiArray //rulebase lemma logits
         let decodedLemmas: [String]
         let arcLogits: MLMultiArray
         let labelLogits: MLMultiArray
@@ -236,6 +233,7 @@ final class UDPipeline {
         // new version
         guard let uposLogits = output.featureValue(for: "upos_logits")?.multiArrayValue,
               let xposLogits = output.featureValue(for: "xpos_logits")?.multiArrayValue,
+              let ruleLemmaLogits = output.featureValue(for:"lemma_rule_logits")?.multiArrayValue,
               let featsLogits = output.featureValue(for: "feats_logits")?.multiArrayValue,
               let arcLogits = output.featureValue(for: "arc_logits")?.multiArrayValue,
               let labelLogits = output.featureValue(for: "label_logits")?.multiArrayValue else {
@@ -263,10 +261,17 @@ final class UDPipeline {
             // new error type to add
             throw UDPipelineError.lemmatizationFailed("lemmatizer failed: \(error)")
         }
-        
+//        print("Report267::")
+//        print("Sentence == \(sentence)")
+//        
+//        print("seqlen == \(seqLen)")
+//        for item in [uposLogits, xposLogits, featsLogits, ruleLemmaLogits,  arcLogits, labelLogits]{
+//            print("\(item) :: , \(item.count)")
+//        }
+//        print ("Neural lemmas == \(lemmas.count)")
         return TaggerRawOutput(
             sentence: sentence, seqLen: seqLen,
-            uposLogits: uposLogits, xposLogits: xposLogits, featsLogits: featsLogits,
+            uposLogits: uposLogits, xposLogits: xposLogits, featsLogits: featsLogits, ruleLemmaLogits: ruleLemmaLogits,
             decodedLemmas: lemmas, arcLogits: arcLogits, labelLogits: labelLogits
         )
     }
@@ -300,12 +305,12 @@ final class UDPipeline {
     /// decodeLemmas function uses edit rules, and is here to enable easy roll-back, test, comparison
     /// 1x lemma string per real word, made by applying the predicted edit-script rule to word's raw form.
     ///
-//    private func decodeLemmas(_ raw: TaggerRawOutput) -> [String] {
-//        zip(1..<raw.seqLen, raw.sentence.tokens).map { t, form in
-//            let id = parserArgmax(raw.lemmaLogits, prefix: [0, t], dimSize: lemmaRuleVocab.itos.count)
-//            return applyLemmaRule(form: form, rule: lemmaRuleVocab.decode(id))
-//        }
-//    }
+    private func decodeRuleLemmas(_ raw: TaggerRawOutput) -> [String] {
+        zip(1..<raw.seqLen, raw.sentence.tokens).map { t, form in
+            let id = parserArgmax(raw.ruleLemmaLogits, prefix: [0, t], dimSize: lemmaRuleVocab.itos.count)
+            return applyLemmaRule(form: form, rule: lemmaRuleVocab.decode(id))
+        }
+    }
     private func getLemmas(_ raw: TaggerRawOutput) -> [String] {
         // set to true for dev test
         let dev = false
@@ -498,12 +503,12 @@ final class UDPipeline {
 
         let n = sentence.tokens.count
         
-        var lemmas = Array(repeating: "_", count: n)
         var uposTags = Array(repeating: "_", count: n)
         var featsTags = Array(repeating: "_", count: n)
         var heads = Array(repeating: "_", count: n)
         var deprels = Array(repeating: "_", count: n)
-        
+        var primaryLemmas = Array(repeating: "_", count: n)
+        var secondaryLemmas = Array(repeating: "_", count: n)
 //        var nlLemmas: [String] = [] //Array(repeating: "_", count: n)
 //        var nlPos: [String] = []//Array(repeating: "_", count: n)
 //        
@@ -534,7 +539,19 @@ final class UDPipeline {
             let raw = try runTaggerParserModel(on: sentence)
             uposTags = decodeUPOS(raw)
             if level >= 3 {
-                lemmas = getLemmas(raw)
+
+                switch myConfig.parsingConfig.priLemSource {
+                case .hybrid:
+                    primaryLemmas = getLemmas(raw)
+                    if myConfig.parsingConfig.getSecLems{
+                        secondaryLemmas = decodeRuleLemmas(raw)
+                    }
+                case .rule:
+                    primaryLemmas = decodeRuleLemmas(raw)
+                    if myConfig.parsingConfig.getSecLems{
+                        secondaryLemmas = getLemmas(raw)
+                    }
+                }
             }
             if level >= 4 {
                 featsTags = decodeFeats(raw)
@@ -548,9 +565,9 @@ final class UDPipeline {
 
         return (0..<n).map { i in
             Token(
-                tokid: i + 1, form: sentence.tokens[i], lemma: lemmas[i],
+                tokid: i + 1, form: sentence.tokens[i], lemma: primaryLemmas[i],
                 upos: uposTags[i], xpos: "_", feats: featsTags[i],
-                head: heads[i], deprel: deprels[i], col8: "_", col9: "_"
+                head: heads[i], deprel: deprels[i], col8: myConfig.parsingConfig.getSecLems ? secondaryLemmas[i] : "_", col9: "_"
             )
         }
     }

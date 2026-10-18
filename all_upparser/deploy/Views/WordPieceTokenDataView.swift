@@ -6,17 +6,20 @@
 //
 
 import SwiftUI
-struct TestOutput{
-    let tokenizer: WordPieceTokenizer
-    let encoded: WordPieceEncodedSentence
-}
+//struct TestOutput{
+//    let tokenizer: WordPieceTokenizer
+//    let encoded: WordPieceEncodedSentence
+//}
+
 
 struct WordPieceTokenDataView: View {
     
     @State var showWordPieces:Bool = false
     
     let words = "Colourless green ideas sleep furiously .".split(separator: " ")
-    @State var testOutput: TestOutput?
+    @State var testOutput: [String] = []
+    let languageCode: String = "FR"
+    let treebank: String = "gsd"
     var body: some View {
                 
         Button {
@@ -34,37 +37,43 @@ struct WordPieceTokenDataView: View {
         .tint(.indigo)
 
         
-        if let testOutput {
-            
-            ForEach(Array(words.enumerated()), id:\.offset){_, word in
-                HStack(alignment: .firstTextBaseline){
-                    Text(word).bold()
-                    Text(testOutput.tokenizer.subtokens(for: String(word)).joined(separator: ""))
+         
+            Form{
+                ForEach(testOutput.enumerated(), id:\.offset){(_, outputitem) in
+                    Text(outputitem)
                 }
-            }
+//            ForEach(Array(words.enumerated()), id:\.offset){_, word in
+//                HStack(alignment: .firstTextBaseline){
+//                    Text(word).bold()
+//                    Text(testOutput.tokenizer.subtokens(for: String(word)).joined(separator: ""))
+//                }
+//            }
         }
     }
-    func testWordpieceTokenisation(words: [String]) throws -> TestOutput {
+    func testWordpieceTokenisation(words: [String]) throws -> [String] {
         
         
         do {
-            let tokenizer: WordPieceTokenizer = try WordPieceTokenizer(
-                // showWordPieces is always set to true, use view to toggle actually showing
-                vocabURL: Bundle.main.url(forResource: "bert_tok_vocab", withExtension: "txt")!,
-                configURL: Bundle.main.url(forResource: "bert_tok_config_settings", withExtension: "json")
-            )
-            guard !tokenizer.clsID.words.isEmpty else {
+            let wordPieceTokenizer: WordPieceTokenizer = try WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank)
+
+
+            guard !wordPieceTokenizer.clsID.words.isEmpty else {
                 print("WordPieceError.tokenizerTryError")
                 throw WordPieceError.tokenizerTryError
             }
             
-            let encoded = try tokenizer.encode(words: words, seqLen: 128, maxWords: 96)
-            
+            let encoded = try wordPieceTokenizer.encode(words: words, seqLen: 128, maxWords: 96)
+            print(encoded.wordCount)
             guard !encoded.inputIDs.isEmpty else {
                 print("WordPieceError.wordPieceTokenizerError")
                 throw WordPieceError.wordPieceTokenizerError
             }
-            return TestOutput(tokenizer: tokenizer, encoded: encoded)
+//            return TestOutput(tokenizer: wordPieceTokenizer, encoded: encoded)
+            let failures = try wordPieceTokenizer.checkAgainstGolden(fileNameChunk: "FR_distilbert_tok_gold_gsd")
+            
+            print(failures)
+            return failures
+
         } catch {
             print("other type of error")
             throw WordPieceError.other
@@ -81,10 +90,10 @@ struct WordPieceTokenDataView: View {
 //        XCTAssertEqual(failures, [])
 //    }
 
-
-#Preview {
-    WordPieceTokenDataView()
-}
+//
+//#Preview {
+//    WordPieceTokenDataView()
+//}
 
 //let encoded = try tokenizer.encode(words: words, seqLen: 128, maxWords: 96)
 //let (ids, wordIndex) = try encoded.multiArrays()
@@ -95,4 +104,69 @@ struct WordPieceTokenDataView: View {
 
 
 
+
+
+struct BERTPipeTestView: View{
+    @State var outputString: String = ""
+    let languageCode = "FR"
+    let treebank = "gsd"
+    @State private var pipeline: UDPipelineBERTbased?
+    @State var alertMessage: String?
+    var body: some View{
+        
+        HStack{
+            Button {
+                outputString = "pressed"//testInstBertPipe(languageCode: languageCode, treebank: treebank)
+            } label: {
+                Text("Test load")
+            }
+            .tint(.orange)
+            .buttonStyle(.borderedProminent)
+            .task(id: languageCode) {
+                pipeline = nil
+                do {
+                    pipeline = try await UDPipelineBERTbased.load(languageCode: languageCode, treebank: treebank)
+                    alertMessage = "Success !"
+                } catch {
+                    alertMessage = error.localizedDescription
+                }
+            }
+            
+            Button {
+                outputString = "reset"
+            } label: {
+                Text("reset")
+            }
+            .tint(.blue)
+            .buttonStyle(.borderedProminent)
+        }
+        Text(outputString)
+    }
+    }
+
+func testInstBertPipe(languageCode: String, treebank: String) -> String {
+        // test instantiation of pipeline class based on params chosen
+        var outputString: String = ""
+        
+        Task{
+            do {
+                let _ = try UDPipelineBERTbased(languageCode: languageCode, treebank: treebank)
+                await MainActor.run {
+                    outputString = "Success"
+                    print(outputString)
+                }
+            } catch {
+                await MainActor.run {
+                    outputString = "Fail : \(error.localizedDescription)"
+                    print(outputString)
+                }
+            }
+        }
+        return outputString
+}
+#Preview {
+    BERTPipeTestView()
+}
+//
+//
 
