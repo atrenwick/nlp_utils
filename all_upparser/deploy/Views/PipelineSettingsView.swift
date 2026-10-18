@@ -20,6 +20,7 @@ struct PipelineSettingsView: View {
     @State private var exportStatusMessage: String?
     @State private var runOutput: RunOutput?
     @State private var taggingInProgress: Bool = false
+    @State var isFirstRun: Bool = true
     // sentences ::
     @State var builtSents: [BuiltSentHolder] = []
     @State var sentsToRetokenise: [String] = []
@@ -94,7 +95,8 @@ struct PipelineSettingsView: View {
                             runTagging(
                                 inputFileType: myConfig.inputConfig.inputFileType,
                                 maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
-                                taggingInProgress: $taggingInProgress
+                                taggingInProgress: $taggingInProgress,
+                                isFirstRun: $isFirstRun
                             ) // close runTagging bracket
                         } // close action brace
                     ) // close button bracket
@@ -140,10 +142,19 @@ struct PipelineSettingsView: View {
         }
     }
     
+    
     private func runTagging(
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
-        taggingInProgress: Binding<Bool>) {
+        taggingInProgress: Binding<Bool>,
+        isFirstRun: Binding<Bool>
+    ) {
+            // clear outputstruct data here AND onChange(of : inputfile
+        if !isFirstRun.wrappedValue {
+            myConfig.runResetters()
+        } else {
+            isFirstRun.wrappedValue = false
+        }
             myConfig.parsingConfig.runExplicit = true
             // MARK: parameters, initialisations for task
             taggingInProgress.wrappedValue = true
@@ -158,7 +169,7 @@ struct PipelineSettingsView: View {
             Task {
                 do {
                     // get pipeline object
-                    let pipeline = try UDPipeline(myConfig: myConfig)
+                    let pipeline = try UDPipelineCNNBiLSTM(myConfig: myConfig)
                     var allSentences: [HashableSentence] = []
                     
                     //MARK: INGEST SENTS ::
@@ -218,13 +229,15 @@ struct PipelineSettingsView: View {
                         allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
 #endif
                     for sentence in allSentences {
+                        print("processing line 232")
                         let parsedTokens = try pipeline.runOnSentence(sentence, myConfig: myConfig)
                         myConfig.outputData.outSents.append(
                             postprocessSentence(sentence: sentence, parsedTokens: parsedTokens, myConfig: myConfig)
                         )
+                        print("awaitng mainactor line 237")
                         await MainActor.run {
                             myConfig.progressConfig.processedCount += 1
-                            myConfig.progressConfig.appleProgress.completedUnitCount = Int64(myConfig.progressConfig.totalCount)
+                            myConfig.progressConfig.appleProgress.completedUnitCount = Int64(myConfig.progressConfig.processedCount)
                         }
                     }
 

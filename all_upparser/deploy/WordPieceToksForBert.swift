@@ -366,9 +366,14 @@ extension WordPieceTokenizer {
 
     /// Runs every case in tokenizer_golden.json (written by train_bert.py) and returns a
     /// description of each mismatch. An empty array means this tokenizer agrees with Python.
-    func checkAgainstGolden(at url: URL) throws -> [String] {
+    func checkAgainstGolden(fileNameChunk: String) throws -> [String] {
+        guard let url = Bundle.main.url(forResource: fileNameChunk, withExtension: "json") else {
+            throw UDPipelineError.modelLoadFailed(fileNameChunk.appending(".json"))
+        }
+        
         let cases = try JSONDecoder().decode([GoldenCase].self, from: Data(contentsOf: url))
         var failures: [String] = []
+        var matchCount: Int = 0
         for (n, golden) in cases.enumerated() {
             let got = encodeUnpadded(words: golden.words)
             let gotIDs = got.inputIDs.map { Int($0) }
@@ -379,9 +384,23 @@ extension WordPieceTokenizer {
                   expected ids \(golden.inputIDs.prefix(40))
                   got      ids \(gotIDs.prefix(40))
                 """)
+            } else {
+                matchCount += 1
+                let printstring = "case \(n) \(golden.words.prefix(8)) :: \(golden.inputIDs.prefix(40)) ==  \(gotIDs.prefix(40))"
+                print("\(printstring)  ::match \(matchCount)")
             }
         }
         return failures
     }
 }
 
+extension WordPieceTokenizer {
+    static func fromBundle(_ bundle: Bundle = .main, languageCode: String, treebank: String) throws -> WordPieceTokenizer {
+        guard let vocab = bundle.url(forResource: "\(languageCode)_distilbert_tok_vocab_\(treebank)", withExtension: "txt") else {
+            throw WordPieceError.vocabUnreadable(URL(fileURLWithPath: "\(languageCode)_distilbert_tok_vocab_\(treebank).txt"))
+        }
+        print("got vocab txt")
+        let settings = bundle.url(forResource: "\(languageCode)_distilbert_wordpiece_settings_\(treebank)", withExtension: "json")
+        return try WordPieceTokenizer(vocabURL: vocab, configURL: settings)
+    }
+}

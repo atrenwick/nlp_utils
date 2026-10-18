@@ -319,8 +319,8 @@ struct BigGoButtonReadinessView: View{
     let isPipelineReady: Bool
     let missingReqsMessage: String
     var body: some View{
-        VStack{
             if !isPipelineReady {
+                VStack{
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                     Text(missingReqsMessage)

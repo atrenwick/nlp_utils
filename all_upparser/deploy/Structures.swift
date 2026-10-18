@@ -479,6 +479,16 @@ struct TaggerConfig{
             self.totalCount = 0
             self.hasStarted = false
         }
+        
+        mutating func reset(){
+            self.appleProgress = Progress(totalUnitCount: 1)
+            self.startTime = nil
+            self.alertMessage = nil
+            self.exportStatusMessage = nil
+            self.processedCount = 0
+            self.totalCount = 0
+            self.hasStarted = false
+        }
     }
     //    // sentences ::
     struct InputData{
@@ -498,17 +508,20 @@ struct TaggerConfig{
             self.sentsToRetokenise = []
             self.resentencizerOutputStrings = []
         }
+        mutating func reset(){
+            self = Self()
+        }
     }
     
     struct OutputData{
-            var topLevelOutputList: [RunOutput]
-            var outputString: String
-            var runOutput: RunOutput?
-            var exportContent: String = ""
-            var safeHeaderAttribs: XmlHeaderAttribs
-            var outSents: [Sentence]
-            
-            init(
+        var topLevelOutputList: [RunOutput]
+        var outputString: String
+        var runOutput: RunOutput?
+        var exportContent: String = ""
+        var safeHeaderAttribs: XmlHeaderAttribs
+        var outSents: [Sentence]
+        
+        init(
             topLevelOutputList: [RunOutput]? = nil,
             outputString: String? = nil,
             runOutput: RunOutput? = nil,
@@ -518,16 +531,20 @@ struct TaggerConfig{
             safeHeaderAttribs: XmlHeaderAttribs? = nil,
             resentencizerOutputStrings: [String]? = nil,
             outSents: [Sentence]? = nil
-            )
-            {
-                self.topLevelOutputList = []
-                self.outputString = ""
-                self.runOutput = nil
-                self.exportContent = ""
-                self.safeHeaderAttribs = XmlHeaderAttribs()
-                self.outSents = []
-            }
+        )
+        {
+            self.topLevelOutputList = []
+            self.outputString = ""
+            self.runOutput = nil
+            self.exportContent = ""
+            self.safeHeaderAttribs = XmlHeaderAttribs()
+            self.outSents = []
         }
+        mutating func reset(){
+            self = Self() // reinit
+        }
+    }
+    
     //
     
     // top level init
@@ -569,9 +586,7 @@ struct TaggerConfig{
         }
         return fallback
     }
-    
-    //
-    static func resolveRepresentable<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == Int {
+        static func resolveRepresentable<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == Int {
         if let value = passed { return value }
         
         // Note: Using object(forKey:) as? Int avoids UserDefaults' default '0' bug
@@ -581,6 +596,13 @@ struct TaggerConfig{
             return enumValue
         }
         return fallback
+    }
+    mutating func runResetters(){
+        progressConfig.reset()
+        inputData.reset()
+        outputData.reset() // full reinit
+        print("Running resetters")
+        
     }
     
 }
@@ -605,19 +627,19 @@ struct Token : Identifiable {
     let col9: String
     
     var conlluLine: String {
-        [String(tokid), form, lemma, upos, xpos, feats, head, deprel].joined(separator: "\t")
+        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8, col9].joined(separator: "\t")
     }
     
+//    var conllRaw: String{
+//        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, "_","_"].joined(separator: "\t") //+ "\n"
+//    }
     var conllRaw: String{
-        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, "_","_"].joined(separator: "\t") //+ "\n"
-    }
-    var conllRawMultitag: String{
         [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8,col9].joined(separator: "\t") //+ "\n"
     } // this includes NL parser outputs for col8,9, but the funct to make the ExportString doesn't call this prop.
     
     var asXML: String{
                 """
-                <w tokID=\"\(tokid)\"  form=\"\(form.xmlEscaped)\" lemma=\"\(lemma.xmlEscaped)\" upos=\"\(upos.xmlEscaped)\" xpos=\"\(xpos.xmlEscaped)\" feats=\"\(feats.xmlEscaped)\" head=\"\(head.xmlEscaped)\" deprel=\"\(deprel.xmlEscaped)\">\(form.xmlEscaped)</w>
+                <w tokID=\"\(tokid)\"  form=\"\(form.xmlEscaped)\" lemma=\"\(lemma.xmlEscaped)\" upos=\"\(upos.xmlEscaped)\" xpos=\"\(xpos.xmlEscaped)\" feats=\"\(feats.xmlEscaped)\" head=\"\(head.xmlEscaped)\" deprel=\"\(deprel.xmlEscaped)\" secLem=\"\(col8.xmlEscaped)\" col9=\"\(col9.xmlEscaped)\">\(form.xmlEscaped)</w>
                 """
     }
 }

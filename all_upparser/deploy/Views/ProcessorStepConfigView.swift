@@ -10,9 +10,7 @@ import SwiftUI
 
 struct ProcessorStepConfigViewSection: View {
     @Binding var myConfig: TaggerConfig
-    @State var priLemSource: LemmaSource = .hybrid
-    @State var secLemSource: LemmaSource = .rule
-    @State var getSecLemmas: Bool = false
+    
     var body: some View {
         Form{
             Section("Retokenisation"){
@@ -52,37 +50,37 @@ struct ProcessorStepConfigViewSection: View {
                 Toggle(isOn: toggleBinding(for: PipelineStep.step3)){
                     Text("3. Lemmatisation ")
                 }
-                .onChange(of: getSecLemmas){
-                    if isStepActive(PipelineStep.step3) == false && getSecLemmas == true {
+                .onChange(of: myConfig.parsingConfig.getSecLems){
+                    if isStepActive(PipelineStep.step3) == false && myConfig.parsingConfig.getSecLems == true {
                         myConfig.parsingConfig.maxPipelineStep = PipelineStep.step3
                     }
                 }
-                Toggle("    Get additional lemmas", isOn: $getSecLemmas)
+                Toggle("    Get additional lemmas", isOn: $myConfig.parsingConfig.getSecLems)
                     .onChange(of: isStepActive(PipelineStep.step3)){
                         if isStepActive(PipelineStep.step3) == false {
-                        getSecLemmas = false}
+                            myConfig.parsingConfig.getSecLems = false}
                     }
-                Picker("    Primary method", selection: $priLemSource){
+                Picker("    Primary method", selection: $myConfig.parsingConfig.priLemSource){
                     ForEach(LemmaSource.allCases){lsource in
                         Text(lsource.displayName)
                     }
                 }
-                .onChange(of: secLemSource){_, newValue in
-                    if secLemSource == priLemSource {
-                        if let remaining = LemmaSource.allCases.filter({ format in format != secLemSource  }).first{
-                            priLemSource = remaining
+                .onChange(of: myConfig.parsingConfig.secLemSource){_, newValue in
+                    if myConfig.parsingConfig.secLemSource == myConfig.parsingConfig.priLemSource {
+                        if let remaining = LemmaSource.allCases.filter({ format in format != myConfig.parsingConfig.secLemSource  }).first{
+                            myConfig.parsingConfig.priLemSource = remaining
                         }
                     }
                 }
-                Picker("    Secondary method", selection: $secLemSource){
+                Picker("    Secondary method", selection: $myConfig.parsingConfig.secLemSource){
                     ForEach(LemmaSource.allCases){lsource in
                         Text(lsource.displayName)
                     }
                 }
-                .onChange(of: priLemSource){_, newValue in
-                    if secLemSource == priLemSource {
-                        if let remaining = LemmaSource.allCases.filter({ format in format != priLemSource  }).first{
-                            secLemSource = remaining
+                .onChange(of: myConfig.parsingConfig.priLemSource){_, newValue in
+                    if myConfig.parsingConfig.secLemSource == myConfig.parsingConfig.priLemSource {
+                        if let remaining = LemmaSource.allCases.filter({ format in format != myConfig.parsingConfig.priLemSource  }).first{
+                            myConfig.parsingConfig.secLemSource = remaining
                         }
                     }
                 }
