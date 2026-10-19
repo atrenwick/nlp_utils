@@ -8,7 +8,6 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
-
 struct BuiltSentsViewer: View {
     @Binding var myConfig: TaggerConfig
     @Binding var builtSents:[BuiltSentHolder]
@@ -73,7 +72,6 @@ struct ChooseInputFileViewSection: View {
         }
     }
 }
-
 
 struct ExportConfigViewSection: View {
     @State private var isSelectingFolder: Bool = false
@@ -150,7 +148,6 @@ struct FileNameInputViewSection: View {
                 .textInputAutocapitalization(TextInputAutocapitalization.never)
                 .autocorrectionDisabled()
                 .onChange(of: myConfig.exportConfig.fileName) { _, newValue in
-                    // Strip any forbidden characters immediately as typed or pasted
                     let cleaned = myConfig.exportConfig.fileName.sanitizedFileName
                     if cleaned != newValue {
                         myConfig.exportConfig.fileName = cleaned
@@ -259,9 +256,6 @@ struct PretokenisedSentViewSection : View {
     }
 }
 
-
-
-
 struct TokenisationEditView: View {
     @Binding var toks: [TempToken]
     @FocusState var isFocused
@@ -333,7 +327,6 @@ struct BigGoButtonReadinessView: View{
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        
     }
 }
 
@@ -360,7 +353,6 @@ struct InputTypeEncapsulatorView: View{
                 }
             }
         }
-
     }
 }
 
@@ -368,7 +360,6 @@ struct InputTypeEncapsulatorView: View{
 struct RunExplicitButtonView: View{
     @Binding var myConfig: TaggerConfig
     @State var outputString: String = "not yet run"
-    
     
     var body: some View{
         if myConfig.parsingConfig.runExplicit{
@@ -409,7 +400,6 @@ struct TaggingProgressButtonView: View{
                         .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)
                     Text(taggingInProgress ? "Running" : "Run")
                         .fontWeight(.semibold)
-                    //                            .opacity(taggingInProgress ? 1 : 1)
                 }
             }
             .font(.headline)
@@ -418,7 +408,6 @@ struct TaggingProgressButtonView: View{
         }
     }
 }
-
 
 struct ToolbarLinkToOutputView: View {
     @Binding var myConfig: TaggerConfig
@@ -453,3 +442,4 @@ struct ToolbarLinkToOutputView: View {
         }
     }
 }
+

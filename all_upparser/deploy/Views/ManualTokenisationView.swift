@@ -16,14 +16,11 @@ struct ManualTokenisationView: View {
     @State var getsentNum: Int = 0
     @State private var newSentence: String = ""
     @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, parce que Bonn n'était assez bonne pour tous", "Alors que Paris est une grande ville, elle est plus petite que Tokyo", "Li chevaliers combattent les dragons."]
-    
 
     @FocusState var isFocused
     @State var alertMessage: String?
     
-    private var visibleSents: [String] {
-        Array(testSentences.prefix(5))
-    }
+    private var visibleSents: [String] { Array(testSentences.prefix(5)) }
     
     var body: some View {
         NavigationStack{
@@ -63,11 +60,11 @@ struct ManualTokenisationView: View {
                         }
                         do {
                             let toksAsStrings = try applyNaiveTokenisation(language: myConfig.parsingConfig.selectedLanguage, myString: thisSentence)
-                           tempTokens = toksAsStrings.map {$0.asTempToken}
+                            tempTokens = toksAsStrings.map {$0.asTempToken}
                         } catch {
                             ParseProcessingError.retokenisationError
                         }
-
+                        
                     } label: {
                         Text("Tokenise")
                     }
@@ -80,7 +77,6 @@ struct ManualTokenisationView: View {
                         } else {
                             getsentNum = testSentences.count - 1
                         }
-                        
                     } label: {
                         HStack{
                             Text(String("-"))
@@ -106,9 +102,7 @@ struct ManualTokenisationView: View {
                     Spacer()
                     Button {
                         do {
-                            builtSents.append(
-                                BuiltSentHolder(tempToks: tempTokens)
-                            )
+                            builtSents.append( BuiltSentHolder(tempToks: tempTokens) )
                             print("Added 1 sent to builtSents")
                             tempTokens = []
                         }
@@ -117,7 +111,6 @@ struct ManualTokenisationView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
-                    
                 }
                 TokenisationEditView(toks: $tempTokens,  myConfig: $myConfig)
                 Spacer()

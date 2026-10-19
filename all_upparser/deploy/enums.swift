@@ -19,7 +19,7 @@ enum EosApproach{
     case next
 }
 
-enum ExportFormat: String, CaseIterable, Identifiable{
+enum ExportFormat: String, CaseIterable, Identifiable, Codable {
     var id: Self {self}
     case xml
     case xmlConll
@@ -39,7 +39,7 @@ enum ExportFormat: String, CaseIterable, Identifiable{
     
 }
 
-enum InputFileType: String, Identifiable, CaseIterable {
+enum InputFileType: String, Identifiable, CaseIterable, Codable {
     var id: Self { self }
     
     case conll
@@ -206,6 +206,7 @@ enum ParseProcessingError: LocalizedError{
     case conllChunkToLineError
     case fileLoadError
     case fileNotInBundle
+    case fileSaveError(filename: String)
     case inputFileFormatChoiceError
     case languageMethodConflict(language: Language)
     case makeConllLinesFromURLError
@@ -213,6 +214,7 @@ enum ParseProcessingError: LocalizedError{
     case missingURL
     case noRunOutput
     case noSentencesLoaded
+    case outputFolderCreationError
     case parserCreationError(file: URL)
     case readFromSandboxError
     case retokenisationError
@@ -231,6 +233,8 @@ enum ParseProcessingError: LocalizedError{
             return "Error in conllChunkToLineError function"
         case .fileLoadError:
             return "Failed to load file from outside bundle"
+        case .fileSaveError(let filename):
+            return "Failed to save to file \(filename)"
         case .fileNotInBundle:
             return "File not in bundle"
         case .inputFileFormatChoiceError:
@@ -247,6 +251,8 @@ enum ParseProcessingError: LocalizedError{
             return "No run output to return"
         case .noSentencesLoaded:
             return "No sentences found when switching on inputFileTYpe"
+        case .outputFolderCreationError:
+            return "Can't create the output folder in sandbox"
         case .parserCreationError(let file):
             return "Couldn't create XML parser from \(file.lastPathComponent)"
         case .retokenisationError:
@@ -262,7 +268,7 @@ enum ParseProcessingError: LocalizedError{
 }
 
 
-enum PipelineStep: Int, CaseIterable, Identifiable, Comparable {
+enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
     // RawValue type (Int) links each case to an integer (1, 2, 3, 4).
     // Comparable conformance allows using <, >, <=, >= on enum cases.
     // step1 is tokenisation, and is handled with diff pipe
@@ -325,7 +331,7 @@ enum RegexStash{
     }
 }
 
-enum RetokenisationType: String, Identifiable, CaseIterable{
+enum RetokenisationType: String, Identifiable, CaseIterable, Codable{
     var id: Self {self}
     case predict = "Predict"
     case manual = "Manual"
@@ -333,7 +339,7 @@ enum RetokenisationType: String, Identifiable, CaseIterable{
     case skip = "skip" // special case for txt parsed from raw file - is already Hashable, so skip by toggling value
     }
 
-enum SentencizingMethod: String, Identifiable, CaseIterable {
+enum SentencizingMethod: String, Identifiable, CaseIterable, Codable {
     var id: Self {self}
     case nlSentencizer
     case custom
@@ -341,7 +347,7 @@ enum SentencizingMethod: String, Identifiable, CaseIterable {
     case eosMark
     }
 
-enum TokenizingMethod : String, Identifiable, CaseIterable{
+enum TokenizingMethod : String, Identifiable, CaseIterable, Codable{
     var id: Self {self}
     case custom = "Custom"
     case nltokeniser = "NLTokenizer"
