@@ -109,7 +109,7 @@ struct RegexLangPatternToLangMap: Identifiable{
     }
 }
 
-struct RunMetas: Identifiable{
+struct RunMetas: Identifiable, Codable {
     //mod
     let id = UUID()
     let runID: String
@@ -135,9 +135,15 @@ struct RunMetas: Identifiable{
     let totalCount: Int
     let treebank : String
     var unread: Bool = true
+    
+    func save() {
+        if let encoded = try? JSONEncoder().encode(self) {
+            UserDefaults.standard.set(encoded, forKey: "SavedData")
+        }
+    }
 }
 
-struct RunData: Identifiable{
+struct RunData: Identifiable, Codable {
     var id = UUID()
     let runID: String
     let sents: [Sentence]
@@ -148,7 +154,7 @@ struct RunData: Identifiable{
     }
 }
 
-struct RunOutput: Identifiable {
+struct RunOutput: Identifiable, Codable {
     var id = UUID()
     let runID: String
     let runData: RunData
@@ -176,20 +182,7 @@ struct SandboxImporter {
     }
 }
 
-//struct SaveInputMetas: Identifiable{
-//    var id = UUID()
-//    let lang: Language
-//    let displayName: String
-//    let inputURL: URL?
-//    let saveName: String
-//    let targetFolderURL: URL?
-//    let exportFormat: ExportFormat
-//    let treebank: Language.Treebank
-//    let safeHeaderAttribs: XmlHeaderAttribs
-//    let includeConllSentText: Bool
-//}
-
-struct Sentence : Identifiable {
+struct Sentence : Identifiable, Codable {
     var id = UUID()
     let sentID: String
     let conllData: [Token]
@@ -255,16 +248,13 @@ struct Sentence : Identifiable {
             sentTextLine.append(contentsOf: conllData.map {$0.form} )
             lineStore.append(sentTextLine.joined(separator: " "))
         }
-        lineStore.append(contentsOf: conllData.map {$0.form})
+        lineStore.append(contentsOf: conllData.map {$0.conllRaw})
         return lineStore.joined(separator: "\n")
     }
     var conll: String {
-//        var testText = [""]
-         (
-            conllData.map {$0.form}
-         ).joined(separator: "\n")
-//        testText.append(contentsOf: conllData.map {$0.form})
-//         testText.joined(separator: "\n")
+        var conllString = ["\n# sent_id = \(sentID)"]
+        conllString.append(contentsOf: conllData.map {$0.conlluLine} )
+        return conllString.joined(separator: "\n")
     }
     
     var conllTidy: String {
@@ -301,7 +291,7 @@ struct Sentence : Identifiable {
     /// Use string count to column-align rows of each sent  independently
     func formatTidy() -> [String] {
         //get lines, add blank for end
-        var lines: [ConllLineContent] = conllData.map { .row($0) }
+        let lines: [ConllLineContent] = conllData.map { .row($0) }
         var result: [String] = []
         result.append(sentIdAsMeta)
         var currentRows: [[String]] = []
@@ -330,7 +320,7 @@ struct Sentence : Identifiable {
             case .row(let tok):
                 currentRows.append([
                     String(tok.tokid), tok.form, tok.lemma, tok.upos,
-                    tok.xpos, tok.feats, tok.head, tok.deprel,
+                    tok.xpos, tok.feats, tok.head, tok.deprel, tok.col8, tok.col9
                 ])
             case .blank:
                 flushSentence()
@@ -340,6 +330,60 @@ struct Sentence : Identifiable {
         flushSentence() // in case the input didn't end with a trailing .blank
         return result
     }
+}
+
+struct ResultStorageManager {
+    @discardableResult
+    static func getRunsDirectory() throws -> URL? {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let runsURL = documents.appendingPathComponent("runs", isDirectory: true)
+
+        do {  // Automatically creates the folder if it's missing
+            try FileManager.default.createDirectory(at: runsURL, withIntermediateDirectories: true, attributes: nil)
+            return runsURL
+        } catch {
+            print("Failed to create 'runs' directory: \(error)")
+            throw ParseProcessingError.outputFolderCreationError
+        }
+    }
+
+    static func save(_ runOutput: RunOutput) throws ->URL? {
+        guard let runsFolder = try getRunsDirectory() else { throw ParseProcessingError.outputFolderCreationError }
+        let fileURL = runsFolder.appendingPathComponent("\(runOutput.id).json")
+        
+        do {
+            let data = try JSONEncoder().encode(runOutput)
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
+            print("Successfully saved to: \(fileURL.path)")
+            return fileURL
+        } catch {
+            print("Failed to save result: \(error)")
+            throw ParseProcessingError.fileSaveError(filename: fileURL.absoluteString)
+        }
+    }
+
+    static func load(runID: String) throws -> RunOutput? {
+        guard let runsFolder = try getRunsDirectory() else { throw ParseProcessingError.outputFolderCreationError }
+        let fileURL = runsFolder.appendingPathComponent("\(runID).json")
+        
+        do {
+            let data = try Data(contentsOf: fileURL)
+            return try JSONDecoder().decode(RunOutput.self, from: data)
+        } catch {
+            print("Failed to load result: \(error)")
+            return nil
+        }
+    }
+}
+
+struct RunFileWrapper: Decodable {
+    let id: UUID
+    let runMetas: RunMetas
+}
+
+struct RunSelectorHelper{
+    let runMetas: RunMetas
+    let jsonFile: URL
 }
 
 struct TaggerConfig{
@@ -613,7 +657,7 @@ struct TempToken: Identifiable, Hashable {
     var form: String
 }
 
-struct Token : Identifiable {
+struct Token : Identifiable, Codable {
     var id = UUID()
     let tokid: Int
     let form: String
@@ -650,7 +694,7 @@ struct XMLConllElement {
     let blob: String // content of s.text == conll lines with sent id line added in by parser
 }
 
-struct XmlHeaderAttribs{
+struct XmlHeaderAttribs : Codable{
     var xmlTitle: String
     var xmlAuthorName: String
     var lang: String

@@ -14,16 +14,11 @@ protocol TreebankProvidable {
     var defaultTB: TreebankType { get } //
 }
 
-// 2. Conforming your language enum to it
-// (Assuming Language.Treebank is your treebank type)
+// 2. Conforming  language enum to it
 extension Language: TreebankProvidable {
-    
     typealias TreebankType = Language.Treebank
-    
 }
-
-
-
+///Similar pickers :: diff names, Binding, onChange logic
 struct ConstrainedLanguagePickerView<T: Hashable & CaseIterable & RawRepresentable & TreebankProvidable>: View
 where T.RawValue == String, T.TreebankType == Language.Treebank {
     let title: String
@@ -60,7 +55,6 @@ where T.RawValue == String, T.TreebankType == Language.Treebank {
         }
     }
 }
-
 
 struct DefaultPickerView<T: Hashable & CaseIterable & RawRepresentable>: View where T.RawValue == String {
     // 1. The parameters you want to pass in

@@ -9,6 +9,10 @@ import SwiftUI
 
 @main
 struct TaggerApp: App {
+    init() {
+        // Ensure the runs directory exists the second the app opens
+        try? ResultStorageManager.getRunsDirectory()
+    }
     var body: some Scene {
         WindowGroup {
             
@@ -23,3 +27,5 @@ struct TaggerApp: App {
         }
     }
 }
+
+

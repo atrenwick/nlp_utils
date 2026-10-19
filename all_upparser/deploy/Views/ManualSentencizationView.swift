@@ -79,7 +79,6 @@ Virgil Ivan "Gus" Grissom (April 3, 1926 - January 27, 1967) was one of the seve
             ForEach(eosTokOutput){item in
                 
                 let printString = item.isEOS == "true" ? "\(item.form) >>>>>>>>>>>>>>>>\(item.isEOS)" : "\(item.form)"
-//                print(printString)
                 Text(printString)
                 
             }
@@ -90,12 +89,4 @@ Virgil Ivan "Gus" Grissom (April 3, 1926 - January 27, 1967) was one of the seve
 #Preview {
     ManualSentencizationView()
 }
-//
 
-struct EosTok: Identifiable, Hashable{
-    var id = UUID()
-    let form: String
-    let isEOS: String
-    let reason: String
-    
-}
