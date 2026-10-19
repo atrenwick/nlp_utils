@@ -1,10 +1,2 @@
 all_upparser/train/lemmatizer/*_lemmatizer_out/* filter=lfs diff=lfs merge=lfs -text
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_feats_vocab_gsd.json filter=lfs diff=lfs merge=lfs -text
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_lemma_rule_vocab_gsd.json filter=lfs diff=lfs merge=lfs -text
 all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_tagger_parser_gsd.mlpackage filter=lfs diff=lfs merge=lfs -text
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_tok_gold_gsd.json filter=lfs diff=lfs merge=lfs -text
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_tok_vocab_gsd.txt filter=lfs diff=lfs merge=lfs -text
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_upos_vocab_gsd.json filter=lfs diff=lfs merge=lfs -text
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_deprel_vocab_gsd.json filter=lfs diff=lfs merge=lfs -text
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_wordpiece_settings_gsd.json filter=lfs diff=lfs merge=lfs -text
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_xpos_vocab_gsd.json filter=lfs diff=lfs merge=lfs -text
