@@ -109,6 +109,66 @@ struct RegexLangPatternToLangMap: Identifiable{
     }
 }
 
+struct ResultStorageManager {
+    @discardableResult
+    static func getRunsDirectory() throws -> URL? {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let runsURL = documents.appendingPathComponent("runs", isDirectory: true)
+
+        do {  // Automatically creates the folder if it's missing
+            try FileManager.default.createDirectory(at: runsURL, withIntermediateDirectories: true, attributes: nil)
+            return runsURL
+        } catch {
+            print("Failed to create 'runs' directory: \(error)")
+            throw ParseProcessingError.outputFolderCreationError
+        }
+    }
+
+    static func save(_ runOutput: RunOutput) throws ->URL? {
+        guard let runsFolder = try getRunsDirectory() else { throw ParseProcessingError.outputFolderCreationError }
+        let fileURL = runsFolder.appendingPathComponent("\(runOutput.id).json")
+        
+        do {
+            let data = try JSONEncoder().encode(runOutput)
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
+            print("Successfully saved to: \(fileURL.path)")
+            return fileURL
+        } catch {
+            print("Failed to save result: \(error)")
+            throw ParseProcessingError.fileSaveError(filename: fileURL.absoluteString)
+        }
+    }
+
+    static func load(runID: String) throws -> RunOutput? {
+        guard let runsFolder = try getRunsDirectory() else { throw ParseProcessingError.outputFolderCreationError }
+        let fileURL = runsFolder.appendingPathComponent("\(runID).json")
+        
+        do {
+            let data = try Data(contentsOf: fileURL)
+            return try JSONDecoder().decode(RunOutput.self, from: data)
+        } catch {
+            print("Failed to load result: \(error)")
+            return nil
+        }
+    }
+}
+
+struct RunData: Identifiable, Codable {
+    var id = UUID()
+    let runID: String
+    let sents: [Sentence]
+    let exportContent: String
+    var tokCount: Int {
+        // reduce collection to single element : start at 0, add iteratively over elements
+        sents.reduce(0) { $0 + $1.conllData.count }
+    }
+}
+
+struct RunFileWrapper: Decodable {
+    let id: UUID
+    let runMetas: RunMetas
+}
+
 struct RunMetas: Identifiable, Codable {
     //mod
     let id = UUID()
@@ -143,22 +203,17 @@ struct RunMetas: Identifiable, Codable {
     }
 }
 
-struct RunData: Identifiable, Codable {
-    var id = UUID()
-    let runID: String
-    let sents: [Sentence]
-    let exportContent: String
-    var tokCount: Int {
-        // reduce collection to single element : start at 0, add iteratively over elements
-        sents.reduce(0) { $0 + $1.conllData.count }
-    }
-}
 
 struct RunOutput: Identifiable, Codable {
     var id = UUID()
     let runID: String
     let runData: RunData
     var runMetas: RunMetas
+}
+
+struct RunSelectorHelper{
+    let runMetas: RunMetas
+    let jsonFile: URL
 }
 
 struct SandboxImporter {
@@ -332,59 +387,6 @@ struct Sentence : Identifiable, Codable {
     }
 }
 
-struct ResultStorageManager {
-    @discardableResult
-    static func getRunsDirectory() throws -> URL? {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let runsURL = documents.appendingPathComponent("runs", isDirectory: true)
-
-        do {  // Automatically creates the folder if it's missing
-            try FileManager.default.createDirectory(at: runsURL, withIntermediateDirectories: true, attributes: nil)
-            return runsURL
-        } catch {
-            print("Failed to create 'runs' directory: \(error)")
-            throw ParseProcessingError.outputFolderCreationError
-        }
-    }
-
-    static func save(_ runOutput: RunOutput) throws ->URL? {
-        guard let runsFolder = try getRunsDirectory() else { throw ParseProcessingError.outputFolderCreationError }
-        let fileURL = runsFolder.appendingPathComponent("\(runOutput.id).json")
-        
-        do {
-            let data = try JSONEncoder().encode(runOutput)
-            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
-            print("Successfully saved to: \(fileURL.path)")
-            return fileURL
-        } catch {
-            print("Failed to save result: \(error)")
-            throw ParseProcessingError.fileSaveError(filename: fileURL.absoluteString)
-        }
-    }
-
-    static func load(runID: String) throws -> RunOutput? {
-        guard let runsFolder = try getRunsDirectory() else { throw ParseProcessingError.outputFolderCreationError }
-        let fileURL = runsFolder.appendingPathComponent("\(runID).json")
-        
-        do {
-            let data = try Data(contentsOf: fileURL)
-            return try JSONDecoder().decode(RunOutput.self, from: data)
-        } catch {
-            print("Failed to load result: \(error)")
-            return nil
-        }
-    }
-}
-
-struct RunFileWrapper: Decodable {
-    let id: UUID
-    let runMetas: RunMetas
-}
-
-struct RunSelectorHelper{
-    let runMetas: RunMetas
-    let jsonFile: URL
-}
 
 struct TaggerConfig{
     // MARK: vars to bring in substructs
@@ -669,6 +671,7 @@ struct Token : Identifiable, Codable {
     let deprel: String
     let col8: String
     let col9: String
+    let subTokens: [String]?
     
     var conlluLine: String {
         [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8, col9].joined(separator: "\t")

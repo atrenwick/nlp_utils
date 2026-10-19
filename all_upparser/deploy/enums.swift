@@ -200,29 +200,38 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
 }
 
 enum ParseProcessingError: LocalizedError{
+
     case badTempTokens
     case conllParsingError(line: String, filename:String)
     case conllLineIdentificationError
     case conllChunkToLineError
+    case emptyInput
     case fileLoadError
     case fileNotInBundle
     case fileSaveError(filename: String)
     case inputFileFormatChoiceError
+    case invalidModelInputs(String)
     case languageMethodConflict(language: Language)
     case makeConllLinesFromURLError
     case makeExportContentError
     case missingURL
+    case modelLoadFailed(Error)
     case noRunOutput
     case noSentencesLoaded
     case outputFolderCreationError
     case parserCreationError(file: URL)
+    case predictionFailed(Error)
+    case resourceMissing(String)
     case readFromSandboxError
     case retokenisationError
+    case unexpectedOutput(String)
     case utf8DecodeError
     case xmlParserFailure(line: Int, reason: String)
     
     var errorDescription: String? {
         switch self{
+            
+
         case .badTempTokens:
             return "Error makiing hashable sentence from temp tokens"
         case .conllParsingError(let lineNumber, let filename):
@@ -231,6 +240,8 @@ enum ParseProcessingError: LocalizedError{
             return "Error getting finding sentence chunks in conll input"
         case .conllChunkToLineError:
             return "Error in conllChunkToLineError function"
+        case .emptyInput:
+            return "There are no words to annotate"
         case .fileLoadError:
             return "Failed to load file from outside bundle"
         case .fileSaveError(let filename):
@@ -239,6 +250,8 @@ enum ParseProcessingError: LocalizedError{
             return "File not in bundle"
         case .inputFileFormatChoiceError:
             return "Not an XML format"
+        case .invalidModelInputs(let detail):
+            return "Unexpected model inputs: \(detail)"
         case .languageMethodConflict(let language):
             return "Language \(language.rawValue) cannot be used with naive tokenisation"
         case .makeConllLinesFromURLError:
@@ -247,6 +260,8 @@ enum ParseProcessingError: LocalizedError{
             return "Error in makeExportContent function"
         case .missingURL:
             return "No URL provided"
+        case .modelLoadFailed(let error):
+            return "Couldn't load the model: \(error.localizedDescription)"
         case .noRunOutput:
             return "No run output to return"
         case .noSentencesLoaded:
@@ -255,10 +270,16 @@ enum ParseProcessingError: LocalizedError{
             return "Can't create the output folder in sandbox"
         case .parserCreationError(let file):
             return "Couldn't create XML parser from \(file.lastPathComponent)"
+        case .predictionFailed(let error):
+            return "The model failed to run: \(error.localizedDescription)"
+        case .resourceMissing(let name):
+            return "Missing resource: \(name)"
         case .retokenisationError:
             return "Error retokenising: no sentences found"
         case .readFromSandboxError:
             return "Error reading the file from the sandbox"
+        case .unexpectedOutput(let detail):
+            return "Unexpected model output: \(detail)"
         case .utf8DecodeError:
             return "Failed to decode as UTF-8"
         case .xmlParserFailure:

@@ -567,7 +567,7 @@ final class UDPipelineCNNBiLSTM {
             Token(
                 tokid: i + 1, form: sentence.tokens[i], lemma: primaryLemmas[i],
                 upos: uposTags[i], xpos: "_", feats: featsTags[i],
-                head: heads[i], deprel: deprels[i], col8: myConfig.parsingConfig.getSecLems ? secondaryLemmas[i] : "_", col9: "_"
+                head: heads[i], deprel: deprels[i], col8: myConfig.parsingConfig.getSecLems ? secondaryLemmas[i] : "_", col9: "_", subTokens: []
             )
         }
     }
