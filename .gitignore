@@ -1,3 +1,1 @@
 *.DS_Store
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_tagger_parser_gsd.mlpackage/Data/com.apple.CoreML/weights/weight.bin
-all_upparser/deploy/TaggingAssets/BertTok/FR_distilbert_tagger_parser_gsd.mlpackage/Data/com.apple.CoreML/model.mlmodel
