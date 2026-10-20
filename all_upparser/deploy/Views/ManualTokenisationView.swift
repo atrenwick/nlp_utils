@@ -62,7 +62,7 @@ struct ManualTokenisationView: View {
                             let toksAsStrings = try applyNaiveTokenisation(language: myConfig.parsingConfig.selectedLanguage, myString: thisSentence)
                             tempTokens = toksAsStrings.map {$0.asTempToken}
                         } catch {
-                            ParseProcessingError.retokenisationError
+                            PipelineError.retokenisationError
                         }
                         
                     } label: {

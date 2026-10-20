@@ -818,3 +818,25 @@ markEosEnds(selectedLanguage: Language, tokListIn: [Substring])-> [EosTok]
 //  Verify against Python with checkAgainstGolden(at:) before trusting any model output.
 //
 //  Not compiled or run when this was written, so treat the golden check as the real test.
+
+
+//  BertPipeline.swift
+//
+//  Loading (tokenizer, Core ML model, label vocabularies) and annotate(...).
+//
+//  Written without your project's sources, so these names are assumptions:
+//    Language, Treebank       your enums (used with .rawValue to build resource names)
+//    Vocab.load(from: URL)    your vocab loader; swap in the real call (marked below)
+//    resource naming          see "match your convention" comments
+//  Not compiled.
+
+
+
+
+
+// MARK: - Pipeline
+
+
+
+// MARK: - Annotate
+

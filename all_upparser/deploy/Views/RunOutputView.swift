@@ -87,8 +87,8 @@ struct RunOutputDetailView: View{
                                 topLevelOutput.append(runOutput)
                             } catch {
                                 switch error {
-                                case let parseProcessingError as ParseProcessingError:
-                                    alertMessage = parseProcessingError.errorDescription
+                                case let PipelineError as PipelineError:
+                                    alertMessage = PipelineError.errorDescription
                                 default:
                                     alertMessage = error.localizedDescription
                                 }
@@ -109,7 +109,7 @@ struct RunOutputDetailView: View{
                                     print("Saved to \(savedURL)")}
                             } catch {
                                 switch error {
-                                case let fileSaveError as ParseProcessingError:
+                                case let fileSaveError as PipelineError:
                                     alertMessage = fileSaveError.errorDescription
                                 default:
                                     alertMessage = error.localizedDescription
@@ -156,7 +156,7 @@ struct RunOutputDetailView: View{
     ) throws -> RunOutput {
         
         let exportContent = makeExportContentFromMetas(run: run, additionalExportFormat: additionalExportFormat)
-        guard !exportContent.isEmpty else { throw ParseProcessingError.makeExportContentError }
+        guard !exportContent.isEmpty else { throw PipelineError.makeExportContentError }
         
         let runData = RunData(
             runID: run.runID,

@@ -110,7 +110,8 @@ struct BERTPipeTestView: View{
     @State var outputString: String = ""
     let languageCode = "FR"
     let treebank = "gsd"
-    @State private var pipeline: UDPipelineBERTbased?
+    let myConfig: TaggerConfig
+    @State private var pipeline: BERTlikePipeline?
     @State var alertMessage: String?
     var body: some View{
         
@@ -125,7 +126,7 @@ struct BERTPipeTestView: View{
             .task(id: languageCode) {
                 pipeline = nil
                 do {
-                    pipeline = try await UDPipelineBERTbased.load(languageCode: languageCode, treebank: treebank)
+                    pipeline = try await BERTlikePipeline.load(myConfig: myConfig)
                     alertMessage = "Success !"
                 } catch {
                     alertMessage = error.localizedDescription
@@ -142,7 +143,7 @@ struct BERTPipeTestView: View{
         }
         Text(outputString)
     }
-    }
+    
 
 func testInstBertPipe(languageCode: String, treebank: String) -> String {
         // test instantiation of pipeline class based on params chosen
@@ -150,7 +151,7 @@ func testInstBertPipe(languageCode: String, treebank: String) -> String {
         
         Task{
             do {
-                let _ = try UDPipelineBERTbased(languageCode: languageCode, treebank: treebank)
+                let _ = try BERTlikePipeline(myConfig: myConfig)
                 await MainActor.run {
                     outputString = "Success"
                     print(outputString)
@@ -164,8 +165,10 @@ func testInstBertPipe(languageCode: String, treebank: String) -> String {
         }
         return outputString
 }
+}
 #Preview {
-    BERTPipeTestView()
+    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
+    BERTPipeTestView(myConfig: myConfig)
 }
 //
 //

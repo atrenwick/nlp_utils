@@ -14,13 +14,13 @@ extension Bundle {
     func loadText(_ file: String, format: String) throws -> String {
         let normalizedText: String
         guard let url = self.url(forResource: file, withExtension: nil) else {
-            throw ParseProcessingError.fileNotInBundle
+            throw PipelineError.fileNotInBundle
         }
         guard let data = try? Data(contentsOf: url) else {
-            throw ParseProcessingError.fileLoadError
+            throw PipelineError.fileLoadError
         }
         guard let text = String(data: data, encoding: .utf8) else {
-            throw ParseProcessingError.utf8DecodeError
+            throw PipelineError.utf8DecodeError
         }
         // BBEdit yields texts with tab = 4 spaces so send to \t here
         if format == "conllu" {

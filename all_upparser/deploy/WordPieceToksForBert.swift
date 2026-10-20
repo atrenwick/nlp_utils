@@ -96,7 +96,7 @@ struct WordPieceTokenizer: Sendable {
     /// When true, encode(...) also fills EncodedSentence.wordPieces with the subword strings
     /// for each word. Off by default, so normal use does no extra work. It is a plain value
     /// property: set it on a `var` tokenizer, or on a copy (copies share the vocabulary).
-    let showWordPieces: Bool = true
+    var showWordPieces: Bool = false
 
     let clsID: Int32
     let sepID: Int32
@@ -368,7 +368,7 @@ extension WordPieceTokenizer {
     /// description of each mismatch. An empty array means this tokenizer agrees with Python.
     func checkAgainstGolden(fileNameChunk: String) throws -> [String] {
         guard let url = Bundle.main.url(forResource: fileNameChunk, withExtension: "json") else {
-            throw UDPipelineError.modelLoadFailed(fileNameChunk.appending(".json"))
+            throw PipelineError.configFileLoadError(name: fileNameChunk.appending(".json"))
         }
         
         let cases = try JSONDecoder().decode([GoldenCase].self, from: Data(contentsOf: url))
