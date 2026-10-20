@@ -199,9 +199,12 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
     
 }
 
-enum ParseProcessingError: LocalizedError{
+enum PipelineError: LocalizedError{
 
+    
+    case architectureConflict
     case badTempTokens
+    case configFileLoadError(name: String)
     case conllParsingError(line: String, filename:String)
     case conllLineIdentificationError
     case conllChunkToLineError
@@ -210,20 +213,26 @@ enum ParseProcessingError: LocalizedError{
     case fileNotInBundle
     case fileSaveError(filename: String)
     case inputFileFormatChoiceError
+    case invalidLevel(Int)
     case invalidModelInputs(String)
     case languageMethodConflict(language: Language)
+    case lemmatizationFailed(String)
     case makeConllLinesFromURLError
     case makeExportContentError
+    case missingResource(String)
     case missingURL
     case modelLoadFailed(Error)
     case noRunOutput
     case noSentencesLoaded
     case outputFolderCreationError
+    case packageLoadFailed(String)
     case parserCreationError(file: URL)
     case predictionFailed(Error)
+    case predictionFailedAtLogits(String)
     case resourceMissing(String)
     case readFromSandboxError
     case retokenisationError
+    case tokenizationFail(String)
     case unexpectedOutput(String)
     case utf8DecodeError
     case xmlParserFailure(line: Int, reason: String)
@@ -231,9 +240,12 @@ enum ParseProcessingError: LocalizedError{
     var errorDescription: String? {
         switch self{
             
-
+        case .architectureConflict:
+            return "conflict between architecture and available models"
         case .badTempTokens:
             return "Error makiing hashable sentence from temp tokens"
+        case .configFileLoadError(let filename):
+            return "Failed to load file config file \(filename)"
         case .conllParsingError(let lineNumber, let filename):
             return "Error parsing conll lines : 10 fields not found in file \(filename) line \(lineNumber)"
         case .conllLineIdentificationError:
@@ -243,21 +255,27 @@ enum ParseProcessingError: LocalizedError{
         case .emptyInput:
             return "There are no words to annotate"
         case .fileLoadError:
-            return "Failed to load file from outside bundle"
+            return "Failed to load file"
         case .fileSaveError(let filename):
             return "Failed to save to file \(filename)"
         case .fileNotInBundle:
             return "File not in bundle"
         case .inputFileFormatChoiceError:
             return "Not an XML format"
+        case .invalidLevel(let level):
+            return "Invalid pipeline level \(level): must be between 1 and 5."
         case .invalidModelInputs(let detail):
             return "Unexpected model inputs: \(detail)"
         case .languageMethodConflict(let language):
             return "Language \(language.rawValue) cannot be used with naive tokenisation"
+        case .lemmatizationFailed(let msg):
+            return "Lemmatization failed: \(msg)"
         case .makeConllLinesFromURLError:
             return "Error in makeConllLinesFromURL function"
         case .makeExportContentError:
             return "Error in makeExportContent function"
+        case .missingResource(let name):
+            return "Missing bundled resource: \(name). Did you add it to the app target?"
         case .missingURL:
             return "No URL provided"
         case .modelLoadFailed(let error):
@@ -268,16 +286,22 @@ enum ParseProcessingError: LocalizedError{
             return "No sentences found when switching on inputFileTYpe"
         case .outputFolderCreationError:
             return "Can't create the output folder in sandbox"
+        case .packageLoadFailed(let name):
+            return "Failed to load model from package \(name)"
         case .parserCreationError(let file):
             return "Couldn't create XML parser from \(file.lastPathComponent)"
         case .predictionFailed(let error):
             return "The model failed to run: \(error.localizedDescription)"
+        case .predictionFailedAtLogits(let message):
+            return message
         case .resourceMissing(let name):
             return "Missing resource: \(name)"
         case .retokenisationError:
             return "Error retokenising: no sentences found"
         case .readFromSandboxError:
             return "Error reading the file from the sandbox"
+        case .tokenizationFail(let message):
+            return "Tokenisation failed :: \(message)"
         case .unexpectedOutput(let detail):
             return "Unexpected model output: \(detail)"
         case .utf8DecodeError:

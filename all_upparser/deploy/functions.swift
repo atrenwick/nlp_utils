@@ -21,7 +21,7 @@ import SwiftUI
 //  5. dump scalars : can be used to dump logits
 //1
 func readFromFile(inputURL: URL?) throws -> String {
-    guard let inputFile = inputURL else { throw ParseProcessingError.missingURL}
+    guard let inputFile = inputURL else { throw PipelineError.missingURL}
     do {
         let returnString = try String(contentsOf: inputFile, encoding: .utf8)
         return returnString
@@ -35,7 +35,7 @@ func loadTextFromBundledFile(inputFile: String, thisExtension: String) throws ->
         let normalizedText: String = try Bundle.main.loadText(inputFile, format: thisExtension)
         return normalizedText
     } catch {
-        return ParseProcessingError.fileLoadError.localizedDescription
+        return PipelineError.fileLoadError.localizedDescription
     }
 }
 
@@ -74,7 +74,7 @@ func testInstantiatePipeline(myConfig: TaggerConfig)   -> String {
     
     Task{
         do {
-            let _ = try UDPipelineCNNBiLSTM(myConfig: myConfig)
+            let _ = try CNNBiLSTMPipeline(myConfig: myConfig)
             await MainActor.run {
                 outputString = "Success"
             }
@@ -198,7 +198,7 @@ func _conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Senten
 
                 guard lineChunks.count == 10 else {
                     let errorstring = lineChunks.count == 0 ?  "no chunks " :lineChunks.joined(separator: "<TAB>")
-                    throw ParseProcessingError.conllParsingError(
+                    throw PipelineError.conllParsingError(
                         line: String("Sent:\(sentNum + 1) line \(lineNum + 1) :: \(errorstring)"),
                         filename: String(inputURL.lastPathComponent))
 
@@ -213,7 +213,8 @@ func _conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Senten
                     head: String(lineChunks[6]),
                     deprel: String(lineChunks[7]),
                     col8: String(lineChunks[8]),
-                    col9: String(lineChunks[9])
+                    col9: String(lineChunks[9]),
+                    subTokens: []
                 )
                 currentToks.append(newTok)
             }
@@ -233,34 +234,34 @@ func _conllLinesToSents(inputURL: URL, conllLines: [[String]]) throws -> [Senten
 //4.
 func _makeConllLinesFromURL(inputURL: URL?) throws -> [[String]]{
     guard let inputURL else {
-            throw ParseProcessingError.missingURL
+            throw PipelineError.missingURL
     }
     do {
         let normalizedText = try readFromFile(inputURL: inputURL)
         guard  !normalizedText.isEmpty else {
-            throw ParseProcessingError.readFromSandboxError
+            throw PipelineError.readFromSandboxError
         }
         
         let sentenceChunks: [String] = _conllBlobToChunks(conllBlob: normalizedText)
         guard !sentenceChunks.isEmpty else {
-            throw ParseProcessingError.conllLineIdentificationError
+            throw PipelineError.conllLineIdentificationError
         }
 
         let hashableTokenLists: [[String]] = _conllChunksToLines(conllChunks: sentenceChunks)
         guard !hashableTokenLists.isEmpty else {
-            throw ParseProcessingError.conllChunkToLineError
+            throw PipelineError.conllChunkToLineError
         }
         return hashableTokenLists
         
     } catch {
-        throw ParseProcessingError.makeConllLinesFromURLError
+        throw PipelineError.makeConllLinesFromURLError
     }
 }
 
 //6.
 func conllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSentence]{
     guard let inputFile = inputURL else {
-        throw ParseProcessingError.missingURL
+        throw PipelineError.missingURL
     }
     var allSentences: [HashableSentence] = []
     let hashableTokenList: [[String]] = try _makeConllLinesFromURL(inputURL: inputFile) // funct4, calls 1,2
@@ -284,11 +285,11 @@ func conllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSente
 //1. parse xml-conll to get conll blob-pairs identical to CoNLL parsing
 func _xmlConllToIdBlobPairs(from url: URL?) throws -> [XMLConllElement] {
     guard let url = url else {
-        throw ParseProcessingError.missingURL
+        throw PipelineError.missingURL
     }
 
     guard let parser = XMLParser(contentsOf: url) else {
-        throw ParseProcessingError.parserCreationError(file: url)
+        throw PipelineError.parserCreationError(file: url)
     }
 
     let delegate = SParser()
@@ -300,7 +301,7 @@ func _xmlConllToIdBlobPairs(from url: URL?) throws -> [XMLConllElement] {
         if let parserError = parser.parserError{
             throw parserError
         } else {
-            throw ParseProcessingError.xmlParserFailure(line: 0, reason:"Unknown XML parsing error")
+            throw PipelineError.xmlParserFailure(line: 0, reason:"Unknown XML parsing error")
         }
     }
     return delegate.results
@@ -308,7 +309,7 @@ func _xmlConllToIdBlobPairs(from url: URL?) throws -> [XMLConllElement] {
 //2. call 1. then apply CoNLL parsing functions
 func xmlConllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSentence]{
     guard let inputURL else {
-        throw ParseProcessingError.missingURL
+        throw PipelineError.missingURL
     }
 
     var allSentences: [HashableSentence] = []
@@ -329,11 +330,11 @@ func xmlConllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSe
 // 1 function with SWParser, delegate, for std xml -> hashable sent. XMLConll needs 2 steps to conllise
 func xmlToHashableSentForPipeline(inputURL: URL?) throws  -> [HashableSentence]{
     guard let inputURL else {
-        throw ParseProcessingError.missingURL
+        throw PipelineError.missingURL
     }
 
     guard let parser = XMLParser(contentsOf: inputURL) else {
-        throw ParseProcessingError.parserCreationError(file: inputURL)
+        throw PipelineError.parserCreationError(file: inputURL)
     }
     
     let delegate = SWParser()
@@ -344,7 +345,7 @@ func xmlToHashableSentForPipeline(inputURL: URL?) throws  -> [HashableSentence]{
         if let parserError = parser.parserError{
             throw parserError
         } else {
-            throw ParseProcessingError.xmlParserFailure(line: 0, reason:"Unknown XML parsing error")
+            throw PipelineError.xmlParserFailure(line: 0, reason:"Unknown XML parsing error")
         }
     }
     return delegate.results
@@ -506,7 +507,7 @@ func _applySentencizingMethodToString(normalizedText: String,  myConfig: TaggerC
 }
 
 //3
-func textFileToSentStrings(myConfig: TaggerConfig, tokenizerPipeline: UDPipelineCNNBiLSTM) throws -> [String]{
+func textFileToSentStrings(myConfig: TaggerConfig, tokenizerPipeline: NLPPipeline) throws -> [String]{
     guard let _ = myConfig.inputConfig.selectedInputFile else {
         print("guard let failed loading form file")
         return []
@@ -516,7 +517,7 @@ func textFileToSentStrings(myConfig: TaggerConfig, tokenizerPipeline: UDPipeline
     }
     let inputString = try readFromFile(inputURL: myConfig.inputConfig.selectedInputFile)
     guard !inputString.isEmpty else {
-        throw ParseProcessingError.fileLoadError
+        throw PipelineError.fileLoadError
     }
     do {
         let normalizedText = inputString.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
@@ -540,7 +541,7 @@ func desentenciseAndResentencise(sentsToDiscard: [HashableSentence], myConfig: T
 
 
 
-func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: UDPipelineCNNBiLSTM, taggingInProgress: Binding<Bool>) throws -> [HashableSentence]{
+func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: NLPPipeline, taggingInProgress: Binding<Bool>) throws -> [HashableSentence]{
     
     var sentencesAsStrings: [String] = []
     
@@ -560,14 +561,14 @@ func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: UDPipelineCNNB
     
     guard !retokenisedSents.isEmpty else {
         taggingInProgress.wrappedValue = false
-        throw ParseProcessingError.retokenisationError
+        throw PipelineError.retokenisationError
     }
 
     return retokenisedSents
 }
 func ingestSentEncapsulator(
     myConfig: TaggerConfig,
-    pipeline: UDPipelineCNNBiLSTM
+    pipeline: NLPPipeline
 ) throws -> [HashableSentence] {
     
     var allSentences: [HashableSentence] = []
@@ -607,7 +608,7 @@ func ingestSentEncapsulator(
 //1.
 func applyNaiveTokenisation(language: Language, myString: String) throws -> [String]{
     guard ![.DE, .ANG].contains(language) else {
-        throw ParseProcessingError.languageMethodConflict(language: language)
+        throw PipelineError.languageMethodConflict(language: language)
     }
     
     let input: String = myString
@@ -661,7 +662,7 @@ func applyNaiveTokenisation(language: Language, myString: String) throws -> [Str
 
 
 //4
-func stringSentsToHashableSents(myConfig: TaggerConfig, sents: [String], pipeline: UDPipelineCNNBiLSTM) throws -> [HashableSentence]{
+func stringSentsToHashableSents(myConfig: TaggerConfig, sents: [String], pipeline: NLPPipeline) throws -> [HashableSentence]{
 
     var internalSentList: [HashableSentence] = []
     switch myConfig.parsingConfig.tokenizingMethod {
@@ -673,22 +674,29 @@ func stringSentsToHashableSents(myConfig: TaggerConfig, sents: [String], pipelin
         break
 
     case .nltokeniser:
-        if myConfig.parsingConfig.runExplicit{
-            print("calling getTokSents @ line 85")
-            print("nltokeniser")
-        }
+    if myConfig.parsingConfig.runExplicit{
+        print("calling getTokSents @ line 85")
+        print("nltokeniser")
+    }
+        
         internalSentList = _getTokenisedSentences(sents: sents, myConfig: myConfig)
         
     case .trained:
-        // retokenize everything with model
-        // MARK: can change this IN to be testSentences
-        //    let pipeline = try UDPipeline(languageCode: languageCode.rawValue, treebank: "gsd")
-
-        if myConfig.parsingConfig.runExplicit{
-            print("sentencizing with trained")
-        }
-        for sentence in sents {
-            internalSentList.append(contentsOf: try pipeline.tokenize(sentence))
+        switch myConfig.parsingConfig.modelArchitecture {
+        case .distilbert:
+            throw PipelineError.architectureConflict
+        case .cnnBiLSTM:
+            // retokenize everything with model
+            // MARK: can change this IN to be testSentences
+            //    let pipeline = try UDPipeline(languageCode: languageCode.rawValue, treebank: "gsd")
+            
+            if myConfig.parsingConfig.runExplicit{
+                print("sentencizing with trained")
+            }
+            for sentence in sents {
+                let tokenisedSent = try pipeline.tokenize(sentence)
+                internalSentList.append(tokenisedSent)
+            }
         }
     }
     return internalSentList
@@ -751,13 +759,7 @@ func applySimplexTokenisation(inputText: String) -> [String] {
 
 
 //6
-func textFileToHashableSents(myConfig: TaggerConfig, pipeline: UDPipelineCNNBiLSTM
-//    inputURL: URL?,
-//    sentencizingMethod: SentencizingMethod,
-//    tokenizingMethod: TokenizingMethod,
-//    lang: Language,
-//    pipeline: UDPipeline,
-//    runExplicit: Bool
+func textFileToHashableSents(myConfig: TaggerConfig, pipeline: NLPPipeline
 ) throws -> [HashableSentence]{
     var internalSentList: [HashableSentence] = []
     
@@ -1201,7 +1203,7 @@ func printFromConllSents(outsents: [Sentence]) throws -> URL{
 func dumpDetailsForRunExplicit(myConfig: TaggerConfig, taggingInProgress:Binding<Bool>) throws  {
     guard myConfig.outputData.outSents.count > 0 else {
             taggingInProgress.wrappedValue = false
-            throw ParseProcessingError.noRunOutput
+            throw PipelineError.noRunOutput
     }
 
     if myConfig.parsingConfig.runExplicit {

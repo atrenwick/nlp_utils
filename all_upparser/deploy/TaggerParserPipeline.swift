@@ -3,96 +3,10 @@ import CoreML
 import Foundation
 import NaturalLanguage
 
-// MARK: - Vocabulary
-//structure to decode the vocab data JSON file
-struct VocabData: Decodable {
-    let itos: [String]
-    let pad: String
-    let unk: String
-}
-//define the vocab class
-final class Vocab {
-    let itos: [String]
-    let stoi: [String: Int]
-    let pad: String
-    let unk: String
-    
-    //   //init method for the vocab class
-    init(data: VocabData) {
-        itos = data.itos
-        pad = data.pad
-        unk = data.unk
-        var map = [String: Int](minimumCapacity: data.itos.count)
-        for (i, s) in data.itos.enumerated() { map[s] = i }
-        stoi = map
-    }
-
-    var unkId: Int { stoi[unk] ?? 1 }
-
-    func encode(_ token: String) -> Int {
-        stoi[token] ?? unkId
-    }
-
-    func decode(_ id: Int) -> String {
-        (id >= 0 && id < itos.count) ? itos[id] : unk
-    }
-
-    //func to get path to file, load, decode and return decoded data based on name of json file
-    static func load(named name: String, bundle: Bundle = .main) throws -> Vocab {
-        guard let url = bundle.url(forResource: name, withExtension: "json") else {
-            throw UDPipelineError.missingResource("\(name).json")
-        }
-        let data = try Data(contentsOf: url)
-        let decoded = try JSONDecoder().decode(VocabData.self, from: data)
-        return Vocab(data: decoded)
-    }
-}
-
-
-
-// MARK: - Errors
-
-enum UDPipelineError: Error, LocalizedError {
-    case missingResource(String)
-    case modelLoadFailed(String)
-    case lemmatizationFailed(String)
-    case predictionFailed(String)
-    case invalidLevel(Int)
-    case emptyInput
-    case unexpectedOutput(String)
-    case invalidModelInputs(String)
-
-
-    
-    var errorDescription: String? {
-        switch self {
-        case .missingResource(let name):
-            return "Missing bundled resource: \(name). Did you add it to the app target?"
-        case .modelLoadFailed(let name):
-            return "Failed to load Core ML model '\(name)'. Did you add \(name).mlpackage to the app target?"
-        case .lemmatizationFailed(let msg):
-            return "Lemmatization failed: \(msg)"
-        case .predictionFailed(let msg):
-            return "Prediction failed: \(msg)"
-        case .invalidLevel(let level):
-            return "Invalid pipeline level \(level): must be between 1 and 5."
-        case .invalidModelInputs(let detail):
-            return "Unexpected model inputs: \(detail)"
-
-        case .emptyInput:
-            return "no input found"
-        case .unexpectedOutput(_):
-            return "Unexpected output"
-        }
-    }
-}
-
-
-
 // MARK: - Pipeline
 //TODO: add choice of lemmatisation method - rule/hybrid for cnnbilstm :: choose primary lemmas as col2, option is sec lemma as col8
 ///     :add option of multiple lemmas predicted on same run, send extra to spec column
-final class UDPipelineCNNBiLSTM {
+final class CNNBiLSTMPipeline: PipelineHelper, NLPPipeline {
     static let rootToken = "<root>"
     static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
     
@@ -119,8 +33,8 @@ final class UDPipelineCNNBiLSTM {
 
         switch myConfig.parsingConfig.modelArchitecture {
         case .cnnBiLSTM:
-            tokenizerModel = try Self.loadModel(named: "\(languageCode)_tokenizer_\(treebank)")
-            taggerModel = try Self.loadModel(named: "\(languageCode)_tagger_parser_\(treebank)")
+            tokenizerModel = try Self.loadMlpackage(named: "\(languageCode)_tokenizer_\(treebank)", myConfig: myConfig)
+            taggerModel = try Self.loadMlpackage(named: "\(languageCode)_tagger_parser_\(treebank)", myConfig: myConfig)
             
             tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
             wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
@@ -132,17 +46,17 @@ final class UDPipelineCNNBiLSTM {
             lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab_\(treebank)")
             self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
         default :
-            throw UDPipelineError.modelLoadFailed("Not a valid architecture choice")
+            throw PipelineError.architectureConflict
         }
     }
-
-    private static func loadModel(named name: String) throws -> MLModel {
-        // Xcode compiles a bundled .mlpackage into a .mlmodelc at build
-        guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else {
-            throw UDPipelineError.modelLoadFailed(name)
-        }
-        return try MLModel(contentsOf: url)
-    }
+    // prefer static func on UDPipelineBERTBased ->> loadMlpackage
+//    private static func loadModel(named name: String) throws -> MLModel {
+//        // Xcode compiles a bundled .mlpackage into a .mlmodelc at build
+//        guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else {
+//            throw PipelineError.modelLoadFailed(name)
+//        }
+//        return try MLModel(contentsOf: url)
+//    }
 
     // MARK: Step 1 -- character-level tokenizer / sentence segmenter
     /// Run raw text through tokenizer model, returning 1x [HashableSent] per sent, numbered 1->
@@ -157,7 +71,7 @@ final class UDPipelineCNNBiLSTM {
         )
         let output = try tokenizerModel.prediction(from: provider)
         guard let logits = output.featureValue(for: "logits")?.multiArrayValue else {
-            throw UDPipelineError.predictionFailed("tokenizer produced no 'logits' output")
+            throw PipelineError.tokenizationFail("tokenizer produced no 'logits' output")
         }
 
         var tokenLists: [[String]] = []
@@ -194,7 +108,7 @@ final class UDPipelineCNNBiLSTM {
     // MARK: Step 2 -- run the tagger-parser
     /// Holds the raw tensors from 1 tagger_parser model call for 1 sent
     ///`seqLen` includes the synthetic ROOT index 0, so real words are indices 1,2....<seqLen.
-    private struct TaggerRawOutput {
+    struct TaggerRawOutput {
         let sentence: HashableSentence
         let seqLen: Int
         let uposLogits: MLMultiArray
@@ -245,7 +159,7 @@ final class UDPipelineCNNBiLSTM {
             if runExplicit {
                 print(info)
             }
-            throw UDPipelineError.predictionFailed("missing expected model output type 310")
+            throw PipelineError.predictionFailedAtLogits("missing expected model output type 310 :: getting from logits")
         }
         //need to get, decode UPOS so they can be passed to lemmatiser
         let decodedUpos = decodeUPOSInternal(uposLogits)
@@ -259,7 +173,7 @@ final class UDPipelineCNNBiLSTM {
             }
         } catch {
             // new error type to add
-            throw UDPipelineError.lemmatizationFailed("lemmatizer failed: \(error)")
+            throw PipelineError.lemmatizationFailed("lemmatizer failed: \(error)")
         }
 //        print("Report267::")
 //        print("Sentence == \(sentence)")
@@ -301,16 +215,16 @@ final class UDPipelineCNNBiLSTM {
 //    }
 
     // MARK: Step 3 (decode) -- lemmatisation with edit-script rule
-    /// //NOTE: getLemmas uses the NEW lemmatizer.
-    /// decodeLemmas function uses edit rules, and is here to enable easy roll-back, test, comparison
     /// 1x lemma string per real word, made by applying the predicted edit-script rule to word's raw form.
     ///
-    private func decodeRuleLemmas(_ raw: TaggerRawOutput) -> [String] {
+    func decodeRuleLemmas(_ raw: TaggerRawOutput) -> [String] {
         zip(1..<raw.seqLen, raw.sentence.tokens).map { t, form in
             let id = parserArgmax(raw.ruleLemmaLogits, prefix: [0, t], dimSize: lemmaRuleVocab.itos.count)
             return applyLemmaRule(form: form, rule: lemmaRuleVocab.decode(id))
         }
     }
+
+    // decode rule lemmas moved to UDDecoding extension via protocol 
     private func getLemmas(_ raw: TaggerRawOutput) -> [String] {
         // set to true for dev test
         let dev = false
@@ -335,170 +249,24 @@ final class UDPipelineCNNBiLSTM {
     }
 
     // MARK: Step 5 (decode) -- dependency parsing
-    /// One (head, deprel) pair per real word, decoded via Chu-Liu-Edmonds (max spanning arborescence,
-    /// rooted at node 0), which guarantees a valid, cycle-free dependency tree with a single root --
-    /// unlike a per-word greedy parserArgmax, which can produce cycles or multiple roots.
+    // now in extension via protocol
     private func decodeDependencies(_ raw: TaggerRawOutput) -> [(head: Int, deprel: String)] {
-        let n = raw.seqLen
-        if runExplicit {
-            print("Decoding deps:: raw seq len == \(n)")
-        }
-        // Dense head-score matrix: scoreMatrix[h][d] = score of dependent d attaching to head h.
-        // d == 0 (root can't be a dependent) and h == d (a word can't be its own head) are left
-        // at -infinity and are never read by the arc-selection loops below.
-        var scoreMatrix = [[Double]](repeating: [Double](repeating: -Double.infinity, count: n), count: n)
-        for d in 1..<n {
-            for h in 0..<n where h != d {
-                scoreMatrix[h][d] = raw.arcLogits[[0, d, h] as [NSNumber]].doubleValue
-            }
-        }
-		//print("scoreMatrix == \(scoreMatrix)")
-        let heads = solveArborescence(activeNodes: Array(0..<n), scoreMatrix: scoreMatrix)
-        if runExplicit {
-            print("heads == \(heads)")
-        }
-        return (1..<n).map { t in
-            // Every non-root node is guaranteed a parent by solveArborescence;
-            let head = heads[t] ?? 0 // nil colalesce to be safe
-
-            var bestDeprelId = 0
-            var bestDeprelScore = -Double.infinity
-            for c in 0..<deprelVocab.itos.count {
-                let v = raw.labelLogits[[0, c, t, head] as [NSNumber]].doubleValue
-                if v > bestDeprelScore { bestDeprelScore = v; bestDeprelId = c }
-            }
-            if runExplicit {
-                print("Decode deps::\n head ==\(head); deprel===\(deprelVocab.decode(bestDeprelId))")
-            }
-            return (head: head, deprel: deprelVocab.decode(bestDeprelId))
-        }
+        decodeParse(
+            runExplicit: true,
+            wordCount: raw.seqLen - 1,
+            deprelVocab: deprelVocab,
+            arcScore: { d, h in raw.arcLogits[[0, d, h] as [NSNumber]].doubleValue },
+            labelScore: { c, t, head in raw.labelLogits[[0, c, t, head] as [NSNumber]].doubleValue }
+        )
     }
 
-    // MARK: Chu-Liu-Edmonds maximum spanning arborescence
-    /// Solves the maximum-weight spanning arborescence rooted at node 0 over exactly `activeNodes`
-    /// (which must include 0), using `scoreMatrix` for edge weights. Returns a map from every
-    /// active node except 0 to its chosen parent (also an active node).
-    ///
-    /// This is a standard recursive implementation of Chu-Liu-Edmonds: greedily pick each node's
-    /// best incoming edge; if that produces a cycle, contract the cycle into one representative
-    /// node with reweighted edges, recurse on the smaller graph, then expand the result back out.
-    /// Recursion terminates because each contraction strictly reduces the number of active nodes,
-    /// and a graph with no cycle is returned immediately as-is.
-    private func solveArborescence(activeNodes: [Int], scoreMatrix: [[Double]]) -> [Int: Int] {
-        // Step 1: each non-root active node's single best incoming edge.
-        var bestParent: [Int: Int] = [:]
-        for d in activeNodes where d != 0 {
-            var best = -Double.infinity
-            var bestH = -1
-            for h in activeNodes where h != d {
-                let s = scoreMatrix[h][d]
-                if s > best { best = s; bestH = h }
-            }
-            bestParent[d] = bestH
-        }
-
-        guard let cycle = findCycle(bestParent: bestParent, activeNodes: activeNodes) else {
-            // No cycle: the greedy choice is already optimal.
-            return bestParent
-        }
-
-        // Step 2: contract the cycle into a single representative node (reusing the smallest node id in
-        // the cycle, rather than minting a new one, keeps every id a real, meaningful node throughout)
-        let cycleSet = Set(cycle)
-        let representative = cycle.min()!
-
-        // Total weight of the cycle's own internal edges -- used below to work out true cost of "breaking"
-        // the cycle at whichever node ends up accepting an external edge instead.
-        var cycleWeight = 0.0
-        for v in cycle {
-            cycleWeight += scoreMatrix[bestParent[v]!][v]
-        }
-
-        let newActiveNodes = activeNodes.filter { !cycleSet.contains($0) || $0 == representative }
-        var newScoreMatrix = scoreMatrix
-
-        // Bookkeeping so the contracted-graph result can be expanded back into real node ids afterward
-        var enterFrom: [Int: Int] = [:] // u -> which cycle node the (u -> representative) edge really targets
-        var exitTo: [Int: Int] = [:]    // w -> which cycle node the (representative -> w) edge really originates from
-
-        for u in activeNodes where !cycleSet.contains(u) {
-            var bestIn = -Double.infinity
-            var bestVIn = -1
-            var bestOut = -Double.infinity
-            var bestVOut = -1
-            for v in cycle {
-                // Incoming: cost of accepting edge (u -> v) instead of v's  current in-cycle edge, while
-                // keeping every other cycle edge intact.
-                let reweighted = scoreMatrix[u][v] - scoreMatrix[bestParent[v]!][v] + cycleWeight
-                if reweighted > bestIn { bestIn = reweighted; bestVIn = v }
-
-                // Outgoing: plain best edge leaving the cycle to u -- no reweighting needed, since
-                // which internal edge eventually gets broken doesn't affect edges leaving the cycle.
-                let s = scoreMatrix[v][u]
-                if s > bestOut { bestOut = s; bestVOut = v }
-            }
-            newScoreMatrix[u][representative] = bestIn
-            enterFrom[u] = bestVIn
-            newScoreMatrix[representative][u] = bestOut
-            exitTo[u] = bestVOut
-        }
-
-        // Step 3: recurse on the smaller, contracted graph.
-        let contractedParents = solveArborescence(activeNodes: newActiveNodes, scoreMatrix: newScoreMatrix)
-
-        // Step 4: expand back. Every cycle node keeps its original in-cycle parent, except the one node
-        // where an external edge broke the cycle -- that node's real parent is whichever external node
-        // fed into the cycle at that point.
-        var result = contractedParents
-        result.removeValue(forKey: representative)
-        for v in cycle {
-            result[v] = bestParent[v]
-        }
-        if let repParent = contractedParents[representative], let breakNode = enterFrom[repParent] {
-            result[breakNode] = repParent
-        }
-
-        // Any outside node whose contracted parent came out as the representative actually attaches to
-        // whichever real cycle node achieved that best exit edge.
-        for (node, parent) in contractedParents where parent == representative {
-            if let realParent = exitTo[node] {
-                result[node] = realParent
-            }
-        }
-        return result
-    }
-
-    private func findCycle(bestParent: [Int: Int], activeNodes: [Int]) -> [Int]? {
-        var visitedGlobally = Set<Int>()
-
-        for start in activeNodes where start != 0 && !visitedGlobally.contains(start) {
-            var path: [Int] = []
-            var pathSet = Set<Int>()
-            var current = start
-
-            while true {
-                if pathSet.contains(current) {
-                    let cycleStartIndex = path.firstIndex(of: current)!
-                    return Array(path[cycleStartIndex...])
-                }
-                if visitedGlobally.contains(current) || current == 0 {
-                    break // reached root, or a previously-confirmed cycle-free path -- no cycle here
-                }
-                path.append(current)
-                pathSet.insert(current)
-                visitedGlobally.insert(current)
-                current = bestParent[current]!
-            }
-        }
-        return nil
-    }
 
     // MARK: Per-sentence processing: for progress-reporting callers
     /// same field-decoding logic as `run(text:level:mode:)`,with 1x tokenised sent a time ->Token
     func runOnSentence(_ sentence: HashableSentence,  myConfig: TaggerConfig) throws -> [Token] {
         let level = myConfig.parsingConfig.maxPipelineStep.rawValue
         guard (1...5).contains(level) else {
-            throw UDPipelineError.invalidLevel(level)
+            throw PipelineError.invalidLevel(level)
         }
 
         let n = sentence.tokens.count
@@ -583,7 +351,7 @@ final class UDPipelineCNNBiLSTM {
 //        case "tidy":
 //            return formatTidy(lines)
 //        default:
-//            throw UDPipelineError.predictionFailed(
+//            throw PipelineError.predictionFailed(
 //                "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
 //            )
 //        }
@@ -605,7 +373,7 @@ final class UDPipelineCNNBiLSTM {
 //    func run(text: String, myConfig: TaggerConfig) throws -> [String] {
 //        let level = myConfig.parsingConfig.maxPipelineStep.rawValue
 //        guard (1...5).contains(level) else {
-//            throw UDPipelineError.invalidLevel(level)
+//            throw PipelineError.invalidLevel(level)
 //        }
 //
 //        let sentences = try tokenize(text)
@@ -625,82 +393,14 @@ final class UDPipelineCNNBiLSTM {
 //        case "tidy":
 //            return formatTidy(allLines)
 //        default:
-//            throw UDPipelineError.predictionFailed(
+//            throw PipelineError.predictionFailed(
 //                "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
 //            )
 //        }
 //    }
 
-    // MARK: - Output formatting
-    private func formatRaw(_ lines: [ConllLineContent]) -> [String] {
-        lines.map { line in
-            switch line {
-            case .row(let tok): return tok.conllRaw
-            case .blank: return ""
-            }
-        }
-    }
 
-    /// Use string count to column-align rows of each sent  independently
-    private func formatTidy(_ lines: [ConllLineContent]) -> [String] {
-        var result: [String] = []
-        var currentRows: [[String]] = []
 
-        func flushSentence() {
-            guard let columnCount = currentRows.first?.count else { return }
-            var widths = Array(repeating: 0, count: columnCount)
-            for row in currentRows {
-                for (i, field) in row.enumerated() {
-                    widths[i] = max(widths[i], field.count)
-                }
-            }
-            for row in currentRows {
-                let padded = row.enumerated().map { i, field in
-                    field.padding(toLength: widths[i], withPad: " ", startingAt: 0)
-                }
-                result.append(padded.joined(separator: "  "))
-            }
-            currentRows = []
-        }
-
-        for line in lines {
-            switch line {
-            case .row(let tok):
-                currentRows.append([
-                    String(tok.tokid), tok.form, tok.lemma, tok.upos,
-                    tok.xpos, tok.feats, tok.head, tok.deprel,
-                ])
-            case .blank:
-                flushSentence()
-                result.append("")
-            }
-        }
-        flushSentence() // in case the input didn't end with a trailing .blank
-        return result
-    }
-
-    // MARK: - Lemma edit-script : functional but not superb lemmatisation
-    private func applyLemmaRule(form: String, rule: String) -> String {
-        var result: String
-        if rule == "IDENTITY" {
-            result = form.lowercased()
-        } else {
-            let parts = rule.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
-            guard parts.count == 3, let p = Int(parts[0]), let s = Int(parts[1]) else {
-                return form
-            }
-            let middle = String(parts[2])
-            let f = Array(form.lowercased())
-            if p + s > f.count { return form }
-            let prefix = String(f[0..<p])
-            let suffix = s > 0 ? String(f[(f.count - s)...]) : ""
-            result = prefix + middle + suffix
-        }
-        if let firstChar = form.first, firstChar.isUppercase {
-            result = result.prefix(1).uppercased() + result.dropFirst()
-        }
-        return result
-    }
     func makeIntArray(_ values: [Int32], shape: [NSNumber]) throws -> MLMultiArray {
         let arr = try MLMultiArray(shape: shape, dataType: .int32)
         for (i, v) in values.enumerated() {

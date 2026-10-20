@@ -114,4 +114,18 @@ extension PipelineSettingsView {
     }
 }
 
+protocol NLPPipeline{
+    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
+}
 
+extension NLPPipeline{
+    func tokenize(_ naughtyString: String) -> HashableSentence{
+        let input = naughtyString
+        let intermediate = input.split(separator: " ")
+        let output = intermediate.map {String($0)}
+        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
+        print("this should't have been callable…")
+        return outputSent
+    }
+
+}

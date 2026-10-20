@@ -56,11 +56,17 @@ struct PipelineSettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("DetectLanguageToggle")
+                    
                     Picker("architecture", selection: $myConfig.parsingConfig.modelArchitecture){
                         ForEach(ModelArchitecture.allCases){modarch in
                             Text(modarch.displayName)
                         }
-                    }
+                    }.onChange(of: myConfig.parsingConfig.modelArchitecture)
+                    {if myConfig.parsingConfig.modelArchitecture == .distilbert {
+                        myConfig.parsingConfig.selectedLanguage = .FR
+                        myConfig.parsingConfig.selectedTreebank = .frTB1
+                        
+                    }}
                     
                     ConstrainedLanguagePickerView(title: "Language", selectedTreebankDefault: $myConfig.parsingConfig.selectedTreebank, selection: $myConfig.parsingConfig.selectedLanguage)
                         .onChange(of: fileContainerModel.localSandboxFileURL){
@@ -169,8 +175,16 @@ struct PipelineSettingsView: View {
             Task {
                 do {
                     // get pipeline object
-                    let pipeline = try UDPipelineCNNBiLSTM(myConfig: myConfig)
+                    
                     var allSentences: [HashableSentence] = []
+                    let pipeline: NLPPipeline
+                    switch myConfig.parsingConfig.modelArchitecture {
+                    case .distilbert:
+                        pipeline = try BERTlikePipeline(myConfig: myConfig)
+                    case .cnnBiLSTM:
+                        pipeline = try CNNBiLSTMPipeline(myConfig: myConfig)
+                    }
+                    
                     
                     //MARK: INGEST SENTS ::
                     allSentences = try ingestSentEncapsulator(
@@ -183,7 +197,7 @@ struct PipelineSettingsView: View {
                     //MARK: check we have sents
                     guard !allSentences.isEmpty else {
                         taggingInProgress.wrappedValue = false
-                        throw ParseProcessingError.noSentencesLoaded
+                        throw PipelineError.noSentencesLoaded
                     }
                     //MARK: run resentenciser on request
                     if ![InputFileType.txt, InputFileType.manual].contains(myConfig.inputConfig.inputFileType) && myConfig.parsingConfig.runResentenciser{
@@ -247,7 +261,7 @@ struct PipelineSettingsView: View {
                     try await MainActor.run {
                         taggingInProgress.wrappedValue = false
                         guard let runOutput else {
-                            throw ParseProcessingError.noRunOutput
+                            throw PipelineError.noRunOutput
                         }
                         topLevelOutputList.append(runOutput)
                         if myConfig.parsingConfig.runExplicit{
@@ -256,8 +270,8 @@ struct PipelineSettingsView: View {
                     }
                 } catch {
                     switch error {
-                    case let parseProcessingError as ParseProcessingError:
-                        myConfig.progressConfig.alertMessage = parseProcessingError.errorDescription
+                    case let PipelineError as PipelineError:
+                        myConfig.progressConfig.alertMessage = PipelineError.errorDescription
                     case let nsError as NSError where nsError.domain == XMLParser.errorDomain:
                         myConfig.progressConfig.alertMessage = "XML Parsing error : No valid XML to parse"
                     default:

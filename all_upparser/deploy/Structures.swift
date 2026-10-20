@@ -6,7 +6,7 @@
 //
 
 import Foundation
-
+import CoreML
 
 struct BuiltSentHolder: Identifiable, Hashable{
     var id = UUID()
@@ -99,6 +99,135 @@ struct HashableSentence: Hashable {
     }
 }
 
+struct LabelVocabsForBERTlike {
+// MARK: - Label vocabularies for BERT derived models :: 4x vocabs with loader
+/// The five vocabularies that turn output indices back into labels. They must come from
+/// the same training run as the model (train_bert.py writes them next to it); the old
+/// BiLSTM vocabularies number the labels differently.
+    let upos: Vocab
+    let feats: Vocab
+    let deprel: Vocab
+    let lemmaRule: Vocab
+    
+    static func loadLabelVocabularies(languageCode: String,
+                                      treebank: String,
+                                      bundle: Bundle = .main
+    ) throws -> LabelVocabsForBERTlike {
+        
+        func vocab(_ label: String) throws -> Vocab {
+            let name = "\(languageCode)_distilbert_\(label)_vocab_\(treebank)"
+            guard let url = bundle.url(forResource: name, withExtension: "json") else {
+                throw PipelineError.missingResource("\(name).json")
+            }
+            let data = try Data(contentsOf: url)
+            let decoded = try JSONDecoder().decode(VocabData.self, from: data)
+            return Vocab(data: decoded)
+        }
+
+        return LabelVocabsForBERTlike(
+            upos: try vocab("upos"),
+            feats: try vocab("feats"),
+            deprel: try vocab("deprel"),
+            lemmaRule: try vocab("lemma_rule")
+        )
+    }
+}
+
+struct LogitReaderForBERTlike {
+// MARK: - Reading Core ML output arrays for bert-derived models to deal with padding
+/// Reads values out of an MLMultiArray without boxing every element. Honours the array's
+/// strides (Core ML may pad rows) and its element type (the model's outputs are normally
+/// float16; float32 and double are handled too).
+
+    private let array: MLMultiArray             // keeps the buffer alive
+    private let base: UnsafeRawPointer
+    private let dataType: MLMultiArrayDataType
+    private let strides: [Int]
+    private let shape: [Int]
+
+    /// - Parameters:
+    ///   - rank: expected number of dimensions (3 = [1, rows, width], 4 = [1, channels, rows, columns])
+    ///   - rows: how many rows the caller will read (words + 1)
+    ///   - labels: the vocabulary size this array's label dimension must match (nil to skip)
+    init(_ output: MLFeatureProvider, _ name: String, rank: Int, rows: Int,
+         labels: Int? = nil) throws  {
+        guard let array = output.featureValue(for: name)?.multiArrayValue else {
+            throw PipelineError.unexpectedOutput("\(name) is missing")
+        }
+
+        let shape = array.shape.map { $0.intValue }
+        guard shape.count == rank, shape[rank - 2] >= rows else {
+            throw PipelineError.unexpectedOutput("\(name) has shape \(shape); expected rank \(rank) with at least \(rows) rows")
+        }
+        if let labels {
+            let width = rank == 3 ? shape[2] : shape[1]
+            guard width == labels else {
+                throw PipelineError.unexpectedOutput("\(name) has \(width) labels but the vocabulary has \(labels); the vocabulary files and the model are from different training runs")
+            }
+        }
+       switch array.dataType {
+        case .float16, .float32, .double: break
+        default: throw PipelineError.unexpectedOutput("\(name) has an unsupported element type")
+        }
+        self.array = array
+        self.base = UnsafeRawPointer(array.dataPointer)
+        self.dataType = array.dataType
+        self.strides = array.strides.map { $0.intValue }
+        self.shape = shape
+    }
+
+    /// rank 3: value at [0, row, column]
+    func value(row: Int, column: Int) -> Float {
+        load(strides[1] * row + strides[2] * column)
+    }
+
+    /// rank 3: index of the largest value in a row (over the last dimension)
+    func argmax(row: Int) -> Int {
+        var best = 0
+        var bestValue = -Float.infinity
+        for k in 0..<shape[2] {
+            let v = value(row: row, column: k)
+            if v > bestValue { bestValue = v; best = k }
+        }
+        return best
+    }
+
+    /// rank 4 ([1, channels, rows, columns]): value at [0, channel, row, column]
+    func value(channel: Int, row: Int, column: Int) -> Float {
+        load(strides[1] * channel + strides[2] * row + strides[3] * column)
+    }
+
+    private func load(_ offset: Int) -> Float {
+        switch dataType {
+        case .float32:
+            return base.load(fromByteOffset: offset * 4, as: Float.self)
+        case .double:
+            return Float(base.load(fromByteOffset: offset * 8, as: Double.self))
+        default:                                    // .float16, checked in init
+            return Self.float(fromHalfBits: base.load(fromByteOffset: offset * 2, as: UInt16.self))
+        }
+    }
+
+
+    /// IEEE half -> Float by bit manipulation, so no Float16 type is needed (it isn't
+    /// available when building for Intel simulators).
+    private static func float(fromHalfBits h: UInt16) -> Float {
+        let sign = UInt32(h >> 15) << 31
+        let exponent = UInt32((h >> 10) & 0x1F)
+        let mantissa = UInt32(h & 0x3FF)
+        switch exponent {
+        case 0:
+            let magnitude = Float(mantissa) / 16_777_216        // subnormal (or zero): mantissa * 2^-24
+            return sign == 0 ? magnitude : -magnitude
+        case 0x1F:
+            return Float(bitPattern: sign | 0x7F80_0000 | (mantissa << 13))   // infinity / NaN
+        default:
+            return Float(bitPattern: sign | ((exponent + 112) << 23) | (mantissa << 13))
+        }
+    }
+}
+
+
 struct RegexLangPatternToLangMap: Identifiable{
     var id = UUID()
     let string: String
@@ -120,12 +249,12 @@ struct ResultStorageManager {
             return runsURL
         } catch {
             print("Failed to create 'runs' directory: \(error)")
-            throw ParseProcessingError.outputFolderCreationError
+            throw PipelineError.outputFolderCreationError
         }
     }
 
     static func save(_ runOutput: RunOutput) throws ->URL? {
-        guard let runsFolder = try getRunsDirectory() else { throw ParseProcessingError.outputFolderCreationError }
+        guard let runsFolder = try getRunsDirectory() else { throw PipelineError.outputFolderCreationError }
         let fileURL = runsFolder.appendingPathComponent("\(runOutput.id).json")
         
         do {
@@ -135,12 +264,12 @@ struct ResultStorageManager {
             return fileURL
         } catch {
             print("Failed to save result: \(error)")
-            throw ParseProcessingError.fileSaveError(filename: fileURL.absoluteString)
+            throw PipelineError.fileSaveError(filename: fileURL.absoluteString)
         }
     }
 
     static func load(runID: String) throws -> RunOutput? {
-        guard let runsFolder = try getRunsDirectory() else { throw ParseProcessingError.outputFolderCreationError }
+        guard let runsFolder = try getRunsDirectory() else { throw PipelineError.outputFolderCreationError }
         let fileURL = runsFolder.appendingPathComponent("\(runID).json")
         
         do {
@@ -418,7 +547,7 @@ struct TaggerConfig{
     }
     
     struct ParsingConfig{
-        
+        var selectedArchitecture: ModelArchitecture
         var selectedLanguage: Language
         var selectedTreebank: Language.Treebank
         var maxPipelineStep: PipelineStep
@@ -437,6 +566,7 @@ struct TaggerConfig{
         
         // need to add = nil in init of it's to truly allow no parameters to be specified
         init(
+            selectedArchitecture: ModelArchitecture? = nil,
             selectedLanguage: Language? = nil,
             selectedTreebank: Language.Treebank? = nil,
             maxPipelineStep: PipelineStep? = nil,
@@ -452,6 +582,7 @@ struct TaggerConfig{
             getSecLems: Bool? = nil,
             runExplicit: Bool? = nil
         ){
+            self.selectedArchitecture = TaggerConfig.resolveRepresentable(passed: selectedArchitecture, key: "ModelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
             self.selectedLanguage = TaggerConfig.resolveRepresentable(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
             self.selectedTreebank = TaggerConfig.resolveRepresentable(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
             self.runResentenciser = TaggerConfig.resolveBool(passed: runResentenciser, key: "runResentenciserDefault", default: false)
@@ -476,6 +607,7 @@ struct TaggerConfig{
         var xmlTitle: String
         var includeConllSentIdLine: Bool
         var includeConllSentText: Bool
+        var getsubtokens: Bool
         init(
             fileName: String? = nil,
             targetFolderURL: URL? = nil,
@@ -483,7 +615,8 @@ struct TaggerConfig{
             xmlAuthorName: String? = nil,
             xmlTitle: String? = nil,
             includeConllSentIdLine: Bool? = nil,
-            includeConllSentText: Bool? = nil
+            includeConllSentText: Bool? = nil,
+            getsubtokens: Bool? = nil
         ) {
             self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileNameDefault")
             self.targetFolderURL = targetFolderURL
@@ -495,6 +628,7 @@ struct TaggerConfig{
             self.xmlTitle = TaggerConfig.resolveString(passed: xmlTitle, key: "xmlTitleDefault")
             self.includeConllSentIdLine = TaggerConfig.resolveBool(passed: includeConllSentIdLine, key: "includeConllSentIdLineDefault", default: true )
             self.includeConllSentText = TaggerConfig.resolveBool(passed: includeConllSentText, key: "includeConllSentTextDefault", default: true )
+            self.getsubtokens = TaggerConfig.resolveBool(passed: getsubtokens, key: "getsubtokensDefault", default: false )
         }
     }
     struct ProgressConfig{
@@ -690,6 +824,51 @@ struct Token : Identifiable, Codable {
                 """
     }
 }
+// MARK: - Vocabulary
+//structure to decode the vocab data JSON file
+struct VocabData: Decodable {
+    let itos: [String]
+    let pad: String
+    let unk: String
+}
+//define the vocab class
+final class Vocab {
+    let itos: [String]
+    let stoi: [String: Int]
+    let pad: String
+    let unk: String
+    
+    //   //init method for the vocab class
+    init(data: VocabData) {
+        itos = data.itos
+        pad = data.pad
+        unk = data.unk
+        var map = [String: Int](minimumCapacity: data.itos.count)
+        for (i, s) in data.itos.enumerated() { map[s] = i }
+        stoi = map
+    }
+
+    var unkId: Int { stoi[unk] ?? 1 }
+
+    func encode(_ token: String) -> Int {
+        stoi[token] ?? unkId
+    }
+
+    func decode(_ id: Int) -> String {
+        (id >= 0 && id < itos.count) ? itos[id] : unk
+    }
+
+    //func to get path to file, load, decode and return decoded data based on name of json file
+    static func load(named name: String, bundle: Bundle = .main) throws -> Vocab {
+        guard let url = bundle.url(forResource: name, withExtension: "json") else {
+            throw PipelineError.missingResource("\(name).json")
+        }
+        let data = try Data(contentsOf: url)
+        let decoded = try JSONDecoder().decode(VocabData.self, from: data)
+        return Vocab(data: decoded)
+    }
+}
+
 
 /* dealing with XMLconll docs as input */
 struct XMLConllElement {
