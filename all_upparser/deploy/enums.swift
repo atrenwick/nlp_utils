@@ -78,7 +78,6 @@ enum InputFileType: String, Identifiable, CaseIterable, Codable {
         case .xml, .xmlConll: return UTType(filenameExtension: "xml") ?? .plainText
         }
     }
-    
 }
 
 enum InsertPosition : String, Identifiable, CaseIterable{
@@ -156,6 +155,12 @@ enum Language: String, CaseIterable, Identifiable {
             }
         }
     }
+    var availableArchs: [ModelArchitecture]{
+        switch self {
+        case .FR: return [.cnnBiLSTM, .distilbert]
+        default: return [.cnnBiLSTM]
+        }
+    }
     
     // Returns ONLY the models valid for this language
     var availableTBs: [Treebank] {
@@ -200,7 +205,6 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
 }
 
 enum PipelineError: LocalizedError{
-
     
     case architectureConflict
     case badTempTokens

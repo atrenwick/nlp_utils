@@ -12,75 +12,75 @@ import SwiftUI
 //}
 
 
-struct WordPieceTokenDataView: View {
-    
-    @State var showWordPieces:Bool = false
-    
-    let words = "Colourless green ideas sleep furiously .".split(separator: " ")
-    @State var testOutput: [String] = []
-    let languageCode: String = "FR"
-    let treebank: String = "gsd"
-    var body: some View {
-                
-        Button {
-            do {
-                testOutput = try testWordpieceTokenisation(
-                    words: words.map {String($0)}
-                )
-            } catch {
-                print("foobar")
-                }
-        } label: {
-            Text("Tokenise")
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(.indigo)
-
-        
-         
-            Form{
-                ForEach(testOutput.enumerated(), id:\.offset){(_, outputitem) in
-                    Text(outputitem)
-                }
-//            ForEach(Array(words.enumerated()), id:\.offset){_, word in
-//                HStack(alignment: .firstTextBaseline){
-//                    Text(word).bold()
-//                    Text(testOutput.tokenizer.subtokens(for: String(word)).joined(separator: ""))
+//struct WordPieceTokenDataView: View {
+//    
+//    @State var showWordPieces:Bool = false
+//    
+//    let words = "Colourless green ideas sleep furiously .".split(separator: " ")
+//    @State var testOutput: [String] = []
+//    let languageCode: String = "FR"
+//    let treebank: String = "gsd"
+//    var body: some View {
+//                
+//        Button {
+//            do {
+//                testOutput = try testWordpieceTokenisation(
+//                    words: words.map {String($0)}
+//                )
+//            } catch {
+//                print("foobar")
 //                }
-//            }
-        }
-    }
-    func testWordpieceTokenisation(words: [String]) throws -> [String] {
-        
-        
-        do {
-            let wordPieceTokenizer: WordPieceTokenizer = try WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank)
-
-
-            guard !wordPieceTokenizer.clsID.words.isEmpty else {
-                print("WordPieceError.tokenizerTryError")
-                throw WordPieceError.tokenizerTryError
-            }
-            
-            let encoded = try wordPieceTokenizer.encode(words: words, seqLen: 128, maxWords: 96)
-            print(encoded.wordCount)
-            guard !encoded.inputIDs.isEmpty else {
-                print("WordPieceError.wordPieceTokenizerError")
-                throw WordPieceError.wordPieceTokenizerError
-            }
-//            return TestOutput(tokenizer: wordPieceTokenizer, encoded: encoded)
-            let failures = try wordPieceTokenizer.checkAgainstGolden(fileNameChunk: "FR_distilbert_tok_gold_gsd")
-            
-            print(failures)
-            return failures
-
-        } catch {
-            print("other type of error")
-            throw WordPieceError.other
-        }
-        
-    }
-}
+//        } label: {
+//            Text("Tokenise")
+//        }
+//        .buttonStyle(.borderedProminent)
+//        .tint(.indigo)
+//
+//        
+//         
+//            Form{
+//                ForEach(testOutput.enumerated(), id:\.offset){(_, outputitem) in
+//                    Text(outputitem)
+//                }
+////            ForEach(Array(words.enumerated()), id:\.offset){_, word in
+////                HStack(alignment: .firstTextBaseline){
+////                    Text(word).bold()
+////                    Text(testOutput.tokenizer.subtokens(for: String(word)).joined(separator: ""))
+////                }
+////            }
+//        }
+//    }
+////    func testWordpieceTokenisation(words: [String]) throws -> [String] {
+////        
+////        
+////        do {
+////            let wordPieceTokenizer: WordPieceTokenizer = try WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank)
+////
+////
+////            guard !wordPieceTokenizer.clsID.words.isEmpty else {
+////                print("WordPieceError.tokenizerTryError")
+////                throw WordPieceError.tokenizerTryError
+////            }
+////            
+////            let encoded = try wordPieceTokenizer.encode(words: words, seqLen: 128, maxWords: 96)
+////            print(encoded.wordCount)
+////            guard !encoded.inputIDs.isEmpty else {
+////                print("WordPieceError.wordPieceTokenizerError")
+////                throw WordPieceError.wordPieceTokenizerError
+////            }
+//////            return TestOutput(tokenizer: wordPieceTokenizer, encoded: encoded)
+////            let failures = try wordPieceTokenizer.checkAgainstGolden(fileNameChunk: "FR_distilbert_tok_gold_gsd")
+////            
+////            print(failures)
+////            return failures
+////
+////        } catch {
+////            print("other type of error")
+////            throw WordPieceError.other
+////        }
+////        
+////    }
+//}
 //    func testMatchesPython() throws {
 //        let tokenizer = try WordPieceTokenizer(
 //            vocabURL: bundle.url(forResource: "vocab", withExtension: "txt")!,

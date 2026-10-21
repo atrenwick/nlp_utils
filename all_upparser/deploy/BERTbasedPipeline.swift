@@ -14,6 +14,7 @@ final class BERTlikePipeline: PipelineHelper, NLPPipeline{
     var wordPieceTokenizer: WordPieceTokenizer
     private let taggerModel: MLModel
     let labels: LabelVocabsForBERTlike
+    let description: String
 
     /// fixed lengths the model was converted with, loaded from model for safety
     let seqLen: Int
@@ -27,6 +28,7 @@ final class BERTlikePipeline: PipelineHelper, NLPPipeline{
         self.labels = labels
         self.seqLen = limits.seqLen
         self.maxWords = limits.maxWords
+        self.description = "BERTlike pipeline"
     }
 
     /// Loads everything for one language/treebank. Building the tokenizer reads a ~100k-entry
@@ -84,11 +86,15 @@ final class BERTlikePipeline: PipelineHelper, NLPPipeline{
         
         var wordPieceTokenizer = self.wordPieceTokenizer                  // a copy; the vocabulary isn't duplicated
         wordPieceTokenizer.showWordPieces = myConfig.exportConfig.getsubtokens // default set to true for the moment
+//        change to optional which can then be unwrapped
+        if let encoded = try wordPieceTokenizer.encode(words: sentence.tokens, seqLen: seqLen, maxWords: maxWords){
+            let output = try predict(encoded)
+            return try decode(output, words: sentence.tokens, wordPieces: encoded.wordPieces)
         
-        let encoded = try wordPieceTokenizer.encode(words: sentence.tokens, seqLen: seqLen, maxWords: maxWords)
-        
-        let output = try predict(encoded)
-        return try decode(output, words: sentence.tokens, wordPieces: encoded.wordPieces)
+            }
+        else {
+            return []
+        }
     }
 
     // MARK: Running the model
@@ -153,6 +159,14 @@ final class BERTlikePipeline: PipelineHelper, NLPPipeline{
                 col9: "_",
                 subTokens: wordPieces?[i - 1]
             ))
+            if runExplicit{
+                var subels: String = "empty"
+                let tidy1 = wordPieces?[i-1]
+                if let success = tidy1{
+                    subels = success.joined(separator: "/")
+                }
+                print("\(form) :: \(subels)")
+            }
         }
         return tokens
     }

@@ -10,6 +10,36 @@ import CoreML
 // pipelineHelper protocol, extension to hold code relevant to BiLSTM and BERT-based pipelines
 
 
+protocol NLPPipeline{
+    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
+    var description: String { get }
+    var maxWords: Int { get }
+}
+
+extension NLPPipeline{
+    func tokenize(_ naughtyString: String) -> HashableSentence{
+        let input = naughtyString
+        let intermediate = input.split(separator: " ")
+        let output = intermediate.map {String($0)}
+        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
+        print("this should't have been callable…")
+        return outputSent
+    }
+
+}
+// combination of extension: Language and a protocol
+// 1. Define a protocol that guarantees availableTBs exists
+protocol TreebankProvidable {
+    associatedtype TreebankType: Hashable
+    var availableTBs: [TreebankType] { get }
+    var defaultTB: TreebankType { get } //
+}
+
+// 2. Conforming  language enum to it
+extension Language: TreebankProvidable {
+    typealias TreebankType = Language.Treebank
+}
+
 
 protocol PipelineHelper {}
 

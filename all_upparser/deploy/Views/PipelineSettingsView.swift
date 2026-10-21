@@ -14,13 +14,15 @@ struct PipelineSettingsView: View {
     @State var fileContainerModel = SourceFileContainerModel()
     @State var myConfig: TaggerConfig = TaggerConfig()
     @State var tempTokens: [TempToken] = []
-        
+    
     // reporting
     @State private var topLevelOutputList: [RunOutput] = []
     @State private var exportStatusMessage: String?
     @State private var runOutput: RunOutput?
     @State private var taggingInProgress: Bool = false
     @State var isFirstRun: Bool = true
+    @State var pipelineSummary: String = ""
+    @State var currentStatus: String = ""
     // sentences ::
     @State var builtSents: [BuiltSentHolder] = []
     @State var sentsToRetokenise: [String] = []
@@ -32,11 +34,13 @@ struct PipelineSettingsView: View {
     let runfive = false //
     #endif
     
+    
     var body: some View {
         NavigationStack{
             Form {
                 InputTypeEncapsulatorView(myConfig: $myConfig, fileContainerModel: $fileContainerModel)
                 .accessibilityIdentifier("InputTypePicker")
+                // watch this with $matchFileNameTypeDefault
 
                 // First Picker
                 Section("Parameters"){
@@ -46,6 +50,8 @@ struct PipelineSettingsView: View {
                         tempTokens: $tempTokens,
                         fileContainerModel: fileContainerModel
                     )
+                    // watch this with $matchFileNameTypeDefault
+
                     Toggle(isOn: $myConfig.inputConfig.detectLanguage) {
                         Text("Autodetect Language")
                     }.onChange(of: myConfig.inputConfig.detectLanguage){_, newValue in
@@ -57,28 +63,17 @@ struct PipelineSettingsView: View {
                     }
                     .accessibilityIdentifier("DetectLanguageToggle")
                     
-                    Picker("architecture", selection: $myConfig.parsingConfig.modelArchitecture){
+                    Picker("Architecture", selection: $myConfig.parsingConfig.modelArchitecture){
                         ForEach(ModelArchitecture.allCases){modarch in
                             Text(modarch.displayName)
                         }
-                    }.onChange(of: myConfig.parsingConfig.modelArchitecture)
-                    {if myConfig.parsingConfig.modelArchitecture == .distilbert {
-                        myConfig.parsingConfig.selectedLanguage = .FR
-                        myConfig.parsingConfig.selectedTreebank = .frTB1
-                        
-                    }}
+                    }.onChange(of: myConfig.parsingConfig.modelArchitecture){
+                        if myConfig.parsingConfig.modelArchitecture == .distilbert && myConfig.inputConfig.inputFileType == .txt {myConfig.parsingConfig.tokenizingMethod = .nltokeniser}
+                    }
                     
-                    ConstrainedLanguagePickerView(title: "Language", selectedTreebankDefault: $myConfig.parsingConfig.selectedTreebank, selection: $myConfig.parsingConfig.selectedLanguage)
-                        .onChange(of: fileContainerModel.localSandboxFileURL){
-                            if myConfig.inputConfig.detectLanguage {
-                                if let detectedLang = detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
-                                    myConfig.parsingConfig.selectedLanguage = detectedLang
-                                }
-                            }
-                        }
+                    ConstrainedPickerForLang(myConfig: $myConfig)
                         .accessibilityIdentifier("LanguagePicker")
-                    
-                    ConstrainedTreebankPickerView(title: "Treebank", selectedLang: $myConfig.parsingConfig.selectedLanguage, selectedTreebank: $myConfig.parsingConfig.selectedTreebank)
+                    ConstrainedPickerForTB(myConfig: $myConfig)
                         .accessibilityIdentifier("TreebankPicker")
                     
                     NavigationLink("Select processor steps"){
@@ -91,11 +86,12 @@ struct PipelineSettingsView: View {
                 
                 // MARK: the Go button
                 Section {
+                    var myNum: Int = 0
                     BigGoButtonReadinessView(
                         isPipelineReady: isPipelineReady,
                         missingReqsMessage: missingRequirementsMessage
                     )
-                    PipelineProgressView(myConfig: $myConfig)
+                    PipelineProgressView(myConfig: $myConfig, currentStatus: $currentStatus)
                     Button(
                         action:{
                             runTagging(
@@ -103,11 +99,13 @@ struct PipelineSettingsView: View {
                                 maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
                                 taggingInProgress: $taggingInProgress,
                                 isFirstRun: $isFirstRun
-                            ) // close runTagging bracket
+                            )
+                            myNum += 1
+                            // close runTagging bracket
                         } // close action brace
                     ) // close button bracket
                     {
-                        TaggingProgressButtonView(taggingInProgress: taggingInProgress, isPipelineReady: isPipelineReady)
+                        TaggingProgressButtonView(taggingInProgress: taggingInProgress, isPipelineReady: isPipelineReady, pipelineSummary: pipelineSummary)
                     }
                     .buttonStyle(.borderedProminent)
                     .clipShape(Capsule())
@@ -155,38 +153,39 @@ struct PipelineSettingsView: View {
         taggingInProgress: Binding<Bool>,
         isFirstRun: Binding<Bool>
     ) {
-            // clear outputstruct data here AND onChange(of : inputfile
+
         if !isFirstRun.wrappedValue {
             myConfig.runResetters()
         } else {
             isFirstRun.wrappedValue = false
         }
+        // MARK: parameters, initialisations for task
             myConfig.parsingConfig.runExplicit = true
-            // MARK: parameters, initialisations for task
             taggingInProgress.wrappedValue = true
-//            startTime = nil
             myConfig.progressConfig.hasStarted = true
             myConfig.outputData.safeHeaderAttribs = makeSafeHeaderAttribs(myConfig: myConfig, fileContainerModel: fileContainerModel)
-//            var resentencizerOutputStrings: [String] = []
-//            var outSents: [Sentence] = []
 
-            
             // MARK: tagging :
             Task {
                 do {
                     // get pipeline object
-                    
                     var allSentences: [HashableSentence] = []
                     let pipeline: NLPPipeline
+                    currentStatus = "Loading pipeline"
                     switch myConfig.parsingConfig.modelArchitecture {
                     case .distilbert:
                         pipeline = try BERTlikePipeline(myConfig: myConfig)
+                        print("bert pipeline called")
                     case .cnnBiLSTM:
                         pipeline = try CNNBiLSTMPipeline(myConfig: myConfig)
+                        print("cnn-lstm pipeline called")
                     }
-                    
-                    
+                    pipelineSummary = pipeline.description
+                    if myConfig.parsingConfig.runExplicit {
+                        print(pipelineSummary)
+                    }
                     //MARK: INGEST SENTS ::
+                    currentStatus = "Ingesting sentences"
                     allSentences = try ingestSentEncapsulator(
                         myConfig: myConfig,
                         pipeline: pipeline
@@ -201,6 +200,7 @@ struct PipelineSettingsView: View {
                     }
                     //MARK: run resentenciser on request
                     if ![InputFileType.txt, InputFileType.manual].contains(myConfig.inputConfig.inputFileType) && myConfig.parsingConfig.runResentenciser{
+                        currentStatus = "Resentencizing"
                         myConfig.inputData.resentencizerOutputStrings = try desentenciseAndResentencise(
                             sentsToDiscard: allSentences,
                             myConfig: myConfig
@@ -211,6 +211,7 @@ struct PipelineSettingsView: View {
                     //MARK: run retokeniser if required/requested
                     if myConfig.inputConfig.inputFileType != .txt && myConfig.parsingConfig.runRetokeniser && [TokenizingMethod.nltokeniser, TokenizingMethod.trained].contains(myConfig.parsingConfig.tokenizingMethod) {
                         if myConfig.parsingConfig.runExplicit {
+                            currentStatus = "retokenizing"
                             print("Retokenising")
                         }
                         allSentences = try retokenisationEncapsulator(
@@ -222,6 +223,7 @@ struct PipelineSettingsView: View {
 
                     // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
                     if myConfig.parsingConfig.runExplicit{
+                        currentStatus = "getting NL Tags"
                         var nlInputTexts: [String] = []
                         for sent in allSentences{
                             nlInputTexts.append(sent.tokens.joined(separator: " "))
@@ -243,12 +245,19 @@ struct PipelineSettingsView: View {
                         allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
 #endif
                     for sentence in allSentences {
-                        print("processing line 232")
+                        if myConfig.parsingConfig.runExplicit {
+                            print("processing line 232")
+                        }
+                        currentStatus = "Ready to tag"
                         let parsedTokens = try pipeline.runOnSentence(sentence, myConfig: myConfig)
-                        myConfig.outputData.outSents.append(
-                            postprocessSentence(sentence: sentence, parsedTokens: parsedTokens, myConfig: myConfig)
-                        )
-                        print("awaitng mainactor line 237")
+                        if !parsedTokens.isEmpty{
+                            myConfig.outputData.outSents.append(
+                                postprocessSentence(sentence: sentence, parsedTokens: parsedTokens, myConfig: myConfig)
+                            )
+                        }
+                        if myConfig.parsingConfig.runExplicit {
+                            print("awaitng mainactor line 237")
+                        }
                         await MainActor.run {
                             myConfig.progressConfig.processedCount += 1
                             myConfig.progressConfig.appleProgress.completedUnitCount = Int64(myConfig.progressConfig.processedCount)
@@ -257,9 +266,10 @@ struct PipelineSettingsView: View {
 
                     try dumpDetailsForRunExplicit(myConfig: myConfig, taggingInProgress: $taggingInProgress)
                     runOutput = makeTidyRunOutput(myConfig: myConfig)
-
+                    
                     try await MainActor.run {
                         taggingInProgress.wrappedValue = false
+                        currentStatus = "Done"
                         guard let runOutput else {
                             throw PipelineError.noRunOutput
                         }

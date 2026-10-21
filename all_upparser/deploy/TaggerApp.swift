@@ -23,9 +23,9 @@ struct TaggerApp: App {
                 Tab("Settings", systemImage: "slider.horizontal.3"){
                     SetDefaultsView()
                 }
-                Tab("test", systemImage: "testtube.2"){
-                    BertPipelineSettingsTestView()
-            }
+//                Tab("test", systemImage: "testtube.2"){
+//                    BertPipelineSettingsTestView()
+//            }
             }
         }
     }

@@ -9,7 +9,8 @@ import NaturalLanguage
 final class CNNBiLSTMPipeline: PipelineHelper, NLPPipeline {
     static let rootToken = "<root>"
     static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
-    
+    let description: String
+    let maxWords: Int = 256
     private let tokenizerModel: MLModel
     private let taggerModel: MLModel
     private let lemmatizerRunner: LemmatizerRunner
@@ -30,7 +31,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, NLPPipeline {
         //    init(languageCode: String, treebank: String) throws {
         let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
         let treebank = myConfig.parsingConfig.selectedTreebank.short
-
+        description = "I'm a CNN-BiLSTM pipeline"
         switch myConfig.parsingConfig.modelArchitecture {
         case .cnnBiLSTM:
             tokenizerModel = try Self.loadMlpackage(named: "\(languageCode)_tokenizer_\(treebank)", myConfig: myConfig)

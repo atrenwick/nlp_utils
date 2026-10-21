@@ -222,15 +222,17 @@ struct WordPieceTokenizer: Sendable {
     }
     /// Padded encoding for the fixed-length Core ML model. Use the same seqLen and maxWords
     /// the model was converted with (convert_bert.py prints them).
-    func encode(words: [String], seqLen: Int, maxWords: Int) throws -> WordPieceEncodedSentence {
+    func encode(words: [String], seqLen: Int, maxWords: Int) throws -> WordPieceEncodedSentence? {
         let detailed = encodeDetailed(words: words, collectPieces: showWordPieces)
         let ids = detailed.inputIDs
         let wordIndex = detailed.wordIndex
         guard wordIndex.count <= maxWords else {
-            throw WordPieceError.tooManyWords(have: words.count, limit: maxWords - 1)
+            return nil
+//            throw WordPieceError.tooManyWords(have: words.count, limit: maxWords - 1)
         }
         guard ids.count <= seqLen else {
-            throw WordPieceError.tooManySubwords(have: ids.count, limit: seqLen)
+            return nil
+            //            throw WordPieceError.tooManySubwords(have: ids.count, limit: seqLen)
         }
         return WordPieceEncodedSentence(
             inputIDs: ids + [Int32](repeating: padID, count: seqLen - ids.count),
