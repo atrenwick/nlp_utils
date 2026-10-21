@@ -17,8 +17,15 @@ struct SetDefaultsView: View {
 
     //import + parsing settings
     @AppStorage("detectLangDefault") var detectLangDefault: Bool = true
+    @AppStorage("matchFileNameTypeDefault") var matchFileNameTypeDefault: Bool = false
     @AppStorage("selectedLanguageDefault") var selectedLanguageDefault: Language = .FR
     @AppStorage("selectedTreebankDefault") var selectedTreebankDefault: Language.Treebank = .frTB3
+    @AppStorage("selectedArchitectureDefault") var selectedArchitectureDefault: ModelArchitecture = .cnnBiLSTM
+
+    @AppStorage("bertlikeTokMethodFailoverDefault") var bertlikeTokMethodFailoverDefault: TokenizingMethod = .nltokeniser
+
+
+    
     @AppStorage("tokenizingMethodDefault") var tokenizingMethodDefault: TokenizingMethod = .nltokeniser
     @AppStorage("sentencizingMethodDefault")  var sentencizingMethodDefault: SentencizingMethod = .nlSentencizer
     @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
@@ -56,9 +63,8 @@ struct SetDefaultsView: View {
                     }
                 }
                 Section("Source file"){
-                    Toggle(isOn: $detectLangDefault){
-                        Text("Autodetect lang in filename")
-                    }
+                    Toggle(isOn: $matchFileNameTypeDefault){Text("Automatch filename-type")}
+                    Toggle(isOn: $detectLangDefault){ Text("Autodetect lang in filename")}
                     DefaultPickerView(title: "InputFiletype method", selection: $inputFileTypeDefault)
                 }
                 Section("Processing"){
@@ -67,9 +73,12 @@ struct SetDefaultsView: View {
                             Text(modArch.displayName)
                         }
                     }
-
-                    
-                    ConstrainedLanguagePickerView(title: "testpicker", selectedTreebankDefault: $selectedTreebankDefault, selection: $selectedLanguageDefault)
+                    ConstrainedLanguagePickerView(
+                        title: "Treebank",
+                        selectedTreebankDefault: $selectedTreebankDefault,
+                        selection: $selectedLanguageDefault,
+                        selectedArchitecture: $selectedArchitectureDefault
+                )
                     
                     Picker("Treebank", selection: $selectedTreebankDefault){
                         ForEach(selectedLanguageDefault.availableTBs){tb in
@@ -95,14 +104,11 @@ struct SetDefaultsView: View {
                 }
                 Section("Sentencization"){
                     DefaultPickerView(title: "Sentencization method", selection: $sentencizingMethodDefault)
-                    Toggle(isOn: $runResentenciserDefault){
-                        Text("Resentencise by default")
-                    }
+                    DefaultPickerView(title: "BERT-like TXT sentencizer", selection: $bertlikeTokMethodFailoverDefault)
+                    Toggle(isOn: $runResentenciserDefault){ Text("Resentencise by default") }
                 }
                 Section("Lemmatization"){
-                    Toggle(isOn: $getSecLemsDefault){
-                        Text("Get Secondary lemmas")
-                    }
+                    Toggle(isOn: $getSecLemsDefault){ Text("Get Secondary lemmas if avail.") }
                     Picker("Primary method", selection: $priLemSourceDefault){
                         ForEach(LemmaSource.allCases){lsource in
                             Text(lsource.displayName)
@@ -127,9 +133,7 @@ struct SetDefaultsView: View {
                             }
                         }
                     }
-
                 }
-
                 Section("View"){
                     DefaultPickerView(title: "Progress bar style", selection: $progressBarStyleDefault)
                 }
@@ -138,7 +142,7 @@ struct SetDefaultsView: View {
                     HStack{
                         Text("Output dir")
                             Spacer()
-                        Text(outputDirDefault.lastPathComponent ?? "Not Selected")
+                        Text(outputDirDefault.lastPathComponent)
                             .foregroundColor(.secondary)
                         Button("Choose...") {
                             isSelectingFolder = true

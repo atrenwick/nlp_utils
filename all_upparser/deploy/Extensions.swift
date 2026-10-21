@@ -52,6 +52,10 @@ extension Sequence where Element == Sentence {
     func generateTokCount() -> String {
         String(self.reduce(0) {$0 + $1.tokCount})
     }
+    
+    func generateXMLsentences() -> String{
+        return self.map { $0.makeXMLsent(exportFormat: .xml, includeConllSentText: false)} .joined(separator: "\n")
+    }
 }
 
 extension Sequence where Element == Token {
@@ -114,18 +118,4 @@ extension PipelineSettingsView {
     }
 }
 
-protocol NLPPipeline{
-    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
-}
 
-extension NLPPipeline{
-    func tokenize(_ naughtyString: String) -> HashableSentence{
-        let input = naughtyString
-        let intermediate = input.split(separator: " ")
-        let output = intermediate.map {String($0)}
-        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
-        print("this should't have been callable…")
-        return outputSent
-    }
-
-}

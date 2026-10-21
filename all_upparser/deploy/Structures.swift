@@ -26,6 +26,41 @@ struct BuiltSentHolder: Identifiable, Hashable{
     }
 }
 
+struct ConfigurationRules {
+    
+    // Define which languages are available per architecture
+    static func availableLanguages(for architecture: ModelArchitecture) -> [Language] {
+        switch architecture {
+        case .cnnBiLSTM:
+            return [.EN, .FR, .ANG, .DE, .FRM, .FRO]
+        case .distilbert:
+            return [.FR]
+        }
+    }
+    
+    // Define which treebanks are available based on the language & architecture combination
+    static func availableTreebanks(for architecture: ModelArchitecture, language: Language) -> [Language.Treebank] {
+        switch architecture {
+        case .cnnBiLSTM:
+            switch language {
+                case .EN: return [.enTB1, .enTB2, .enTB3]
+                case .FR: return [.frTB1, .frTB2, .frTB3]
+                case .DE:  return [.deTB1, .deTB2]
+                case .ANG: return [.angTB1]
+                case .FRM: return [.frmTB1]
+                case .FRO: return [.froTB1]
+            }
+        case .distilbert:
+            switch language {
+            case .FR: return [.frTB1]
+            default: return []
+            }
+        }
+        
+    }
+}
+
+
 //TODO: update calculated property to use Extension method
 struct Document {
     var id = UUID()
@@ -582,7 +617,7 @@ struct TaggerConfig{
             getSecLems: Bool? = nil,
             runExplicit: Bool? = nil
         ){
-            self.selectedArchitecture = TaggerConfig.resolveRepresentable(passed: selectedArchitecture, key: "ModelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
+            self.selectedArchitecture = TaggerConfig.resolveRepresentable(passed: selectedArchitecture, key: "modelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
             self.selectedLanguage = TaggerConfig.resolveRepresentable(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
             self.selectedTreebank = TaggerConfig.resolveRepresentable(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
             self.runResentenciser = TaggerConfig.resolveBool(passed: runResentenciser, key: "runResentenciserDefault", default: false)
@@ -628,7 +663,7 @@ struct TaggerConfig{
             self.xmlTitle = TaggerConfig.resolveString(passed: xmlTitle, key: "xmlTitleDefault")
             self.includeConllSentIdLine = TaggerConfig.resolveBool(passed: includeConllSentIdLine, key: "includeConllSentIdLineDefault", default: true )
             self.includeConllSentText = TaggerConfig.resolveBool(passed: includeConllSentText, key: "includeConllSentTextDefault", default: true )
-            self.getsubtokens = TaggerConfig.resolveBool(passed: getsubtokens, key: "getsubtokensDefault", default: false )
+            self.getsubtokens = TaggerConfig.resolveBool(passed: getsubtokens, key: "getsubtokensDefault", default: true )
         }
     }
     struct ProgressConfig{
@@ -818,9 +853,17 @@ struct Token : Identifiable, Codable {
         [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8,col9].joined(separator: "\t") //+ "\n"
     } // this includes NL parser outputs for col8,9, but the funct to make the ExportString doesn't call this prop.
     
+    var escapedUnwrappedSubtoks: String {
+        if let theseItems = subTokens{
+            return theseItems.joined(separator: "//").xmlEscaped
+        } else {
+            return col9.xmlEscaped
+        }
+    }
+    
     var asXML: String{
                 """
-                <w tokID=\"\(tokid)\"  form=\"\(form.xmlEscaped)\" lemma=\"\(lemma.xmlEscaped)\" upos=\"\(upos.xmlEscaped)\" xpos=\"\(xpos.xmlEscaped)\" feats=\"\(feats.xmlEscaped)\" head=\"\(head.xmlEscaped)\" deprel=\"\(deprel.xmlEscaped)\" secLem=\"\(col8.xmlEscaped)\" col9=\"\(col9.xmlEscaped)\">\(form.xmlEscaped)</w>
+                <w tokID=\"\(tokid)\"  form=\"\(form.xmlEscaped)\" lemma=\"\(lemma.xmlEscaped)\" upos=\"\(upos.xmlEscaped)\" xpos=\"\(xpos.xmlEscaped)\" feats=\"\(feats.xmlEscaped)\" head=\"\(head.xmlEscaped)\" deprel=\"\(deprel.xmlEscaped)\" secLem=\"\(col8.xmlEscaped)\" subtoks=\"\(escapedUnwrappedSubtoks)\">\(form.xmlEscaped)</w>
                 """
     }
 }

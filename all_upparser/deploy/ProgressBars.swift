@@ -78,7 +78,12 @@ struct AppleProgressView: View {
 
 struct PipelineProgressView: View {
     @Binding var myConfig: TaggerConfig
+    @Binding var currentStatus: String
+
     var body: some View {
+        HStack{
+            Text("Status = \(currentStatus)")
+        }
         
         if myConfig.progressConfig.hasStarted{
             switch myConfig.progressConfig.progressBarStyle {
@@ -98,9 +103,10 @@ struct RunProgressButton: View {
     let isPipelineReady: Bool
     let inputFileType: InputFileType
     let maxPipelineStep: PipelineStep
-    
+//    @Binding var currentStatus: String
     
     var body: some View {
+//        Text(currentStatus)
             HStack {
                 Image(systemName: taggingInProgress ? "hourglass" : "play.fill")
                 Text(taggingInProgress ? "(\(processed)/\(total))" : "Run")

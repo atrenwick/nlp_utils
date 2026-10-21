@@ -507,7 +507,7 @@ func _applySentencizingMethodToString(normalizedText: String,  myConfig: TaggerC
 }
 
 //3
-func textFileToSentStrings(myConfig: TaggerConfig, tokenizerPipeline: NLPPipeline) throws -> [String]{
+func textFileToSentStrings(myConfig: TaggerConfig) throws -> [String]{
     guard let _ = myConfig.inputConfig.selectedInputFile else {
         print("guard let failed loading form file")
         return []
@@ -571,6 +571,8 @@ func ingestSentEncapsulator(
     pipeline: NLPPipeline
 ) throws -> [HashableSentence] {
     
+    // need to filter sentences that are over len acceptable
+    let maxSentLenForPipe = pipeline.maxWords
     var allSentences: [HashableSentence] = []
     switch myConfig.inputConfig.inputFileType {
     case .conll:
@@ -602,7 +604,11 @@ func ingestSentEncapsulator(
         }
         
     }
-    return allSentences
+    return allSentences.filter {$0.tokens.count < maxSentLenForPipe }
+    //TODO : report on the sents dropped, add progress for sentencisation as well as pipeline processing
+    // TODO : add stop button
+    // TODO: need to be able to process in batches, size = 500sent
+    // TODO: add subtok filter after subtokenisation :: limit == 128
 }
 
 //1.
@@ -688,7 +694,6 @@ func stringSentsToHashableSents(myConfig: TaggerConfig, sents: [String], pipelin
         case .cnnBiLSTM:
             // retokenize everything with model
             // MARK: can change this IN to be testSentences
-            //    let pipeline = try UDPipeline(languageCode: languageCode.rawValue, treebank: "gsd")
             
             if myConfig.parsingConfig.runExplicit{
                 print("sentencizing with trained")
@@ -764,8 +769,7 @@ func textFileToHashableSents(myConfig: TaggerConfig, pipeline: NLPPipeline
     var internalSentList: [HashableSentence] = []
     
     let sentencesAsStrings = try textFileToSentStrings(
-        myConfig: myConfig,
-        tokenizerPipeline: pipeline,
+        myConfig: myConfig
     )
 //    print("Got sents as strings")
     internalSentList = try stringSentsToHashableSents(myConfig: myConfig,
@@ -1208,7 +1212,8 @@ func dumpDetailsForRunExplicit(myConfig: TaggerConfig, taggingInProgress:Binding
 
     if myConfig.parsingConfig.runExplicit {
         print("Printing conllRaw")
-        print(myConfig.outputData.outSents.generateExportText())
+        print(myConfig.outputData.outSents.generateXMLsentences())
+//        print(myConfig.outputData.outSents.generateExportText())
         if let printPath = myConfig.exportConfig.targetFolderURL?.path(){
             print(printPath)
         } else {

@@ -392,9 +392,12 @@ struct RunExplicitButtonView: View{
 struct TaggingProgressButtonView: View{
     let taggingInProgress: Bool
     let isPipelineReady: Bool
+    let pipelineSummary: String
+    var previous: Int = 0
+
     var body: some View {
         Group {
-            ZStack {
+            VStack {
                 HStack {
                     Image(systemName: taggingInProgress ? "progress.indicator" : "play.fill")
                         .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)
