@@ -10,44 +10,43 @@ import CoreML
 import SwiftUI
 
 
-final class BERTlikePipeline: PipelineHelper, NLPPipeline{
+final class BERTlikePipeline: PipelineHelper {
     var wordPieceTokenizer: WordPieceTokenizer
     private let taggerModel: MLModel
     let labels: LabelVocabsForBERTlike
-    let description: String
+    let description: String = "BERTlikePipeline"
 
     /// fixed lengths the model was converted with, loaded from model for safety
     let seqLen: Int
     let maxWords: Int
-    let runExplicit = true
+    let runExplicit: Bool
     /// Designated init: takes already-loaded pieces, which also makes it easy to test.
-    init(taggerModel: MLModel, wordPieceTokenizer: WordPieceTokenizer, labels: LabelVocabsForBERTlike, languageCode: String, treebank: String) throws {
+    init(taggerModel: MLModel, wordPieceTokenizer: WordPieceTokenizer, labels: LabelVocabsForBERTlike, languageCode: String, treebank: String, runExplicitValue: Bool, version: Int) throws {
         let limits = try BERTlikePipeline.limits(of: taggerModel)
         self.taggerModel = taggerModel
         self.wordPieceTokenizer = wordPieceTokenizer
         self.labels = labels
         self.seqLen = limits.seqLen
         self.maxWords = limits.maxWords
-        self.description = "BERTlike pipeline"
+        self.runExplicit = runExplicitValue
     }
 
     /// Loads everything for one language/treebank. Building the tokenizer reads a ~100k-entry
     /// vocabulary, so call this off the main thread (for example inside Task.detached).
-    convenience init(myConfig: TaggerConfig) throws {
+    convenience init(myConfig: TaggerConfig, version: Int) throws {
+        let vX = version == 2 ? "v2": "v1"
         let languageCode: String = myConfig.parsingConfig.selectedLanguage.rawValue
         let treebank: String = myConfig.parsingConfig.selectedTreebank.short
-        
-        let model = try BERTlikePipeline.loadMlpackage(named: "\(languageCode)_distilbert_tagger_parser_\(treebank)", myConfig: myConfig)
-        let wordPieceTokenizer = try WordPieceTokenizer.fromBundle(languageCode: languageCode,
-                                                          treebank: treebank)
-        let labels = try LabelVocabsForBERTlike.loadLabelVocabularies(languageCode: languageCode, treebank: treebank)
-        try self.init(taggerModel: model, wordPieceTokenizer: wordPieceTokenizer, labels: labels, languageCode:  languageCode, treebank: treebank)
+        let runExplicitValue: Bool = myConfig.parsingConfig.runExplicit
+        let model = try BERTlikePipeline.loadMlpackage(named: "\(languageCode)_distilbert_tagger_parser_\(treebank)\(vX)", myConfig: myConfig)
+        let wordPieceTokenizer = try WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank, vx: vX)
+        let labels = try LabelVocabsForBERTlike.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, vx: vX)
+        try self.init(taggerModel: model, wordPieceTokenizer: wordPieceTokenizer, labels: labels, languageCode:  languageCode, treebank: treebank, runExplicitValue: runExplicitValue, version: version)
     }
 
-    static func load(myConfig: TaggerConfig) async throws -> BERTlikePipeline {
-        /// this static func was in its own extension tot he class
+    static func load(myConfig: TaggerConfig, version: Int) async throws -> BERTlikePipeline {
         try await Task.detached(priority: .userInitiated) {
-            try await BERTlikePipeline(myConfig: myConfig)
+            try await BERTlikePipeline(myConfig: myConfig, version: version)
         }.value
     }
 
@@ -69,37 +68,64 @@ final class BERTlikePipeline: PipelineHelper, NLPPipeline{
         return (seqLen, maxWords)
     }
 
-    /// id -> label string. One line to adapt to your Vocab class.
+    /// convert id -> label as string.
     // this method was in an extension1 to UDPipelineBERTBased - annotating+decoding
-    private static func label(_ vocab: Vocab, _ id: Int) -> String {
-        vocab.decode(id)
-    }
+    private static func label(_ vocab: Vocab, _ id: Int) -> String { vocab.decode(id) }
 
-    /// Annotates one sentence. Runs the model synchronously (tens of milliseconds), so call it
-    /// from a background task, not from the main thread.
-    ///
+    /// Annotate one sentence. Runs model synchronously (tens of ms):: call from background task, not main thread.
     /// Throws PipelineError.emptyInput, WordPieceError.tooManyWords / .tooManySubwords when the
-    /// sentence doesn't fit the model's fixed size, or a PipelineError for model problems.
-    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token] {
-        print("running on sents with bert pipeline")
-        guard !sentence.tokens.isEmpty else { throw PipelineError.emptyInput }
-        
+    /// sentence doesn't fit the model's fixed size, or a PipelineError for model problems. >> changed to optional
+//    func runOnSentenceOrig(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token] {
+//        print("running on sents with bert pipeline")
+//        guard !sentence.tokens.isEmpty else { throw PipelineError.emptyInput }
+//        
+//        var wordPieceTokenizer = self.wordPieceTokenizer                  // a copy; the vocabulary isn't duplicated
+//        wordPieceTokenizer.showWordPieces = myConfig.exportConfig.getsubtokens // default set to true for the moment
+//        if let encoded = try wordPieceTokenizer.encode(words: sentence.tokens, seqLen: seqLen, maxWords: maxWords){
+//            let output = try predict(encoded)
+//            return try decode(output, words: sentence.tokens, wordPieces: encoded.wordPieces)
+//        
+//            }
+//        else {
+//            return []
+//        }
+    
+    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) -> OnSentResult {
+        if runExplicit { print("running on sents with bert pipeline") }
+
+        guard !sentence.tokens.isEmpty else {
+            return OnSentResult(sentence: sentence, resultType: .empty, decoded: [])
+        }
+        // maxWords counts the ROOT slot, so the most real words allowed is maxWords - 1
+        guard sentence.tokens.count < maxWords else {
+            return OnSentResult(sentence: sentence, resultType: .tooManyWords, decoded: [])
+        }
+
         var wordPieceTokenizer = self.wordPieceTokenizer                  // a copy; the vocabulary isn't duplicated
-        wordPieceTokenizer.showWordPieces = myConfig.exportConfig.getsubtokens // default set to true for the moment
-//        change to optional which can then be unwrapped
-        if let encoded = try wordPieceTokenizer.encode(words: sentence.tokens, seqLen: seqLen, maxWords: maxWords){
-            let output = try predict(encoded)
-            return try decode(output, words: sentence.tokens, wordPieces: encoded.wordPieces)
-        
+        wordPieceTokenizer.showWordPieces = myConfig.exportConfig.getsubtokens
+        var currentWordpieceCount: Int = -3
+        do {
+            guard let encoded = try wordPieceTokenizer.encode(words: sentence.tokens, seqLen: seqLen, maxWords: maxWords
+                ) else {
+                return OnSentResult(sentence: sentence, resultType: .otherError, decoded: [])
             }
-        else {
-            return []
+            currentWordpieceCount = encoded.wordPieces?.count ?? -4
+            let output = try predict(encoded)
+            let decoded = try decode(output, words: sentence.tokens, wordPieces: encoded.wordPieces)
+            return OnSentResult(sentence: sentence,  subtokCount: currentWordpieceCount, resultType: .success, decoded: decoded)
+        } catch WordPieceError.tooManySubwords {
+            return OnSentResult(sentence: sentence,  subtokCount: currentWordpieceCount, resultType: .tooManySubtoks, decoded: [])
+        } catch WordPieceError.tooManyWords {                              // backstop; the guard above catches this first
+            return OnSentResult(sentence: sentence, resultType: .tooManyWords, decoded: [])
+        } catch {
+            if runExplicit { print("sentence failed: \(error.localizedDescription)") }
+            return OnSentResult(sentence: sentence, resultType: .otherError, decoded: [])
         }
     }
-
+    
+    
     // MARK: Running the model
     private func predict(_ encoded: WordPieceEncodedSentence) throws -> MLFeatureProvider {
-        // this method was in an extension1 to UDPipelineBERTBased - annotating+decoding
         let arrays = try encoded.multiArrays()
         let inputs = try MLDictionaryFeatureProvider(dictionary: [
             "input_ids": MLFeatureValue(multiArray: arrays.inputIDs),
@@ -114,7 +140,7 @@ final class BERTlikePipeline: PipelineHelper, NLPPipeline{
     // MARK: Decoding
     private func decode(_ output: MLFeatureProvider, words: [String],
                         wordPieces: [[String]]?) throws -> [Token] {
-        /// Turns the six padded output tensors into labelled tokens. Only the first words + 1
+        /// Turns 6 padded output tensors -> labelled tokens. Only the first words + 1
         /// rows/columns mean anything (row 0 is the ROOT slot); the rest is padding.
         let n = words.count + 1
         
@@ -126,7 +152,7 @@ final class BERTlikePipeline: PipelineHelper, NLPPipeline{
         let deprels = try LogitReaderForBERTlike(output, "label_logits", rank: 4, rows: n,
                                       labels: labels.deprel.itos.count)
 
-        // Shared Chu-Liu-Edmonds decoder (UDDecoding): one (head, deprel) per word.
+        // deprel, head decoding
         let parse = decodeParse(
             runExplicit: true,
             wordCount: words.count,

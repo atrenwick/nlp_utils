@@ -82,8 +82,9 @@ struct PipelineSettingsView: View {
                 }
                 // more sections::
                 ExportConfigViewSection(myConfig: $myConfig)
-                RunExplicitButtonView(myConfig: $myConfig)
-                
+//#if debug
+//                RunExplicitButtonView(myConfig: $myConfig)
+//#endif
                 // MARK: the Go button
                 Section {
                     var myNum: Int = 0
@@ -170,11 +171,11 @@ struct PipelineSettingsView: View {
                 do {
                     // get pipeline object
                     var allSentences: [HashableSentence] = []
-                    let pipeline: NLPPipeline
+                    let pipeline: PipelineHelper
                     currentStatus = "Loading pipeline"
                     switch myConfig.parsingConfig.modelArchitecture {
                     case .distilbert:
-                        pipeline = try BERTlikePipeline(myConfig: myConfig)
+                        pipeline = try BERTlikePipeline(myConfig: myConfig, version: 2)
                         print("bert pipeline called")
                     case .cnnBiLSTM:
                         pipeline = try CNNBiLSTMPipeline(myConfig: myConfig)
@@ -249,12 +250,18 @@ struct PipelineSettingsView: View {
                             print("processing line 232")
                         }
                         currentStatus = "Ready to tag"
-                        let parsedTokens = try pipeline.runOnSentence(sentence, myConfig: myConfig)
-                        if !parsedTokens.isEmpty{
+                        let sentResult = pipeline.runOnSentence(sentence, myConfig: myConfig)
+                        switch sentResult.resultType {
+                        case .success:
                             myConfig.outputData.outSents.append(
-                                postprocessSentence(sentence: sentence, parsedTokens: parsedTokens, myConfig: myConfig)
+                                postprocessSentence(sentence: sentence, parsedTokens: sentResult.decoded , myConfig: myConfig)
                             )
+                        default:
+                            myConfig.outputData.outErrors.append(
+                            postprocessErrorSent(sentResult: sentResult))
+                            print("error handled")
                         }
+                        
                         if myConfig.parsingConfig.runExplicit {
                             print("awaitng mainactor line 237")
                         }

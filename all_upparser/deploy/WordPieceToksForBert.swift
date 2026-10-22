@@ -227,12 +227,12 @@ struct WordPieceTokenizer: Sendable {
         let ids = detailed.inputIDs
         let wordIndex = detailed.wordIndex
         guard wordIndex.count <= maxWords else {
-            return nil
-//            throw WordPieceError.tooManyWords(have: words.count, limit: maxWords - 1)
+//            return nil
+            throw WordPieceError.tooManyWords(have: words.count, limit: maxWords - 1)
         }
         guard ids.count <= seqLen else {
-            return nil
-            //            throw WordPieceError.tooManySubwords(have: ids.count, limit: seqLen)
+//            return nil
+                        throw WordPieceError.tooManySubwords(have: ids.count, limit: seqLen)
         }
         return WordPieceEncodedSentence(
             inputIDs: ids + [Int32](repeating: padID, count: seqLen - ids.count),
@@ -397,12 +397,12 @@ extension WordPieceTokenizer {
 }
 
 extension WordPieceTokenizer {
-    static func fromBundle(_ bundle: Bundle = .main, languageCode: String, treebank: String) throws -> WordPieceTokenizer {
-        guard let vocab = bundle.url(forResource: "\(languageCode)_distilbert_tok_vocab_\(treebank)", withExtension: "txt") else {
-            throw WordPieceError.vocabUnreadable(URL(fileURLWithPath: "\(languageCode)_distilbert_tok_vocab_\(treebank).txt"))
+    static func fromBundle(_ bundle: Bundle = .main, languageCode: String, treebank: String, vx: String) throws -> WordPieceTokenizer {
+        guard let vocab = bundle.url(forResource: "\(languageCode)_distilbert_tok_vocab_\(treebank)\(vx)", withExtension: "txt") else {
+            throw WordPieceError.vocabUnreadable(URL(fileURLWithPath: "\(languageCode)_distilbert_tok_vocab_\(treebank)\(vx).txt"))
         }
         print("got vocab txt")
-        let settings = bundle.url(forResource: "\(languageCode)_distilbert_wordpiece_settings_\(treebank)", withExtension: "json")
+        let settings = bundle.url(forResource: "\(languageCode)_distilbert_wordpiece_settings_\(treebank)\(vx)", withExtension: "json")
         return try WordPieceTokenizer(vocabURL: vocab, configURL: settings)
     }
 }

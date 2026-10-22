@@ -541,7 +541,7 @@ func desentenciseAndResentencise(sentsToDiscard: [HashableSentence], myConfig: T
 
 
 
-func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: NLPPipeline, taggingInProgress: Binding<Bool>) throws -> [HashableSentence]{
+func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: PipelineHelper, taggingInProgress: Binding<Bool>) throws -> [HashableSentence]{
     
     var sentencesAsStrings: [String] = []
     
@@ -568,7 +568,7 @@ func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: NLPPipeline, t
 }
 func ingestSentEncapsulator(
     myConfig: TaggerConfig,
-    pipeline: NLPPipeline
+    pipeline: PipelineHelper
 ) throws -> [HashableSentence] {
     
     // need to filter sentences that are over len acceptable
@@ -604,7 +604,7 @@ func ingestSentEncapsulator(
         }
         
     }
-    return allSentences.filter {$0.tokens.count < maxSentLenForPipe }
+    return allSentences //.filter {$0.tokens.count < maxSentLenForPipe }
     //TODO : report on the sents dropped, add progress for sentencisation as well as pipeline processing
     // TODO : add stop button
     // TODO: need to be able to process in batches, size = 500sent
@@ -668,7 +668,7 @@ func applyNaiveTokenisation(language: Language, myString: String) throws -> [Str
 
 
 //4
-func stringSentsToHashableSents(myConfig: TaggerConfig, sents: [String], pipeline: NLPPipeline) throws -> [HashableSentence]{
+func stringSentsToHashableSents(myConfig: TaggerConfig, sents: [String], pipeline: PipelineHelper) throws -> [HashableSentence]{
 
     var internalSentList: [HashableSentence] = []
     switch myConfig.parsingConfig.tokenizingMethod {
@@ -764,7 +764,7 @@ func applySimplexTokenisation(inputText: String) -> [String] {
 
 
 //6
-func textFileToHashableSents(myConfig: TaggerConfig, pipeline: NLPPipeline
+func textFileToHashableSents(myConfig: TaggerConfig, pipeline: PipelineHelper
 ) throws -> [HashableSentence]{
     var internalSentList: [HashableSentence] = []
     

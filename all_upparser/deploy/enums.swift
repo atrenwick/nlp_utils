@@ -36,7 +36,6 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
         case .conllTxt: "txt"
         }
     }
-    
 }
 
 enum InputFileType: String, Identifiable, CaseIterable, Codable {

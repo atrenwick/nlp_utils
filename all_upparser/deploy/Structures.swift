@@ -34,7 +34,7 @@ struct ConfigurationRules {
         case .cnnBiLSTM:
             return [.EN, .FR, .ANG, .DE, .FRM, .FRO]
         case .distilbert:
-            return [.FR]
+            return [.FR, .EN]
         }
     }
     
@@ -52,8 +52,8 @@ struct ConfigurationRules {
             }
         case .distilbert:
             switch language {
-            case .FR: return [.frTB1]
-            default: return []
+            case .FR: return [.frTB1, .frTB2, .frTB3]
+            default: return [.enTB1]
             }
         }
         
@@ -146,11 +146,12 @@ struct LabelVocabsForBERTlike {
     
     static func loadLabelVocabularies(languageCode: String,
                                       treebank: String,
-                                      bundle: Bundle = .main
+                                      bundle: Bundle = .main,
+                                      vx: String
     ) throws -> LabelVocabsForBERTlike {
         
-        func vocab(_ label: String) throws -> Vocab {
-            let name = "\(languageCode)_distilbert_\(label)_vocab_\(treebank)"
+        func vocab(_ label: String, vx: String) throws -> Vocab {
+            let name = "\(languageCode)_distilbert_\(label)_vocab_\(treebank)\(vx)"
             guard let url = bundle.url(forResource: name, withExtension: "json") else {
                 throw PipelineError.missingResource("\(name).json")
             }
@@ -160,10 +161,10 @@ struct LabelVocabsForBERTlike {
         }
 
         return LabelVocabsForBERTlike(
-            upos: try vocab("upos"),
-            feats: try vocab("feats"),
-            deprel: try vocab("deprel"),
-            lemmaRule: try vocab("lemma_rule")
+            upos: try vocab("upos", vx: vx),
+            feats: try vocab("feats", vx: vx),
+            deprel: try vocab("deprel", vx: vx),
+            lemmaRule: try vocab("lemma_rule", vx: vx)
         )
     }
 }
@@ -261,6 +262,62 @@ struct LogitReaderForBERTlike {
         }
     }
 }
+
+enum OnSentResultType: String, RawRepresentable, CaseIterable{
+    var id : Self {self}
+    case empty
+    case tooManyWords
+    case tooManySubtoks
+    case success
+    case otherError
+}
+struct OnSentResult: Identifiable {
+    var id = UUID()
+    let sentence: HashableSentence // input sent
+    var subtokCount: Int = -1
+    let resultType: OnSentResultType
+    let decoded: [Token]
+}
+
+struct OutputError: Identifiable {
+    var id = UUID()
+    let sentence: HashableSentence
+    let tokCount: Int
+    let subtokCount: Int
+    let errorType: OnSentResultType
+    
+}
+
+func postprocessErrorSent(sentResult: OnSentResult) -> OutputError {
+    let errorType = sentResult.resultType
+    let sentence = sentResult.sentence
+    var tokCount: Int
+    var subTokCount: Int
+
+    switch errorType {
+    case .empty:
+        tokCount = 0
+        subTokCount = 0
+    case .tooManyWords:
+        tokCount = sentence.tokens.count
+        subTokCount = -1
+    case .tooManySubtoks, .success:
+        tokCount = sentence.tokens.count
+        subTokCount = sentResult.subtokCount
+    case .otherError:
+        tokCount = sentence.tokens.count > 0 ? sentence.tokens.count : -2
+        subTokCount = sentResult.subtokCount > 0 ? sentResult.subtokCount : -2
+    }
+
+
+    return OutputError(
+        sentence: sentence,
+        tokCount: tokCount,
+        subtokCount: subTokCount,
+        errorType: errorType
+    )
+}
+    
 
 
 struct RegexLangPatternToLangMap: Identifiable{
@@ -735,6 +792,7 @@ struct TaggerConfig{
         var exportContent: String = ""
         var safeHeaderAttribs: XmlHeaderAttribs
         var outSents: [Sentence]
+        var outErrors: [OutputError]
         
         init(
             topLevelOutputList: [RunOutput]? = nil,
@@ -745,7 +803,8 @@ struct TaggerConfig{
             exportContent: String? = nil,
             safeHeaderAttribs: XmlHeaderAttribs? = nil,
             resentencizerOutputStrings: [String]? = nil,
-            outSents: [Sentence]? = nil
+            outSents: [Sentence]? = nil,
+            outErrors: [OutputError]? = nil
         )
         {
             self.topLevelOutputList = []
@@ -754,6 +813,7 @@ struct TaggerConfig{
             self.exportContent = ""
             self.safeHeaderAttribs = XmlHeaderAttribs()
             self.outSents = []
+            self.outErrors = []
         }
         mutating func reset(){
             self = Self() // reinit
@@ -821,6 +881,22 @@ struct TaggerConfig{
     }
     
 }
+
+struct TaggerRawOutput {
+// for CNN-BiLSTM model
+    /// Holds the raw tensors from 1 tagger_parser model call for 1 sent
+///`seqLen` includes the synthetic ROOT index 0, so real words are indices 1,2....<seqLen.
+    let sentence: HashableSentence
+    let seqLen: Int
+    let uposLogits: MLMultiArray
+    let xposLogits: MLMultiArray
+    let featsLogits: MLMultiArray
+    let ruleLemmaLogits: MLMultiArray //rulebase lemma logits
+    let decodedLemmas: [String]
+    let arcLogits: MLMultiArray
+    let labelLogits: MLMultiArray
+}
+
 
 // struct for manually tokenised, modified inputs, before conversion to Token
 struct TempToken: Identifiable, Hashable {

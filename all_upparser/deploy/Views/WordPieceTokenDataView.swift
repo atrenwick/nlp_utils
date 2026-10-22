@@ -126,7 +126,7 @@ struct BERTPipeTestView: View{
             .task(id: languageCode) {
                 pipeline = nil
                 do {
-                    pipeline = try await BERTlikePipeline.load(myConfig: myConfig)
+                    pipeline = try await BERTlikePipeline.load(myConfig: myConfig, version: 2)
                     alertMessage = "Success !"
                 } catch {
                     alertMessage = error.localizedDescription
@@ -151,7 +151,7 @@ func testInstBertPipe(languageCode: String, treebank: String) -> String {
         
         Task{
             do {
-                let _ = try BERTlikePipeline(myConfig: myConfig)
+                let _ = try BERTlikePipeline(myConfig: myConfig, version: 2)
                 await MainActor.run {
                     outputString = "Success"
                     print(outputString)

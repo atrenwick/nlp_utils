@@ -81,10 +81,10 @@ struct PipelineProgressView: View {
     @Binding var currentStatus: String
 
     var body: some View {
-        HStack{
-            Text("Status = \(currentStatus)")
-        }
-        
+//        HStack{
+//            Text("Status = \(currentStatus)")
+//        }
+//        
         if myConfig.progressConfig.hasStarted{
             switch myConfig.progressConfig.progressBarStyle {
             case .tqdm:
