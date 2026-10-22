@@ -6,7 +6,7 @@ import NaturalLanguage
 // MARK: - Pipeline
 //TODO: add choice of lemmatisation method - rule/hybrid for cnnbilstm :: choose primary lemmas as col2, option is sec lemma as col8
 ///     :add option of multiple lemmas predicted on same run, send extra to spec column
-final class CNNBiLSTMPipeline: PipelineHelper, NLPPipeline {
+final class CNNBiLSTMPipeline: PipelineHelper {
     static let rootToken = "<root>"
     static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
     let description: String
@@ -107,19 +107,6 @@ final class CNNBiLSTMPipeline: PipelineHelper, NLPPipeline {
     }
 
     // MARK: Step 2 -- run the tagger-parser
-    /// Holds the raw tensors from 1 tagger_parser model call for 1 sent
-    ///`seqLen` includes the synthetic ROOT index 0, so real words are indices 1,2....<seqLen.
-    struct TaggerRawOutput {
-        let sentence: HashableSentence
-        let seqLen: Int
-        let uposLogits: MLMultiArray
-        let xposLogits: MLMultiArray
-        let featsLogits: MLMultiArray
-        let ruleLemmaLogits: MLMultiArray //rulebase lemma logits
-        let decodedLemmas: [String]
-        let arcLogits: MLMultiArray
-        let labelLogits: MLMultiArray
-    }
 
     private func runTaggerParserModel(on sentence: HashableSentence) throws -> TaggerRawOutput {
         let tokens = sentence.tokens
@@ -264,138 +251,126 @@ final class CNNBiLSTMPipeline: PipelineHelper, NLPPipeline {
 
     // MARK: Per-sentence processing: for progress-reporting callers
     /// same field-decoding logic as `run(text:level:mode:)`,with 1x tokenised sent a time ->Token
-    func runOnSentence(_ sentence: HashableSentence,  myConfig: TaggerConfig) throws -> [Token] {
-        let level = myConfig.parsingConfig.maxPipelineStep.rawValue
-        guard (1...5).contains(level) else {
-            throw PipelineError.invalidLevel(level)
+    func runOnSentence(_ sentence: HashableSentence,  myConfig: TaggerConfig)  -> OnSentResult {
+        if runExplicit { print("running on sents with CNN-BiLSTM pipeline") }
+        let wordPieceCount = -5
+        guard !sentence.tokens.isEmpty else {
+            return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .empty, decoded: [])
+        }
+        // check under word limit for model
+        guard sentence.tokens.count < maxWords else {
+            return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .tooManyWords, decoded: [])
         }
 
         let n = sentence.tokens.count
-        
+        let level = myConfig.parsingConfig.maxPipelineStep.rawValue
         var uposTags = Array(repeating: "_", count: n)
         var featsTags = Array(repeating: "_", count: n)
         var heads = Array(repeating: "_", count: n)
         var deprels = Array(repeating: "_", count: n)
         var primaryLemmas = Array(repeating: "_", count: n)
         var secondaryLemmas = Array(repeating: "_", count: n)
-//        var nlLemmas: [String] = [] //Array(repeating: "_", count: n)
-//        var nlPos: [String] = []//Array(repeating: "_", count: n)
-//        
-//        let nlTagger = NLTagger(tagSchemes: [ .lemma, .lexicalClass])
-//        let nlOptions: NLTagger.Options = [ .omitWhitespace]
-//        let nlInputText = sentence.tokens.joined(separator: " ")
-//        nlTagger.string = nlInputText
-//        nlTagger.enumerateTags(in: nlInputText.startIndex..<nlInputText.endIndex, unit: .word, scheme: .lexicalClass, options: nlOptions) { tag,_  in
-//            if let tag = tag {
-//                nlPos.append( tag.rawValue)
-//            }
-//            else {
-//                nlPos.append("Z")
-//            }
-//            return true // signal to enumerator to keep going with enumeration
-//        }
-//        nlTagger.enumerateTags(in: nlInputText.startIndex..<nlInputText.endIndex, unit: .word, scheme: .lemma, options: nlOptions) { tag,_  in
-//            if let tag = tag {
-//                nlLemmas.append( tag.rawValue)
-//            }
-//            else {
-//                nlLemmas.append("X")
-//            }
-//            return true // signal to enumerator to keep going with enumeration
-//        }
 
-        if level >= 2 {
-            let raw = try runTaggerParserModel(on: sentence)
-            uposTags = decodeUPOS(raw)
-            if level >= 3 {
+        do {
+            if level >= 2 {
+                let raw = try runTaggerParserModel(on: sentence)
+                uposTags = decodeUPOS(raw)
+                if level >= 3 {
 
-                switch myConfig.parsingConfig.priLemSource {
-                case .hybrid:
-                    primaryLemmas = getLemmas(raw)
-                    if myConfig.parsingConfig.getSecLems{
-                        secondaryLemmas = decodeRuleLemmas(raw)
-                    }
-                case .rule:
-                    primaryLemmas = decodeRuleLemmas(raw)
-                    if myConfig.parsingConfig.getSecLems{
-                        secondaryLemmas = getLemmas(raw)
+                    switch myConfig.parsingConfig.priLemSource {
+                    case .hybrid:
+                        primaryLemmas = getLemmas(raw)
+                        if myConfig.parsingConfig.getSecLems{
+                            secondaryLemmas = decodeRuleLemmas(raw)
+                        }
+                    case .rule:
+                        primaryLemmas = decodeRuleLemmas(raw)
+                        if myConfig.parsingConfig.getSecLems{
+                            secondaryLemmas = getLemmas(raw)
+                        }
                     }
                 }
+                if level >= 4 {
+                    featsTags = decodeFeats(raw)
+                }
+                if level >= 5 {
+                    let deps = decodeDependencies(raw)
+                    heads = deps.map { String($0.head) }
+                    deprels = deps.map { $0.deprel }
+                }
             }
-            if level >= 4 {
-                featsTags = decodeFeats(raw)
-            }
-            if level >= 5 {
-                let deps = decodeDependencies(raw)
-                heads = deps.map { String($0.head) }
-                deprels = deps.map { $0.deprel }
-            }
-        }
 
-        return (0..<n).map { i in
-            Token(
-                tokid: i + 1, form: sentence.tokens[i], lemma: primaryLemmas[i],
-                upos: uposTags[i], xpos: "_", feats: featsTags[i],
-                head: heads[i], deprel: deprels[i], col8: myConfig.parsingConfig.getSecLems ? secondaryLemmas[i] : "_", col9: "_", subTokens: []
-            )
+            let tokens = (0..<n).map { i in
+                Token(
+                    tokid: i + 1,
+                    form: sentence.tokens[i],
+                    lemma: primaryLemmas[i],
+                    upos: uposTags[i],
+                    xpos: "_",
+                    feats: featsTags[i],
+                    head: heads[i],
+                    deprel: deprels[i],
+                    col8: myConfig.parsingConfig.getSecLems ? secondaryLemmas[i] : "_",
+                    col9: "_",
+                    subTokens: []
+                )
+            }
+            return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .success, decoded: tokens)
+        } catch {
+            if runExplicit { print("sentence failed: \(error.localizedDescription)") }
+            return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .otherError, decoded: [])
+
         }
     }
-
-//    /// Format tok of a tagged sent using `mode` like in `run(text:level:mode:)`for `runOnSentence`
-//    func formatSentence(_ tokens: [Token], mode: String) throws -> [String] {
-//        var lines: [ConllLineContent] = tokens.map { .row($0) }
-//        lines.append(.blank)
-//
-//        switch mode {
-//        case "raw":
-//            return formatRaw(lines)
-//        case "tidy":
-//            return formatTidy(lines)
-//        default:
-//            throw PipelineError.predictionFailed(
-//                "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
-//            )
-//        }
-//    }
-
-    // MARK: Controller
-    /// Runs raw text through the pipeline up to (and including) `level`, and returns CoNLL-U-style
-    /// lines (blank line between sentences). Fields beyond the requested level are _ per convention
-    ///   1 = tokenize only
-    ///   2 = + UPOS
-    ///   3 = + lemma
-    ///   4 = + FEATS
-    ///   5 = + dependency parsing (HEAD, DEPREL)
-    /// XPOS is always "_" as not trained
-    ///
-    /// `mode` controls formatting, independent of `level`:
-    ///   "raw"  -- plain tab-separated CoNLL-U fields
-    ///   "tidy" -- the same fields, data, but column-aligned with padding
-//    func run(text: String, myConfig: TaggerConfig) throws -> [String] {
+    
+    //    func runOnSentenceOrig(_ sentence: HashableSentence,  myConfig: TaggerConfig) throws -> [Token] {
 //        let level = myConfig.parsingConfig.maxPipelineStep.rawValue
 //        guard (1...5).contains(level) else {
 //            throw PipelineError.invalidLevel(level)
 //        }
 //
-//        let sentences = try tokenize(text)
-//        var allLines: [ConllLineContent] = []
+//        let n = sentence.tokens.count
+//        
+//        var uposTags = Array(repeating: "_", count: n)
+//        var featsTags = Array(repeating: "_", count: n)
+//        var heads = Array(repeating: "_", count: n)
+//        var deprels = Array(repeating: "_", count: n)
+//        var primaryLemmas = Array(repeating: "_", count: n)
+//        var secondaryLemmas = Array(repeating: "_", count: n)
 //
-//        for sentence in sentences {
-//            let tokens = try runOnSentence(sentence, myConfig: myConfig)
-//            for tok in tokens {
-//                allLines.append(.row(tok))
+//        if level >= 2 {
+//            let raw = try runTaggerParserModel(on: sentence)
+//            uposTags = decodeUPOS(raw)
+//            if level >= 3 {
+//
+//                switch myConfig.parsingConfig.priLemSource {
+//                case .hybrid:
+//                    primaryLemmas = getLemmas(raw)
+//                    if myConfig.parsingConfig.getSecLems{
+//                        secondaryLemmas = decodeRuleLemmas(raw)
+//                    }
+//                case .rule:
+//                    primaryLemmas = decodeRuleLemmas(raw)
+//                    if myConfig.parsingConfig.getSecLems{
+//                        secondaryLemmas = getLemmas(raw)
+//                    }
+//                }
 //            }
-//            allLines.append(.blank)
+//            if level >= 4 {
+//                featsTags = decodeFeats(raw)
+//            }
+//            if level >= 5 {
+//                let deps = decodeDependencies(raw)
+//                heads = deps.map { String($0.head) }
+//                deprels = deps.map { $0.deprel }
+//            }
 //        }
 //
-//        switch myConfig.exportConfig {
-//        case "raw":
-//            return formatRaw(allLines)
-//        case "tidy":
-//            return formatTidy(allLines)
-//        default:
-//            throw PipelineError.predictionFailed(
-//                "mode must be \"raw\" or \"tidy\" (got \"\(mode)\")"
+//        return (0..<n).map { i in
+//            Token(
+//                tokid: i + 1, form: sentence.tokens[i], lemma: primaryLemmas[i],
+//                upos: uposTags[i], xpos: "_", feats: featsTags[i],
+//                head: heads[i], deprel: deprels[i], col8: myConfig.parsingConfig.getSecLems ? secondaryLemmas[i] : "_", col9: "_", subTokens: []
 //            )
 //        }
 //    }

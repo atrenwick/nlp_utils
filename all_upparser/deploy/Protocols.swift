@@ -1,5 +1,5 @@
 //
-//  UDDecoding.swift
+//  Custom Protocols and Extensions conforming to them
 //  Tagger
 //
 //  Created by Adam on 20/10/2026.
@@ -7,16 +7,34 @@
 
 import Foundation
 import CoreML
+
 // pipelineHelper protocol, extension to hold code relevant to BiLSTM and BERT-based pipelines
+//protocol NLPPipeline{
+//    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
+//    var description: String { get }
+//    var maxWords: Int { get }
+//}
+//
+//extension NLPPipeline{
+//    func tokenize(_ naughtyString: String) -> HashableSentence{
+//        let input = naughtyString
+//        let intermediate = input.split(separator: " ")
+//        let output = intermediate.map {String($0)}
+//        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
+//        print("this should't have been callable…")
+//        return outputSent
+//    }
+//
+//}
 
-
-protocol NLPPipeline{
-    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
+protocol PipelineHelper {
+//    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
+    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) -> OnSentResult
     var description: String { get }
     var maxWords: Int { get }
 }
 
-extension NLPPipeline{
+extension PipelineHelper {
     func tokenize(_ naughtyString: String) -> HashableSentence{
         let input = naughtyString
         let intermediate = input.split(separator: " ")
@@ -26,24 +44,6 @@ extension NLPPipeline{
         return outputSent
     }
 
-}
-// combination of extension: Language and a protocol
-// 1. Define a protocol that guarantees availableTBs exists
-protocol TreebankProvidable {
-    associatedtype TreebankType: Hashable
-    var availableTBs: [TreebankType] { get }
-    var defaultTB: TreebankType { get } //
-}
-
-// 2. Conforming  language enum to it
-extension Language: TreebankProvidable {
-    typealias TreebankType = Language.Treebank
-}
-
-
-protocol PipelineHelper {}
-
-extension PipelineHelper {
     // loading
     static func loadMlpackage(named name: String, myConfig: TaggerConfig) throws -> MLModel{
         guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else {
@@ -308,3 +308,17 @@ extension PipelineHelper {
     }
 
 }
+
+// combination of extension: Language and a protocol
+// 1. Define a protocol that guarantees availableTBs exists
+protocol TreebankProvidable {
+    associatedtype TreebankType: Hashable
+    var availableTBs: [TreebankType] { get }
+    var defaultTB: TreebankType { get } //
+}
+
+// 2. Conforming  language enum to it
+extension Language: TreebankProvidable {
+    typealias TreebankType = Language.Treebank
+}
+

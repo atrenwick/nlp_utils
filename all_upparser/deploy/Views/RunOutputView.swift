@@ -5,6 +5,55 @@
 //  Created by Adam on 11/09/2026.
 //
 
+struct RunErrorSummaryView: View{
+    let myConfig: TaggerConfig
+    let toksIn: Int
+    var errorCases: [OutputError] { myConfig.outputData.outErrors}
+    var totalSents: Int {
+        errorCases.count + myConfig.outputData.outSents.count
+    }
+    var totalOutputToks: Int {
+        myConfig.outputData.outSents.reduce(0) {$0 + $1.tokCount}
+    }
+    var sentCoverage: String {
+        let intermed = 1 - (Double(errorCases.count) / Double(totalSents))
+        return String(format: "%.2f", (intermed * 100))
+    }
+    var tokCoverage: String {
+        if toksIn == 0 || totalOutputToks == 0 {
+            return " ??? "
+
+        } else{
+            let intermed = Double(totalOutputToks) / Double(toksIn)
+            return String(format: "%.2f", (intermed * 100))
+        }
+//        >> but this is currenrly run after the sent len guards
+    }
+    
+    var body: some View{
+        Form{
+            Text("Sents: \(errorCases.count) errors in \(totalSents) sents -> \(sentCoverage) % coverage")
+            Text("Toks: \(toksIn) in -> \(totalOutputToks) out :: \(tokCoverage) %")
+            
+            ForEach(errorCases.enumerated(), id: \.offset){(num,item) in
+                VStack{
+                    Text(makeString(num: num, item: item))
+                    HStack{
+                        Text(item.errorType.rawValue)
+                        Text("Toks: \(item.tokCount) :: Subtoks: \(item.subtokCount)")
+                    }
+                }
+            }
+        }
+    }
+    func makeString(num: Int, item: OutputError)-> String{
+        let numStr = String(num+1)
+        let tokChunk = item.sentence.tokens.prefix(5).joined(separator: " ")
+        return "\(numStr): \(tokChunk)"
+    }
+    
+}
+
 
 import SwiftUI
 // detail for each run == child
@@ -60,7 +109,12 @@ struct RunOutputDetailView: View{
                             Text("Output files")
                         }
                     }
-
+                    
+                    NavigationLink(destination: RunErrorSummaryView(myConfig: myConfig, toksIn: run.runData.tokCount)){
+                        Text("Coverage :: \(myConfig.outputData.outErrors.count) errors")}
+                    
+                        
+                    
                     Text("Sentence count : \(run.runData.sents.count)")
                     Text("Tok count : \(run.runData.tokCount)")
                     Text("Language : \(run.runMetas.lang)")
