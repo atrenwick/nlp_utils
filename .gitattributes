@@ -39,3 +39,4 @@ all_upparser/deploy/TaggingAssets/BertTok/mlpackages/EN_distilbert_tagger_parser
 all_upparser/deploy/TaggingAssets/BertTok/mlpackages/EN_distilbert_tagger_parser_gumv2.mlpackage/Manifest.json filter=lfs diff=lfs merge=lfs -text
 all_upparser/deploy/TaggingAssets/BertTok/mlpackages/ANG_distilbert_tagger_parser_oedtv2.mlpackage/Data filter=lfs diff=lfs merge=lfs -text
 all_upparser/deploy/TaggingAssets/BertTok/mlpackages/ANG_distilbert_tagger_parser_oedtv2.mlpackage/Manifest.json filter=lfs diff=lfs merge=lfs -text
+
