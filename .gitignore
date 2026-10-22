@@ -1,7 +1,3 @@
 *.DS_Store
-all_upparser/deploy/TaggingAssets/BertTok/mlpackages/ANG_distilbert_tagger_parser_oedtv2.mlpackage/Data/com.apple.CoreML/model.mlmodel
 all_upparser/deploy/TaggingAssets/BertTok/mlpackages/ANG_distilbert_tagger_parser_oedtv2.mlpackage/Data/com.apple.CoreML/weights/weight.bin
-all_upparser/deploy/TaggingAssets/BertTok/mlpackages/ANG_distilbert_tagger_parser_oedtv2.mlpackage/Manifest.json
-all_upparser/deploy/TaggingAssets/BertTok/mlpackages/EN_distilbert_tagger_parser_gumv2.mlpackage/Data/com.apple.CoreML/model.mlmodel
 all_upparser/deploy/TaggingAssets/BertTok/mlpackages/EN_distilbert_tagger_parser_gumv2.mlpackage/Data/com.apple.CoreML/weights/weight.bin
-all_upparser/deploy/TaggingAssets/BertTok/mlpackages/EN_distilbert_tagger_parser_gumv2.mlpackage/Manifest.json
