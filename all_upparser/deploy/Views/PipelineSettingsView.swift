@@ -46,25 +46,41 @@ struct PipelineSettingsView: View {
                 Section("Parameters"){
                     InputFileViewEncapsulator(
                         myConfig: $myConfig,
-                        builtSents: $builtSents,
+                        builtSents: $myConfig.inputData.builtSents,
                         tempTokens: $tempTokens,
                         fileContainerModel: fileContainerModel
                     )
                     // watch this with $matchFileNameTypeDefault
 
-                    Toggle(isOn: $myConfig.inputConfig.detectLanguage) {
-                        Text("Autodetect Language")
-                    }.onChange(of: myConfig.inputConfig.detectLanguage){_, newValue in
-                        if newValue == true {
-                            if let detectedLang = detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
-                                myConfig.parsingConfig.selectedLanguage = detectedLang
+                    HStack{
+                        Toggle(isOn: $myConfig.inputConfig.detectLanguage) {
+                            Text("Autodetect Language")
+                        }.onChange(of: myConfig.inputConfig.detectLanguage){_, newValue in
+                            if newValue == true {
+                                if let detectedLang = detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
+                                    myConfig.parsingConfig.selectedLanguage = detectedLang
+                                }
                             }
                         }
+                        .accessibilityIdentifier("DetectLanguageToggle")
+                        Toggle(isOn: $myConfig.inputConfig.matchFileNameType) {
+                            Text("Automatch filename-type")
+                        }.onChange(of: myConfig.inputConfig.matchFileNameType){_, newValue in
+                            if newValue == true {
+                                //do this
+                                if let detectedValue = fileContainerModel.localSandboxFileURL?.pathExtension {
+                                    if let convertedExt = InputFileType(rawValue: detectedValue.replacingOccurrences(of: ".", with: "")){
+                                        myConfig.inputConfig.inputFileType = convertedExt
+                                    }
+                                }
+                            }
+                                
+                            
+                        }
                     }
-                    .accessibilityIdentifier("DetectLanguageToggle")
-                    
+
                     Picker("Architecture", selection: $myConfig.parsingConfig.modelArchitecture){
-                        ForEach(ModelArchitecture.allCases){modarch in
+                        ForEach(ModelArchitecture.allCases.sorted {$0.rawValue < $1.rawValue }){modarch in
                             Text(modarch.displayName)
                         }
                     }.onChange(of: myConfig.parsingConfig.modelArchitecture){

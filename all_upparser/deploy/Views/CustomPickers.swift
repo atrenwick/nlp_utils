@@ -39,7 +39,6 @@ struct ConstrainedPickerForLang: View{
                 }
             }
         }
-
     }
 }
 
@@ -55,12 +54,11 @@ struct ConstrainedPickerForTB: View{
     }
     
     var body: some View{
-        Picker("title", selection: $myConfig.parsingConfig.selectedTreebank){
-            ForEach(availableTreebanks, id:\.self){tb in
-                Text(tb.short).tag(tb)
+        Picker("Treebank", selection: $myConfig.parsingConfig.selectedTreebank){
+            ForEach(availableTreebanks.sorted {$0.rawValue < $1.rawValue}, id:\.self){tb in
+                Text(tb.shortTidy).tag(tb)
             }
         }
-        
         .onChange(of: myConfig.parsingConfig.selectedLanguage) {
             if let first = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
                 myConfig.parsingConfig.selectedTreebank = first
@@ -85,7 +83,7 @@ where T.RawValue == String, T.TreebankType == Language.Treebank {
 
     var body: some View{
         Picker(title, selection: $selection){
-            ForEach(availableLanguages){lang in
+            ForEach(availableLanguages.sorted {$0.rawValue < $1.rawValue} ){lang in
                 Text(lang.displayName.uppercased())
             }
         }
@@ -106,10 +104,9 @@ where T.RawValue == String, T.TreebankType == Language.Treebank {
         ConfigurationRules.availableTreebanks(for: selectedArchitecture, language: selectedLang as! Language)
         }
 
-
     var body: some View{
         Picker(title, selection: $selectedTreebank){
-            ForEach(availableTreebanks, id:\.self){tb in
+            ForEach(availableTreebanks.sorted {$0.rawValue < $1.rawValue}, id:\.self){tb in
                 Text(tb.short).tag(tb)
             }
         }
@@ -148,8 +145,9 @@ struct DefaultPickerView<T: Hashable & CaseIterable & RawRepresentable>: View wh
     var body: some View {
         Picker(title, selection: $selection) {
             // 2. Iterate over all cases of whatever enum is passed in
-            ForEach(filteredCases, id: \.self) { option in
-                Text(option.rawValue)
+            ForEach(filteredCases.sorted {$0.rawValue < $1.rawValue}, id: \.self) { option in
+                Text (["after","before"].contains(option.rawValue) ? option.rawValue.localizedCapitalized : option.rawValue)
+                //                Text(option.rawValue)
                     .tag(option) // 3. Automatically sets the tag
             }
         }

@@ -18,7 +18,7 @@ struct ProcessorStepConfigViewSection: View {
                 
                 Group{
                     Picker("Tokenizing method", selection: $myConfig.parsingConfig.tokenizingMethod) {
-                        ForEach(TokenizingMethod.allCases.dropLast()){tokMethod in
+                        ForEach(TokenizingMethod.allCases.dropLast().sorted {$0.rawValue < $1.rawValue} ){tokMethod in
                             Text(tokMethod.rawValue)
                         }
                     }
@@ -31,8 +31,8 @@ struct ProcessorStepConfigViewSection: View {
                 
                 Group{
                     Picker("Sentencising method", selection: $myConfig.parsingConfig.sentencizingMethod) {
-                        ForEach(SentencizingMethod.allCases){sentMethod in
-                            Text(sentMethod.rawValue)
+                        ForEach(SentencizingMethod.allCases.sorted {$0.rawValue < $1.rawValue} ){sentMethod in
+                            Text(sentMethod.tidyName)
                         }
                     }
                 }
