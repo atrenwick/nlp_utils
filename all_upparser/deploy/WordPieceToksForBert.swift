@@ -9,7 +9,7 @@
 //      word_index  [1, maxWords]  position of each word's first subword; slot 0 is ROOT -> [CLS];
 //                                 padded with -1
 //
-//  Each word is tokenised on its own, exactly as train_bert.py does it, using the same
+//  Each word tokenised on its own, as train_bert.py does it, using same
 //  pipeline as Hugging Face's BertTokenizerFast:
 //      1. clean      drop NUL / U+FFFD / control characters, map whitespace to " "
 //      2. CJK        put spaces around CJK ideographs (tokenize_chinese_chars)
@@ -93,11 +93,8 @@ extension WordPieceEncodedSentence {
 
 // MARK: - Tokenizer
 struct WordPieceTokenizer: Sendable {
-    /// When true, encode(...) also fills EncodedSentence.wordPieces with the subword strings
-    /// for each word. Off by default, so normal use does no extra work. It is a plain value
-    /// property: set it on a `var` tokenizer, or on a copy (copies share the vocabulary).
+    
     var showWordPieces: Bool = false
-
     let clsID: Int32
     let sepID: Int32
     let padID: Int32

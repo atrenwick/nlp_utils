@@ -137,20 +137,33 @@ enum Language: String, CaseIterable, Identifiable {
         
         var id: String { rawValue }
         
+        var shortTidy: String {
+            // RHS of model files and Picker strings
+            switch self {
+            case .enTB1: return "EWT"
+            case .enTB2: return "GUM"
+            case .enTB3: return "LINES"
+            case .frTB1, .deTB1: return "GSD"
+            case .frTB2: return "Sequoia"
+            case .frTB3: return "Rhapsodie"
+            case .deTB2: return "HDT"
+            case .angTB1: return "OEDT"
+            case .frmTB1, .froTB1: return "Profiterole"
+            }
+        }
+        
         var short: String {
             // RHS of model files and Picker strings
             switch self {
             case .enTB1: return "ewt"
             case .enTB2: return "gum"
             case .enTB3: return "lines"
-            case .frTB1: return "gsd"
+            case .deTB1, .frTB1: return "gsd"
             case .frTB2: return "sequoia"
             case .frTB3: return "rhapsodie"
-            case .deTB1: return "gsd"
             case .deTB2: return "hdt"
             case .angTB1: return "oedt"
-            case .frmTB1: return "profiterole"
-            case .froTB1: return "profiterole"
+            case .froTB1, .frmTB1: return "profiterole"
             }
         }
     }
@@ -187,7 +200,6 @@ enum LemmaSource: String, CaseIterable, Identifiable{
             return "Hybrid"
         }
     }
-    
 }
 
 enum ModelArchitecture: String, CaseIterable, Identifiable{
@@ -200,7 +212,15 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .cnnBiLSTM: return "CNN-BiLSTM"
         }
     }
-    
+}
+
+enum OnSentResultType: String, RawRepresentable, CaseIterable{
+    var id : Self {self}
+    case empty
+    case tooManyWords
+    case tooManySubtoks
+    case success
+    case otherError
 }
 
 enum PipelineError: LocalizedError{
@@ -242,7 +262,6 @@ enum PipelineError: LocalizedError{
     
     var errorDescription: String? {
         switch self{
-            
         case .architectureConflict:
             return "conflict between architecture and available models"
         case .badTempTokens:
@@ -331,8 +350,8 @@ enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
     // Computed property: evaluates 'self' on demand and returns the matching  string
     var title: String {
         switch self {
-        case .step2: return "2. POS tagging"
-        case .step3: return "3. Lemmatisation"
+        case .step2: return "2. POS tag"
+        case .step3: return "3. Lemmas"
         case .step4: return "4. Feats"
         case .step5: return "5. DepParse"
         }
@@ -393,6 +412,15 @@ enum SentencizingMethod: String, Identifiable, CaseIterable, Codable {
     case custom
     case naive
     case eosMark
+    
+    var tidyName: String {
+        switch self {
+        case .nlSentencizer: return "NLSentencizer"
+        case .custom: return "Custom"
+        case .naive: return "Naive"
+        case .eosMark: return "EOS Mark"
+        }
+    }
     }
 
 enum TokenizingMethod : String, Identifiable, CaseIterable, Codable{

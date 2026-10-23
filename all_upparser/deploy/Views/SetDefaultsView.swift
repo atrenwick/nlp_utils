@@ -65,24 +65,24 @@ struct SetDefaultsView: View {
                 Section("Source file"){
                     Toggle(isOn: $matchFileNameTypeDefault){Text("Automatch filename-type")}
                     Toggle(isOn: $detectLangDefault){ Text("Autodetect lang in filename")}
-                    DefaultPickerView(title: "InputFiletype method", selection: $inputFileTypeDefault)
+                    DefaultPickerView(title: "Input filetype", selection: $inputFileTypeDefault)
                 }
                 Section("Processing"){
                     Picker("modelArchitectureDefault", selection: $modelArchitectureDefault){
-                        ForEach(ModelArchitecture.allCases){modArch in
+                        ForEach(ModelArchitecture.allCases.sorted {$0.rawValue < $1.rawValue}){modArch in
                             Text(modArch.displayName)
                         }
                     }
                     ConstrainedLanguagePickerView(
-                        title: "Treebank",
+                        title: "Language",
                         selectedTreebankDefault: $selectedTreebankDefault,
                         selection: $selectedLanguageDefault,
                         selectedArchitecture: $selectedArchitectureDefault
                 )
                     
                     Picker("Treebank", selection: $selectedTreebankDefault){
-                        ForEach(selectedLanguageDefault.availableTBs){tb in
-                            Text(tb.short).tag(tb)
+                        ForEach(selectedLanguageDefault.availableTBs.sorted {$0.shortTidy < $1.shortTidy}){tb in
+                            Text(tb.shortTidy).tag(tb)
                         }
                     }
                     .onChange(of: selectedLanguageDefault) { _, newLang in
@@ -91,7 +91,7 @@ struct SetDefaultsView: View {
                     
                     Picker("Max pipeline step", selection: $maxPipelineStepDefault){
                         ForEach(PipelineStep.allCases){step in
-                            Text(step.title)
+                            Text(step.title).tag(step)
                         }
                     }
                 }
@@ -110,7 +110,7 @@ struct SetDefaultsView: View {
                 Section("Lemmatization"){
                     Toggle(isOn: $getSecLemsDefault){ Text("Get Secondary lemmas if avail.") }
                     Picker("Primary method", selection: $priLemSourceDefault){
-                        ForEach(LemmaSource.allCases){lsource in
+                        ForEach(LemmaSource.allCases.sorted {$0.rawValue < $1.rawValue }){lsource in
                             Text(lsource.displayName)
                         }
                     }
@@ -122,7 +122,7 @@ struct SetDefaultsView: View {
                         }
                     }
                     Picker("Secondary method", selection: $secLemSourceDefault){
-                        ForEach(LemmaSource.allCases){lsource in
+                        ForEach(LemmaSource.allCases.sorted {$0.rawValue < $1.rawValue}){lsource in
                             Text(lsource.displayName)
                         }
                     }
@@ -149,7 +149,7 @@ struct SetDefaultsView: View {
                         }
                     }
                     Picker("Export format", selection: $selectedExportFormatDefault){
-                        ForEach(ExportFormat.allCases){format in
+                        ForEach(ExportFormat.allCases.sorted {$0.rawValue < $1.rawValue }){format in
                             Text(format.rawValue)
                         }
                     }

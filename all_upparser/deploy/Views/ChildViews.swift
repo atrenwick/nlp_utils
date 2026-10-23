@@ -93,7 +93,7 @@ struct ExportConfigViewSection: View {
     var body: some View {
         Section("Export Configuration") {
             Picker("Export (sub)type", selection: $myConfig.exportConfig.selectedExportFormat){
-                ForEach(ExportFormat.allCases){ formatOption in
+                ForEach(ExportFormat.allCases.sorted {$0.rawValue < $1.rawValue }){ formatOption in
                     Text(formatOption.rawValue)
                 }
             }
@@ -335,8 +335,8 @@ struct InputTypeEncapsulatorView: View{
     @Binding var fileContainerModel: SourceFileContainerModel
     var body: some View{
         
-        Picker("Inputtype", selection: $myConfig.inputConfig.inputFileType){
-            ForEach(InputFileType.allCases){fType in
+        Picker("Input type", selection: $myConfig.inputConfig.inputFileType){
+            ForEach(InputFileType.allCases.sorted {$0.rawValue < $1.rawValue }){fType in
                 Text(fType.rawValue)}
         }
         .onChange(of: myConfig.inputConfig.inputFileType) { _, newFileType in

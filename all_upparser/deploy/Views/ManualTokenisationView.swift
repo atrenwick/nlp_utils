@@ -7,6 +7,20 @@
 
 import SwiftUI
 
+struct PrebuiltSentsView: View {
+    let testSents: [String]
+    var body: some View{
+        Form{
+            ForEach(testSents, id:\.self){testSentence in
+                Text("Input: \"\(testSentence)\"")
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+            }
+
+        }
+    }
+}
+
 struct ManualTokenisationView: View {
     
     @Binding var myConfig: TaggerConfig
@@ -24,33 +38,39 @@ struct ManualTokenisationView: View {
     
     var body: some View {
         NavigationStack{
+                
+            HStack{
+                Spacer()
+                NavigationLink {
+                    PrebuiltSentsView(testSents: visibleSents)
+                } label: {
+                    Text("-> Prebuilt sents")
+                }.buttonStyle(.borderedProminent)
+            }
+
             VStack(alignment: .leading, spacing: 16) {
-                ForEach(visibleSents, id:\.self){testSentence in
-                    Text("Input: \"\(testSentence)\"")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
                 HStack{
-                    TextField("Additional sentence", text: $newSentence).textFieldStyle(.roundedBorder)
-                    Button("Add"){
-                        if !newSentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty{
-                            testSentences.append(newSentence)
-                            newSentence = ""
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
+                    TextField("Add exciting sentence to tokenise", text: $newSentence).textFieldStyle(.roundedBorder)
                 }
                 //MARK: pickers for language, tokenisation method, view
+//                HStack{
+//                    Picker("Language", selection: $myConfig.parsingConfig.selectedLanguage) {
+//                        ForEach(Language.allCases) { mode in
+//                            Text(mode.rawValue).tag(mode)
+//                        }
+//                    }
+//                    .pickerStyle(.segmented)
+//                    .tint(.blue)
+//                }
                 HStack{
-                    Picker("Language", selection: $myConfig.parsingConfig.selectedLanguage) {
-                        ForEach(Language.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .tint(.blue)
-                }
-                HStack{
+//                    Button("1. Add"){
+//                        if !newSentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty{
+//                            testSentences.append(newSentence)
+//                            newSentence = ""
+//                        }
+//                    }
+//                    .buttonStyle(.borderedProminent)
+//                    Spacer()
                     Button {
                         let thisSentence: String
                         if newSentence.count == 0 {
@@ -63,51 +83,53 @@ struct ManualTokenisationView: View {
                             tempTokens = toksAsStrings.map {$0.asTempToken}
                         } catch {
                             PipelineError.retokenisationError
+                            // what's this catch doing………
                         }
                         
                     } label: {
-                        Text("Tokenise")
+                        Text("1. Tokenise")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.indigo)
-                    Spacer()
-                    Button {
-                        if (0..<testSentences.count-1).contains(getsentNum - 1){
-                            getsentNum -= 1
-                        } else {
-                            getsentNum = testSentences.count - 1
-                        }
-                    } label: {
-                        HStack{
-                            Text(String("-"))
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.cyan)
-                    Text(String(getsentNum))
-                    Button {
-                        if (0..<testSentences.count-1).contains(getsentNum + 1){
-                            getsentNum += 1
-                        } else {
-                            getsentNum = 0
-                        }
-                    } label: {
-                        HStack{
-                            Text(String("+"))
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.pink)
-                    
+//                    Spacer()
+//                    Button {
+//                        if (0..<testSentences.count-1).contains(getsentNum - 1){
+//                            getsentNum -= 1
+//                        } else {
+//                            getsentNum = testSentences.count - 1
+//                        }
+//                    } label: {
+//                        HStack{
+//                            Text(String("-"))
+//                        }
+//                    }
+//                    .buttonStyle(.borderedProminent)
+//                    .tint(.cyan)
+//                    Text(String(getsentNum))
+//                    Button {
+//                        if (0..<testSentences.count-1).contains(getsentNum + 1){
+//                            getsentNum += 1
+//                        } else {
+//                            getsentNum = 0
+//                        }
+//                    } label: {
+//                        HStack{
+//                            Text(String("+"))
+//                        }
+//                    }
+//                    .buttonStyle(.borderedProminent)
+//                    .tint(.pink)
+//                    
                     Spacer()
                     Button {
                         do {
                             builtSents.append( BuiltSentHolder(tempToks: tempTokens) )
                             print("Added 1 sent to builtSents")
                             tempTokens = []
+                            newSentence = ""
                         }
                     } label: {
-                        Text("Build")
+                        Text("2. Build")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
@@ -136,6 +158,7 @@ struct ManualTokenisationView: View {
             }
             .padding()
             .navigationTitle("Manual tokenisation")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

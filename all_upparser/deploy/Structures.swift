@@ -32,9 +32,9 @@ struct ConfigurationRules {
     static func availableLanguages(for architecture: ModelArchitecture) -> [Language] {
         switch architecture {
         case .cnnBiLSTM:
-            return [.EN, .FR, .ANG, .DE, .FRM, .FRO]
+            return [.EN, .FR, .ANG, .DE, .FRM, .FRO].sorted {$0.rawValue < $1.rawValue}
         case .distilbert:
-            return [.FR, .EN]
+            return [.EN, .FR, .ANG, .DE, .FRM, .FRO].sorted {$0.rawValue < $1.rawValue}
         }
     }
     
@@ -53,10 +53,13 @@ struct ConfigurationRules {
         case .distilbert:
             switch language {
             case .FR: return [.frTB1, .frTB2, .frTB3]
-            default: return [.enTB1]
+            case .DE: return [.deTB1]
+            case .ANG: return [.angTB1]
+            case .EN: return [.enTB1, .enTB2]
+            case .FRM: return [.frmTB1]
+            case .FRO: return [.froTB1]
             }
         }
-        
     }
 }
 
@@ -136,8 +139,8 @@ struct HashableSentence: Hashable {
 
 struct LabelVocabsForBERTlike {
 // MARK: - Label vocabularies for BERT derived models :: 4x vocabs with loader
-/// The five vocabularies that turn output indices back into labels. They must come from
-/// the same training run as the model (train_bert.py writes them next to it); the old
+/// The  vocabularies that turn output indices back into labels. They must come from
+/// the same training run as the model (train_bert.py writes them next to it); 
 /// BiLSTM vocabularies number the labels differently.
     let upos: Vocab
     let feats: Vocab
@@ -263,14 +266,6 @@ struct LogitReaderForBERTlike {
     }
 }
 
-enum OnSentResultType: String, RawRepresentable, CaseIterable{
-    var id : Self {self}
-    case empty
-    case tooManyWords
-    case tooManySubtoks
-    case success
-    case otherError
-}
 struct OnSentResult: Identifiable {
     var id = UUID()
     let sentence: HashableSentence // input sent
@@ -288,36 +283,6 @@ struct OutputError: Identifiable {
     
 }
 
-func postprocessErrorSent(sentResult: OnSentResult) -> OutputError {
-    let errorType = sentResult.resultType
-    let sentence = sentResult.sentence
-    var tokCount: Int
-    var subTokCount: Int
-
-    switch errorType {
-    case .empty:
-        tokCount = 0
-        subTokCount = 0
-    case .tooManyWords:
-        tokCount = sentence.tokens.count
-        subTokCount = -1
-    case .tooManySubtoks, .success:
-        tokCount = sentence.tokens.count
-        subTokCount = sentResult.subtokCount
-    case .otherError:
-        tokCount = sentence.tokens.count > 0 ? sentence.tokens.count : -2
-        subTokCount = sentResult.subtokCount > 0 ? sentResult.subtokCount : -2
-    }
-
-
-    return OutputError(
-        sentence: sentence,
-        tokCount: tokCount,
-        subtokCount: subTokCount,
-        errorType: errorType
-    )
-}
-    
 
 
 struct RegexLangPatternToLangMap: Identifiable{
@@ -618,23 +583,24 @@ struct TaggerConfig{
     var progressConfig: ProgressConfig
     var inputData: InputData
     var outputData : OutputData
-    // var reportingConfig: ReportingConfig
-    // var visibilityConfig: VisibilityConfig
     
     struct InputConfig{
         var inputFileType: InputFileType
         var selectedInputFile: URL?
         var displayName: String
         var detectLanguage: Bool
+        var matchFileNameType: Bool
         init(
             inputFileType: InputFileType? = nil,
             detectLanguage: Bool? = nil,
+            matchFileNameType: Bool? = nil,
             displayName: String? = nil,
             selectedInputFile: URL? = nil
         ){
             self.inputFileType = TaggerConfig.resolveRepresentable(passed: inputFileType, key: "inputFileTypeDefault", fallback: InputFileType.txt )
             self.detectLanguage = TaggerConfig.resolveBool(passed: detectLanguage, key: "detectLangDefault", default: false)
-            self.displayName = ""
+            self.matchFileNameType = TaggerConfig.resolveBool(passed: matchFileNameType, key: "matchFileNameTypeDefault", default: false)
+            self.displayName = String(UUID().uuidString.prefix(5))
         }
     }
     
@@ -710,7 +676,7 @@ struct TaggerConfig{
             includeConllSentText: Bool? = nil,
             getsubtokens: Bool? = nil
         ) {
-            self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileNameDefault")
+            self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileName")
             self.targetFolderURL = targetFolderURL
             ?? URL(string: UserDefaults.standard.string(forKey: "outputDirDefault") ?? "")
             ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
@@ -819,8 +785,6 @@ struct TaggerConfig{
             self = Self() // reinit
         }
     }
-    
-    //
     
     // top level init
     init(

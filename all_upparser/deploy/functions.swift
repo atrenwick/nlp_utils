@@ -1406,6 +1406,37 @@ func postprocessSentence(sentence: HashableSentence, parsedTokens: [Token], myCo
     return mySent
 }
 
+func postprocessErrorSent(sentResult: OnSentResult) -> OutputError {
+    let errorType = sentResult.resultType
+    let sentence = sentResult.sentence
+    var tokCount: Int
+    var subTokCount: Int
+
+    switch errorType {
+    case .empty:
+        tokCount = 0
+        subTokCount = 0
+    case .tooManyWords:
+        tokCount = sentence.tokens.count
+        subTokCount = -1
+    case .tooManySubtoks, .success:
+        tokCount = sentence.tokens.count
+        subTokCount = sentResult.subtokCount
+    case .otherError:
+        tokCount = sentence.tokens.count > 0 ? sentence.tokens.count : -2
+        subTokCount = sentResult.subtokCount > 0 ? sentResult.subtokCount : -2
+    }
+
+
+    return OutputError(
+        sentence: sentence,
+        tokCount: tokCount,
+        subtokCount: subTokCount,
+        errorType: errorType
+    )
+}
+    
+
 func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: IndexSet) {
     // 1. Guard against empty inputs
     guard !offsets.isEmpty else { return }

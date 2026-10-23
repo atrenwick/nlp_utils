@@ -83,7 +83,7 @@ extension PipelineSettingsView {
             missing.append("extension-InputType Mismatch")
         }
         
-        if myConfig.inputConfig.inputFileType == .manual && builtSents.count == 0 {
+        if myConfig.inputConfig.inputFileType == .manual && myConfig.inputData.builtSents.count == 0 {
             missing.append("No built sents found")
         }
         
@@ -93,7 +93,8 @@ extension PipelineSettingsView {
         }
         
         // Rule 3: Check target folder (or destination setting)
-        if myConfig.exportConfig.targetFolderURL == nil {
+        if myConfig.exportConfig.targetFolderURL == nil { // and in sandbox || has auth.
+         
             missing.append("Export Directory")
         }
         
