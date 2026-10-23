@@ -1,0 +1,30 @@
+{
+  "itos": [
+    "<pad>",
+    "<unk>",
+    "<root>",
+    "_",
+    "VerbForm=Fin",
+    "Definite=Def|PronType=Art",
+    "PronType=Prs",
+    "Tense=Past|VerbForm=Part",
+    "VerbForm=Inf",
+    "PronType=Ind",
+    "PronType=Rel",
+    "Poss=Yes",
+    "PronType=Dem",
+    "Polarity=Neg",
+    "NumType=Card",
+    "Definite=Ind|PronType=Art",
+    "Tense=Pres|VerbForm=Part",
+    "Definite=Def",
+    "NumType=Ord",
+    "PronType=Int",
+    "Foreign=Yes",
+    "Definite=Com",
+    "Typo=Yes",
+    "VerbForm=Part"
+  ],
+  "pad": "<pad>",
+  "unk": "<unk>"
+}
