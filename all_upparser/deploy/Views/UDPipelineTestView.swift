@@ -840,3 +840,58 @@ markEosEnds(selectedLanguage: Language, tokListIn: [Substring])-> [EosTok]
 
 // MARK: - Annotate
 
+//struct MyParentView: View {
+//    // Instantiate it lightly here (this happens instantly without freezing)
+//    @StateObject private var bigPipeline = CNNBiLSTMPipeline(
+//        tokenizerModel: MLModel,
+//        taggerModel: <#T##MLModel#>,
+//        lemmatizerRunner: <#T##LemmatizerRunner#>,
+//        tokenizerCharVocab: <#T##Vocab#>,
+//        wordVocab: <#T##Vocab#>,
+//        taggerCharVocab: <#T##Vocab#>,
+//        uposVocab: <#T##Vocab#>,
+//        featsVocab: <#T##Vocab#>,
+//        deprelVocab: <#T##Vocab#>,
+//        lemmaRuleVocab: <#T##Vocab#>
+//    )
+//        
+//
+//    var body: some View {
+
+//    }
+//}
+//struct PipelineContainerView: View {
+//    @StateObject private var loader = BigClass(foobar: myValue, b: myB)
+//    @State private var readyPipeline: ReadyPipeline? = nil
+//    @State private var errorMessage: String? = nil
+//
+//    var body: some View {
+//        Group {
+//            if let pipeline = readyPipeline {
+//                // --- STEP 3: THE APP RUNS HERE WITH ZERO OPTIONALS ---
+//                MainWorkerView(pipeline: pipeline)
+//                
+//            } else {
+//                // --- STEP 1 & 2: LOADING PROGRESS UI ---
+//                VStack {
+//                    ProgressView(value: loader.loadingProgress) {
+//                        Text(loader.statusMessage)
+//                    }
+//                    if let error = errorMessage {
+//                        Text(error).foregroundColor(.red)
+//                    }
+//                }
+//                .task {
+//                    do {
+//                        try await loader.myNewSuperLoadingFunction()
+//                        
+//                        // Once loading completes, convert it to the clean non-optional class!
+//                        self.readyPipeline = try loader.makeReadyPipeline()
+//                    } catch {
+//                        errorMessage = "Failed to initialize: \(error.localizedDescription)"
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
