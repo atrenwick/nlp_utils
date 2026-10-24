@@ -52,14 +52,16 @@ struct PipelineSettingsView: View {
                     )
                     // watch this with $matchFileNameTypeDefault
 
-                    HStack{
+                    
                         Toggle(isOn: $myConfig.inputConfig.detectLanguage) {
                             Text("Autodetect Language")
                         }.onChange(of: myConfig.inputConfig.detectLanguage){_, newValue in
                             if newValue == true {
-                                if let detectedLang = detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
+                                print("case1")
+                                if let detectedLang = FileIngestionWorkflow.detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
+                                    print("case2")
                                     myConfig.parsingConfig.selectedLanguage = detectedLang
-                                }
+                                } else {print("case 3")}
                             }
                         }
                         .accessibilityIdentifier("DetectLanguageToggle")
@@ -77,7 +79,7 @@ struct PipelineSettingsView: View {
                                 
                             
                         }
-                    }
+                    
 
                     Picker("Architecture", selection: $myConfig.parsingConfig.modelArchitecture){
                         ForEach(ModelArchitecture.allCases.sorted {$0.rawValue < $1.rawValue }){modarch in
@@ -180,30 +182,51 @@ struct PipelineSettingsView: View {
             myConfig.parsingConfig.runExplicit = true
             taggingInProgress.wrappedValue = true
             myConfig.progressConfig.hasStarted = true
-            myConfig.outputData.safeHeaderAttribs = makeSafeHeaderAttribs(myConfig: myConfig, fileContainerModel: fileContainerModel)
+        let theseHeaderAttribs = XMLMakingWorkflow.makeSafeHeaderAttribs(myConfig: myConfig, fileContainerModel: fileContainerModel)
+            print("Build header attribs: \(theseHeaderAttribs)")
+            myConfig.outputData.safeHeaderAttribs = theseHeaderAttribs
 
             // MARK: tagging :
             Task {
                 do {
                     // get pipeline object
-                    var allSentences: [HashableSentence] = []
                     let pipeline: PipelineHelper
+                    var allSentences: [HashableSentence] = []
+                    let loader = CNNBiLSTMPipelineLoader()
+//                    var readyPipeline: CNNBiLSTMPipeline? = nil
+//                    var errorMessage: String? = nil
                     currentStatus = "Loading pipeline"
+                    
                     switch myConfig.parsingConfig.modelArchitecture {
                     case .distilbert:
                         pipeline = try BERTlikePipeline(myConfig: myConfig, version: 2)
                         print("bert pipeline called")
+                        currentStatus = "loaded bertlike"
                     case .cnnBiLSTM:
-                        pipeline = try CNNBiLSTMPipeline(myConfig: myConfig)
-                        print("cnn-lstm pipeline called")
+                        do {
+                            print("calling loader")
+                            pipeline = try await loader.loadCNNBiLSTMpipe(myConfig: myConfig)
+                            currentStatus = "loaded bertlike"
+                            print("after try")
+                        } catch {
+                            print("Failed to load pipeline: \(error)")
+                            loader.statusMessage = "Error loading pipeline."
+                            throw PipelineError.notReadyToSendToRunner
+                        }
                     }
-                    pipelineSummary = pipeline.description
+                    
+                  
+                        
+                        
+                    
+
+                    pipelineSummary = "I'm a CNN-BiLSTM pipeline"
                     if myConfig.parsingConfig.runExplicit {
                         print(pipelineSummary)
                     }
                     //MARK: INGEST SENTS ::
                     currentStatus = "Ingesting sentences"
-                    allSentences = try ingestSentEncapsulator(
+                    allSentences = try SentencizationWorkflow.ingestSentEncapsulator(
                         myConfig: myConfig,
                         pipeline: pipeline
                     )
@@ -218,7 +241,7 @@ struct PipelineSettingsView: View {
                     //MARK: run resentenciser on request
                     if ![InputFileType.txt, InputFileType.manual].contains(myConfig.inputConfig.inputFileType) && myConfig.parsingConfig.runResentenciser{
                         currentStatus = "Resentencizing"
-                        myConfig.inputData.resentencizerOutputStrings = try desentenciseAndResentencise(
+                        myConfig.inputData.resentencizerOutputStrings = try SentencizationWorkflow.desentenciseAndResentencise(
                             sentsToDiscard: allSentences,
                             myConfig: myConfig
                         )
@@ -231,7 +254,7 @@ struct PipelineSettingsView: View {
                             currentStatus = "retokenizing"
                             print("Retokenising")
                         }
-                        allSentences = try retokenisationEncapsulator(
+                        allSentences = try SentencizationWorkflow.retokenisationEncapsulator(
                             myConfig: myConfig,
                             pipeline: pipeline,
                             taggingInProgress: taggingInProgress
@@ -270,11 +293,10 @@ struct PipelineSettingsView: View {
                         switch sentResult.resultType {
                         case .success:
                             myConfig.outputData.outSents.append(
-                                postprocessSentence(sentence: sentence, parsedTokens: sentResult.decoded , myConfig: myConfig)
+                                PostPipelineWorkflow.postprocessSentence(sentence: sentence, parsedTokens: sentResult.decoded , myConfig: myConfig)
                             )
                         default:
-                            myConfig.outputData.outErrors.append(
-                            postprocessErrorSent(sentResult: sentResult))
+                            myConfig.outputData.outErrors.append(PostPipelineWorkflow.postprocessErrorSent(sentResult: sentResult))
                             print("error handled")
                         }
                         
@@ -287,8 +309,8 @@ struct PipelineSettingsView: View {
                         }
                     }
 
-                    try dumpDetailsForRunExplicit(myConfig: myConfig, taggingInProgress: $taggingInProgress)
-                    runOutput = makeTidyRunOutput(myConfig: myConfig)
+                    try PrintWorkflow.dumpDetailsForRunExplicit(myConfig: myConfig, taggingInProgress: $taggingInProgress)
+                    runOutput = PostPipelineWorkflow.makeTidyRunOutput(myConfig: myConfig)
                     
                     try await MainActor.run {
                         taggingInProgress.wrappedValue = false

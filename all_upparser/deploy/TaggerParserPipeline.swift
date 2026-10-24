@@ -2,63 +2,59 @@
 import CoreML
 import Foundation
 import NaturalLanguage
+import Combine
 
-// MARK: - Pipeline
-//TODO: add choice of lemmatisation method - rule/hybrid for cnnbilstm :: choose primary lemmas as col2, option is sec lemma as col8
-///     :add option of multiple lemmas predicted on same run, send extra to spec column
-final class CNNBiLSTMPipeline: PipelineHelper {
+
+final class CNNBiLSTMPipeline: PipelineHelper, ObservableObject {
+    // the actual pipeline for processing, with no optionals
+    
+    // heavy properties as constants, non-optional, as passed from loader and passed guard
+    let tokenizerModel: MLModel
+    let taggerModel: MLModel
+    let lemmatizerRunner: LemmatizerRunner
+    let tokenizerCharVocab: Vocab
+    let wordVocab: Vocab
+    let taggerCharVocab: Vocab
+    let uposVocab: Vocab
+    let featsVocab: Vocab
+    let deprelVocab: Vocab
+    let lemmaRuleVocab: Vocab
+
+    // lightweight properties
     static let rootToken = "<root>"
     static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
-    let description: String
+    let description = "I'm a CNN-BiLSTM pipeline"
     let maxWords: Int = 256
-    private let tokenizerModel: MLModel
-    private let taggerModel: MLModel
-    private let lemmatizerRunner: LemmatizerRunner
-    
-    private let tokenizerCharVocab: Vocab
-    private let wordVocab: Vocab
-    private let taggerCharVocab: Vocab
-    private let uposVocab: Vocab
-    //private let xposVocab: Vocab
-    private let featsVocab: Vocab
-    private let deprelVocab: Vocab
-    private let lemmaRuleVocab: Vocab
-    // computed property of class to read from runExplicit every time a method runs
+
     private var runExplicit: Bool {
             UserDefaults.standard.bool(forKey: "runExplicit")
         }
-    init(myConfig: TaggerConfig) throws {
-        //    init(languageCode: String, treebank: String) throws {
-        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
-        let treebank = myConfig.parsingConfig.selectedTreebank.short
-        description = "I'm a CNN-BiLSTM pipeline"
-        switch myConfig.parsingConfig.modelArchitecture {
-        case .cnnBiLSTM:
-            tokenizerModel = try Self.loadMlpackage(named: "\(languageCode)_tokenizer_\(treebank)", myConfig: myConfig)
-            taggerModel = try Self.loadMlpackage(named: "\(languageCode)_tagger_parser_\(treebank)", myConfig: myConfig)
-            
-            tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
-            wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
-            taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
-            uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
-            //xposVocab = try Vocab.load(named: "\(languageCode)_xpos_vocab\(treebank)")
-            featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
-            deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
-            lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab_\(treebank)")
-            self.lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
-        default :
-            throw PipelineError.architectureConflict
-        }
-    }
-    // prefer static func on UDPipelineBERTBased ->> loadMlpackage
-//    private static func loadModel(named name: String) throws -> MLModel {
-//        // Xcode compiles a bundled .mlpackage into a .mlmodelc at build
-//        guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else {
-//            throw PipelineError.modelLoadFailed(name)
-//        }
-//        return try MLModel(contentsOf: url)
-//    }
 
+    init(
+        tokenizerModel: MLModel,
+        taggerModel: MLModel,
+        lemmatizerRunner: LemmatizerRunner,
+        tokenizerCharVocab: Vocab,
+        wordVocab: Vocab,
+        taggerCharVocab: Vocab,
+        uposVocab: Vocab,
+        featsVocab: Vocab,
+        deprelVocab: Vocab,
+        lemmaRuleVocab: Vocab
+    ) {
+        self.tokenizerModel = tokenizerModel
+        self.taggerModel = taggerModel
+        self.lemmatizerRunner = lemmatizerRunner
+        self.tokenizerCharVocab = tokenizerCharVocab
+        self.wordVocab = wordVocab
+        self.taggerCharVocab = taggerCharVocab
+        self.uposVocab = uposVocab
+        self.featsVocab = featsVocab
+        self.deprelVocab = deprelVocab
+        self.lemmaRuleVocab = lemmaRuleVocab
+    }
+    
+    
     // MARK: Step 1 -- character-level tokenizer / sentence segmenter
     /// Run raw text through tokenizer model, returning 1x [HashableSent] per sent, numbered 1->
     func tokenize(_ text: String) throws -> [HashableSentence] {
@@ -107,7 +103,6 @@ final class CNNBiLSTMPipeline: PipelineHelper {
     }
 
     // MARK: Step 2 -- run the tagger-parser
-
     private func runTaggerParserModel(on sentence: HashableSentence) throws -> TaggerRawOutput {
         let tokens = sentence.tokens
         let seqLen = tokens.count + 1 // +1 for the synthetic ROOT at index 0
@@ -165,7 +160,7 @@ final class CNNBiLSTMPipeline: PipelineHelper {
         }
 //        print("Report267::")
 //        print("Sentence == \(sentence)")
-//        
+//
 //        print("seqlen == \(seqLen)")
 //        for item in [uposLogits, xposLogits, featsLogits, ruleLemmaLogits,  arcLogits, labelLogits]{
 //            print("\(item) :: , \(item.count)")
@@ -212,7 +207,7 @@ final class CNNBiLSTMPipeline: PipelineHelper {
         }
     }
 
-    // decode rule lemmas moved to UDDecoding extension via protocol 
+    // decode rule lemmas moved to UDDecoding extension via protocol
     private func getLemmas(_ raw: TaggerRawOutput) -> [String] {
         // set to true for dev test
         let dev = false
@@ -322,60 +317,6 @@ final class CNNBiLSTMPipeline: PipelineHelper {
 
         }
     }
-    
-    //    func runOnSentenceOrig(_ sentence: HashableSentence,  myConfig: TaggerConfig) throws -> [Token] {
-//        let level = myConfig.parsingConfig.maxPipelineStep.rawValue
-//        guard (1...5).contains(level) else {
-//            throw PipelineError.invalidLevel(level)
-//        }
-//
-//        let n = sentence.tokens.count
-//        
-//        var uposTags = Array(repeating: "_", count: n)
-//        var featsTags = Array(repeating: "_", count: n)
-//        var heads = Array(repeating: "_", count: n)
-//        var deprels = Array(repeating: "_", count: n)
-//        var primaryLemmas = Array(repeating: "_", count: n)
-//        var secondaryLemmas = Array(repeating: "_", count: n)
-//
-//        if level >= 2 {
-//            let raw = try runTaggerParserModel(on: sentence)
-//            uposTags = decodeUPOS(raw)
-//            if level >= 3 {
-//
-//                switch myConfig.parsingConfig.priLemSource {
-//                case .hybrid:
-//                    primaryLemmas = getLemmas(raw)
-//                    if myConfig.parsingConfig.getSecLems{
-//                        secondaryLemmas = decodeRuleLemmas(raw)
-//                    }
-//                case .rule:
-//                    primaryLemmas = decodeRuleLemmas(raw)
-//                    if myConfig.parsingConfig.getSecLems{
-//                        secondaryLemmas = getLemmas(raw)
-//                    }
-//                }
-//            }
-//            if level >= 4 {
-//                featsTags = decodeFeats(raw)
-//            }
-//            if level >= 5 {
-//                let deps = decodeDependencies(raw)
-//                heads = deps.map { String($0.head) }
-//                deprels = deps.map { $0.deprel }
-//            }
-//        }
-//
-//        return (0..<n).map { i in
-//            Token(
-//                tokid: i + 1, form: sentence.tokens[i], lemma: primaryLemmas[i],
-//                upos: uposTags[i], xpos: "_", feats: featsTags[i],
-//                head: heads[i], deprel: deprels[i], col8: myConfig.parsingConfig.getSecLems ? secondaryLemmas[i] : "_", col9: "_", subTokens: []
-//            )
-//        }
-//    }
-
-
 
     func makeIntArray(_ values: [Int32], shape: [NSNumber]) throws -> MLMultiArray {
         let arr = try MLMultiArray(shape: shape, dataType: .int32)
@@ -413,3 +354,146 @@ final class CNNBiLSTMPipeline: PipelineHelper {
         return best
     }
 }
+
+
+// this is the loader - not designed to persist or be used for prediction
+final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
+    // 1. Published properties for UI progress meter to track
+    @Published var loadingProgress: Double = 0.0
+    @Published var statusMessage: String = "Waiting to load..."
+    @Published var isReady: Bool = false
+    
+    // 2. The heavy properties are now optional 'var's, populated during async loading
+    var tokenizerModel: MLModel?
+    var taggerModel: MLModel?
+    var lemmatizerRunner: LemmatizerRunner?
+    
+    var tokenizerCharVocab: Vocab?
+    var wordVocab: Vocab?
+    var taggerCharVocab: Vocab?
+    var uposVocab: Vocab?
+    var featsVocab: Vocab?
+    var deprelVocab: Vocab?
+    var lemmaRuleVocab: Vocab?
+    
+    // lightweight properties
+    static let rootToken = "<root>"
+    static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
+    let maxWords: Int = 256
+    private var runExplicit: Bool {
+        UserDefaults.standard.bool(forKey: "runExplicit")
+    }
+    
+    // 3. LIGHTWEIGHT INIT: No heavy lifting or throwing here anymore!
+    init() {
+        // Just assign quick variables or configurations if needed
+    }
+    func convertToRealPipeline(
+        tokenizerModel: MLModel,
+        taggerModel: MLModel,
+        lemmatizerRunner: LemmatizerRunner,
+        tokenizerCharVocab: Vocab,
+        wordVocab: Vocab,
+        taggerCharVocab: Vocab,
+        uposVocab: Vocab,
+        featsVocab: Vocab,
+        deprelVocab: Vocab,
+        lemmaRuleVocab: Vocab
+    ) throws -> CNNBiLSTMPipeline {
+        print("calling converter")
+        return CNNBiLSTMPipeline(
+            tokenizerModel: tokenizerModel,
+            taggerModel: taggerModel,
+            lemmatizerRunner: lemmatizerRunner,
+            tokenizerCharVocab: tokenizerCharVocab,
+            wordVocab: wordVocab,
+            taggerCharVocab: taggerCharVocab,
+            uposVocab: uposVocab,
+            featsVocab: featsVocab,
+            deprelVocab: deprelVocab,
+            lemmaRuleVocab: lemmaRuleVocab
+        )
+    }
+    
+    func loadCNNBiLSTMpipe(myConfig: TaggerConfig) async throws -> CNNBiLSTMPipeline {
+        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
+        let treebank = myConfig.parsingConfig.selectedTreebank.short
+        
+        // tokenizer model
+        await MainActor.run {
+            self.statusMessage = "Loading Tokenizer model"
+            self.loadingProgress = 0.1
+        }
+        // This can throw, which is fine because the function is marked 'throws'
+        tokenizerModel = try Self.loadMlpackage(named: "\(languageCode)_tokenizer_\(treebank)", myConfig: myConfig)
+        
+        // tagger model
+        await MainActor.run {
+            self.statusMessage = "Loading tagger"
+            self.loadingProgress = 0.1
+        }
+        taggerModel = try Self.loadMlpackage(named: "\(languageCode)_tagger_parser_\(treebank)", myConfig: myConfig)
+        // tokcharVocab
+        await MainActor.run{
+            self.statusMessage = "Loading vocabs"
+            self.loadingProgress = 0.1
+        }
+        tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
+        
+        await MainActor.run{
+            self.statusMessage = "Loading vocabs"
+            self.loadingProgress = 0.1
+        }
+        wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
+        await MainActor.run{
+            self.statusMessage = "Loading vocabs"
+            self.loadingProgress = 0.1
+        }
+        taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
+        await MainActor.run{
+            self.statusMessage = "Loading vocabs"
+            self.loadingProgress = 0.1
+        }
+        uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
+        await MainActor.run{
+            self.statusMessage = "Loading vocabs"
+            self.loadingProgress = 0.1
+        }
+        featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
+        await MainActor.run{
+            self.statusMessage = "Loading vocabs"
+            self.loadingProgress = 0.1
+        }
+        deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
+        await MainActor.run{
+            self.statusMessage = "Loading vocabs"
+            self.loadingProgress = 0.1
+        }
+        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab_\(treebank)")
+        await MainActor.run{
+            self.statusMessage = "Loading lemmatizer"
+            self.loadingProgress = 0.1
+        }
+        lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
+        print("seems to have succeeeded")
+        
+        // Step 3: Assign to properties and mark ready
+        try await MainActor.run {
+            self.loadingProgress = 100
+        }
+        guard let tokenizerModel = tokenizerModel, let taggerModel = taggerModel, let lemmatizerRunner = lemmatizerRunner, let tokenizerCharVocab = tokenizerCharVocab, let wordVocab = wordVocab, let taggerCharVocab = taggerCharVocab, let uposVocab = uposVocab, let featsVocab = featsVocab, let deprelVocab = deprelVocab, let lemmaRuleVocab = lemmaRuleVocab else { throw PipelineError.notReadyToSendToRunner }
+        return try convertToRealPipeline(
+            tokenizerModel: tokenizerModel,
+            taggerModel: taggerModel,
+            lemmatizerRunner: lemmatizerRunner,
+            tokenizerCharVocab: tokenizerCharVocab,
+            wordVocab: wordVocab,
+            taggerCharVocab: taggerCharVocab,
+            uposVocab: uposVocab,
+            featsVocab: featsVocab,
+            deprelVocab: deprelVocab,
+            lemmaRuleVocab: lemmaRuleVocab
+        )
+    }
+}
+
