@@ -14,8 +14,6 @@ struct ConstrainedPickerForLang: View{
         ConfigurationRules.availableLanguages(for: myConfig.parsingConfig.modelArchitecture)
             .sorted {$0.rawValue < $1.rawValue}
     }
-
-    
     var body: some View{
         Picker("Language", selection: $myConfig.parsingConfig.selectedLanguage){
             ForEach(availableLanguages){lang in
@@ -34,7 +32,7 @@ struct ConstrainedPickerForLang: View{
         }
         .onChange(of: myConfig.inputConfig.selectedInputFile){
             if myConfig.inputConfig.detectLanguage {
-                if let detectedLang = detectLangInFilename(inputURL:myConfig.inputConfig.selectedInputFile){
+                if let detectedLang = FileIngestionWorkflow.detectLangInFilename(inputURL:myConfig.inputConfig.selectedInputFile){
                     myConfig.parsingConfig.selectedLanguage = detectedLang
                 }
             }
@@ -50,7 +48,6 @@ struct ConstrainedPickerForTB: View{
             for: myConfig.parsingConfig.modelArchitecture,
             language: myConfig.parsingConfig.selectedLanguage
         )
-        .sorted {$0.rawValue < $1.rawValue}
     }
     
     var body: some View{

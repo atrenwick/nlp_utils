@@ -8,42 +8,10 @@
 import Foundation
 import CoreML
 
-// pipelineHelper protocol, extension to hold code relevant to BiLSTM and BERT-based pipelines
-//protocol NLPPipeline{
-//    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
-//    var description: String { get }
-//    var maxWords: Int { get }
-//}
-//
-//extension NLPPipeline{
-//    func tokenize(_ naughtyString: String) -> HashableSentence{
-//        let input = naughtyString
-//        let intermediate = input.split(separator: " ")
-//        let output = intermediate.map {String($0)}
-//        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
-//        print("this should't have been callable…")
-//        return outputSent
-//    }
-//
-//}
-
-protocol PipelineHelper {
-//    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
-    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) -> OnSentResult
-    var description: String { get }
-    var maxWords: Int { get }
+protocol PipelineLoader {
 }
 
-extension PipelineHelper {
-    func tokenize(_ naughtyString: String) -> HashableSentence{
-        let input = naughtyString
-        let intermediate = input.split(separator: " ")
-        let output = intermediate.map {String($0)}
-        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
-        print("this should't have been callable…")
-        return outputSent
-    }
-
+extension PipelineLoader{
     // loading
     static func loadMlpackage(named name: String, myConfig: TaggerConfig) throws -> MLModel{
         guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else {
@@ -62,10 +30,24 @@ extension PipelineHelper {
             throw PipelineError.packageLoadFailed("failed to load model \(name)")
         }
     }
+}
 
+protocol PipelineHelper {
+//    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
+    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) -> OnSentResult
+    var description: String { get }
+    var maxWords: Int { get }
+}
 
-    // MARK: Lemma rules
-
+extension PipelineHelper {
+    func tokenize(_ naughtyString: String) -> HashableSentence{
+        let input = naughtyString
+        let intermediate = input.split(separator: " ")
+        let output = intermediate.map {String($0)}
+        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
+        print("this should't have been callable…")
+        return outputSent
+    }
     // MARK: - Lemma edit-script : functional but not superb lemmatisation
     func applyLemmaRule(form: String, rule: String) -> String {
         var result: String
@@ -88,7 +70,6 @@ extension PipelineHelper {
         }
         return result
     }
-
 
     // MARK: Dependency parsing
     /// Best tree (Chu-Liu-Edmonds), then the best label for each arc.

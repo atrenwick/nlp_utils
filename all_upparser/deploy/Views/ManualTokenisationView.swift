@@ -16,7 +16,6 @@ struct PrebuiltSentsView: View {
                     .font(.subheadline)
                     .foregroundColor(.primary)
             }
-
         }
     }
 }
@@ -26,11 +25,11 @@ struct ManualTokenisationView: View {
     @Binding var myConfig: TaggerConfig
     @Binding var builtSents: [BuiltSentHolder]
     @Binding var tempTokens: [TempToken]
-
+    
     @State var getsentNum: Int = 0
     @State private var newSentence: String = ""
     @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, parce que Bonn n'était assez bonne pour tous", "Alors que Paris est une grande ville, elle est plus petite que Tokyo", "Li chevaliers combattent les dragons."]
-
+    
     @FocusState var isFocused
     @State var alertMessage: String?
     
@@ -38,7 +37,7 @@ struct ManualTokenisationView: View {
     
     var body: some View {
         NavigationStack{
-                
+            
             HStack{
                 Spacer()
                 NavigationLink {
@@ -47,30 +46,10 @@ struct ManualTokenisationView: View {
                     Text("-> Prebuilt sents")
                 }.buttonStyle(.borderedProminent)
             }
-
+            
             VStack(alignment: .leading, spacing: 16) {
+                TextField("Add exciting sentence to tokenise", text: $newSentence).textFieldStyle(.roundedBorder)
                 HStack{
-                    TextField("Add exciting sentence to tokenise", text: $newSentence).textFieldStyle(.roundedBorder)
-                }
-                //MARK: pickers for language, tokenisation method, view
-//                HStack{
-//                    Picker("Language", selection: $myConfig.parsingConfig.selectedLanguage) {
-//                        ForEach(Language.allCases) { mode in
-//                            Text(mode.rawValue).tag(mode)
-//                        }
-//                    }
-//                    .pickerStyle(.segmented)
-//                    .tint(.blue)
-//                }
-                HStack{
-//                    Button("1. Add"){
-//                        if !newSentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty{
-//                            testSentences.append(newSentence)
-//                            newSentence = ""
-//                        }
-//                    }
-//                    .buttonStyle(.borderedProminent)
-//                    Spacer()
                     Button {
                         let thisSentence: String
                         if newSentence.count == 0 {
@@ -79,47 +58,18 @@ struct ManualTokenisationView: View {
                             thisSentence = newSentence
                         }
                         do {
-                            let toksAsStrings = try applyNaiveTokenisation(language: myConfig.parsingConfig.selectedLanguage, myString: thisSentence)
+                            let toksAsStrings = try TokenisationWorkflow.applyNaiveTokenisation(language: myConfig.parsingConfig.selectedLanguage, myString: thisSentence)
                             tempTokens = toksAsStrings.map {$0.asTempToken}
                         } catch {
                             PipelineError.retokenisationError
                             // what's this catch doing………
                         }
-                        
                     } label: {
                         Text("1. Tokenise")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.indigo)
-//                    Spacer()
-//                    Button {
-//                        if (0..<testSentences.count-1).contains(getsentNum - 1){
-//                            getsentNum -= 1
-//                        } else {
-//                            getsentNum = testSentences.count - 1
-//                        }
-//                    } label: {
-//                        HStack{
-//                            Text(String("-"))
-//                        }
-//                    }
-//                    .buttonStyle(.borderedProminent)
-//                    .tint(.cyan)
-//                    Text(String(getsentNum))
-//                    Button {
-//                        if (0..<testSentences.count-1).contains(getsentNum + 1){
-//                            getsentNum += 1
-//                        } else {
-//                            getsentNum = 0
-//                        }
-//                    } label: {
-//                        HStack{
-//                            Text(String("+"))
-//                        }
-//                    }
-//                    .buttonStyle(.borderedProminent)
-//                    .tint(.pink)
-//                    
+                    
                     Spacer()
                     Button {
                         do {

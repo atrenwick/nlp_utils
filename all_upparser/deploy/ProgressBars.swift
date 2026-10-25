@@ -116,8 +116,6 @@ struct RunProgressButton: View {
             .font(.headline)
             .frame(maxWidth: .infinity)
             .padding()
-            // Use background alignment so the fill sits underneath the text/icon
-            // and scales across the entire button area.
             .background(alignment: .leading)  {
                 GeometryReader { geometry in
                     let fraction = total > 0 ? CGFloat(processed) / CGFloat(total) : 0
@@ -130,30 +128,3 @@ struct RunProgressButton: View {
             .clipShape(Capsule())
         }
 }
-// button fill needs ot be faster, smoother, button filled needs ot be higher top to bottom
-//    .padding()
-//            .frame(maxWidth: .infinity)
-//            .background(alignment: .leading) {
-//                let fraction = totalCount > 0 ? CGFloat(processedCount) / CGFloat(totalCount) : 0
-//                
-//                Rectangle()
-//                    .fill(Color.accentColor.opacity(0.3))
-//                    // 1. Span full width initially
-//                    .frame(maxWidth: .infinity)
-//                    // 2. Scale it horizontally from the left edge (0 to 1)
-//                    .scaleEffect(x: max(0, min(fraction, 1.0)), y: 1.0, anchor: .leading)
-//                    // 3. Smooth animation transition
-//                    .animation(.easeInOut(duration: 0.15), value: processedCount)
-//            }
-//            .clipShape(Capsule())
-//    .frame(maxWidth: .infinity)
-//            .background(alignment: .leading) {
-//                // Use the native, highly optimized ProgressView
-//                ProgressView(
-//                    value: Double(max(0, processedCount)),
-//                    total: Double(max(1, totalCount))
-//                )
-//                .tint(Color.accentColor.opacity(0.3)) // Adjust color and opacity of the fill
-//                .scaleEffect(x: 1.0, y: 3.0, anchor: .center) // Stretches it vertically to fill the button height nicely
-//            }
-//            .clipShape(Capsule())

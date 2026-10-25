@@ -21,10 +21,7 @@ struct SetDefaultsView: View {
     @AppStorage("selectedLanguageDefault") var selectedLanguageDefault: Language = .FR
     @AppStorage("selectedTreebankDefault") var selectedTreebankDefault: Language.Treebank = .frTB3
     @AppStorage("selectedArchitectureDefault") var selectedArchitectureDefault: ModelArchitecture = .cnnBiLSTM
-
     @AppStorage("bertlikeTokMethodFailoverDefault") var bertlikeTokMethodFailoverDefault: TokenizingMethod = .nltokeniser
-
-
     
     @AppStorage("tokenizingMethodDefault") var tokenizingMethodDefault: TokenizingMethod = .nltokeniser
     @AppStorage("sentencizingMethodDefault")  var sentencizingMethodDefault: SentencizingMethod = .nlSentencizer
@@ -39,7 +36,6 @@ struct SetDefaultsView: View {
     @AppStorage("priLemSourceDefault") var priLemSourceDefault: LemmaSource = .hybrid
     @AppStorage("secLemSourceDefault") var secLemSourceDefault: LemmaSource = .rule
     @AppStorage("getSecLemsDefault") var getSecLemsDefault: Bool = false
-
 
     //export
     @AppStorage("xmlAuthorDefault")  var xmlAuthorDefault: String = "XML Author"

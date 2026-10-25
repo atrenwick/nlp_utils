@@ -14,20 +14,20 @@ struct BuiltSentHolder: Identifiable, Hashable{
     
     func toHashableSent(tempToks: [TempToken]) -> HashableSentence? {
         guard tempToks.count > 0 else {return nil }
-        return makeHashableSentFromTestToks(tempTokens: tempToks)
+        
+        return tempToks.makeHashableSentFromTestToks()
     }
     
     func toShowString(tempToks: [TempToken])-> AttributedString {
         guard tempToks.count > 0 else {return "error1" }
-        if let hashableSent = makeHashableSentFromTestToks(tempTokens: tempToks){
-            return markupTokenisationInSent(hashableSent: hashableSent)
+        if let hashableSent = tempToks.makeHashableSentFromTestToks(){
+            return TokenisationWorkflow.markupTokenisationInSent(hashableSent: hashableSent)
         }
         else {return "error2"}
     }
 }
 
 struct ConfigurationRules {
-    
     // Define which languages are available per architecture
     static func availableLanguages(for architecture: ModelArchitecture) -> [Language] {
         switch architecture {
@@ -139,9 +139,8 @@ struct HashableSentence: Hashable {
 
 struct LabelVocabsForBERTlike {
 // MARK: - Label vocabularies for BERT derived models :: 4x vocabs with loader
-/// The  vocabularies that turn output indices back into labels. They must come from
-/// the same training run as the model (train_bert.py writes them next to it); 
-/// BiLSTM vocabularies number the labels differently.
+/// The  vocabularies that turn output indices back into labels, from same training as model
+/// these are not the same as for BiLSTM models
     let upos: Vocab
     let feats: Vocab
     let deprel: Vocab
@@ -247,7 +246,6 @@ struct LogitReaderForBERTlike {
         }
     }
 
-
     /// IEEE half -> Float by bit manipulation, so no Float16 type is needed (it isn't
     /// available when building for Intel simulators).
     private static func float(fromHalfBits h: UInt16) -> Float {
@@ -282,8 +280,6 @@ struct OutputError: Identifiable {
     let errorType: OnSentResultType
     
 }
-
-
 
 struct RegexLangPatternToLangMap: Identifiable{
     var id = UUID()
@@ -573,7 +569,6 @@ struct Sentence : Identifiable, Codable {
     }
 }
 
-
 struct TaggerConfig{
     // MARK: vars to bring in substructs
     var id = UUID()
@@ -620,8 +615,9 @@ struct TaggerConfig{
         var secLemSource: LemmaSource
         var getSecLems: Bool
         var runExplicit: Bool
-
-        
+        var loadingStatusMessage: String
+        var loadingProgress: Double
+        var loadingComplete: Bool
         // need to add = nil in init of it's to truly allow no parameters to be specified
         init(
             selectedArchitecture: ModelArchitecture? = nil,
@@ -638,7 +634,10 @@ struct TaggerConfig{
             priLemSource: LemmaSource? = nil,
             secLemSource: LemmaSource? = nil,
             getSecLems: Bool? = nil,
-            runExplicit: Bool? = nil
+            runExplicit: Bool? = nil,
+            loadingStatusMessage: String? = nil,
+            loadingProgress: Double? = nil,
+            loadingComplete: Bool? = nil
         ){
             self.selectedArchitecture = TaggerConfig.resolveRepresentable(passed: selectedArchitecture, key: "modelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
             self.selectedLanguage = TaggerConfig.resolveRepresentable(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
@@ -655,6 +654,10 @@ struct TaggerConfig{
             self.secLemSource = TaggerConfig.resolveRepresentable(passed: secLemSource, key: "secLemSourceDefault", fallback: .rule )
             self.getSecLems = TaggerConfig.resolveBool(passed: getSecLems, key: "getSecLemsDefault")
             self.runExplicit = TaggerConfig.resolveBool(passed: runExplicit, key: "runExplicifDefault")
+            self.loadingStatusMessage = ""
+            self.loadingProgress  = 0.0
+            self.loadingComplete = false
+
         }
     }
     struct ExportConfig{
@@ -676,7 +679,7 @@ struct TaggerConfig{
             includeConllSentText: Bool? = nil,
             getsubtokens: Bool? = nil
         ) {
-            self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileName")
+            self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileName") == "" ? makeFilename() : TaggerConfig.resolveString(passed: fileName, key: "fileName")
             self.targetFolderURL = targetFolderURL
             ?? URL(string: UserDefaults.standard.string(forKey: "outputDirDefault") ?? "")
             ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
@@ -698,6 +701,9 @@ struct TaggerConfig{
         var processedCount: Int
         var totalCount: Int
         var hasStarted: Bool
+        var loadTotalCount: Int
+        var loadedCount: Int
+        var loadingComplete: Bool
         init(
             appleProgress: Progress? = nil,
             progressBarStyle: ProgressBarStyle? = nil,
@@ -707,6 +713,9 @@ struct TaggerConfig{
             processedCount: Int? = nil,
             totalCount: Int? = nil,
             hasStarted: Bool? = nil,
+            loadTotalCount: Int? = nil,
+            loadedCount: Int? = nil,
+            loadingComplete: Bool? = nil
         ){
             self.appleProgress = Progress(totalUnitCount: 1)
             self.progressBarStyle = TaggerConfig.resolveRepresentable(passed: progressBarStyle, key: "progressBarStyleDefault", fallback: .apple)
@@ -716,6 +725,9 @@ struct TaggerConfig{
             self.processedCount = 0
             self.totalCount = 0
             self.hasStarted = false
+            self.loadTotalCount = 0
+            self.loadedCount = 0
+            self.loadingComplete = false
         }
         
         mutating func reset(){
@@ -726,6 +738,9 @@ struct TaggerConfig{
             self.processedCount = 0
             self.totalCount = 0
             self.hasStarted = false
+            self.loadTotalCount = 0
+            self.loadedCount = 0
+            self.loadingComplete = false
         }
     }
     //    // sentences ::
@@ -752,35 +767,14 @@ struct TaggerConfig{
     }
     
     struct OutputData{
-        var topLevelOutputList: [RunOutput]
-        var outputString: String
+        var topLevelOutputList: [RunOutput] = []
+        var outputString: String = ""
         var runOutput: RunOutput?
         var exportContent: String = ""
-        var safeHeaderAttribs: XmlHeaderAttribs
-        var outSents: [Sentence]
-        var outErrors: [OutputError]
+        var safeHeaderAttribs: XmlHeaderAttribs = XmlHeaderAttribs()
+        var outSents: [Sentence] = []
+        var outErrors: [OutputError] = []
         
-        init(
-            topLevelOutputList: [RunOutput]? = nil,
-            outputString: String? = nil,
-            runOutput: RunOutput? = nil,
-            builtSents: [BuiltSentHolder]? = nil,
-            sentsToRetokenise: [String]? = nil,
-            exportContent: String? = nil,
-            safeHeaderAttribs: XmlHeaderAttribs? = nil,
-            resentencizerOutputStrings: [String]? = nil,
-            outSents: [Sentence]? = nil,
-            outErrors: [OutputError]? = nil
-        )
-        {
-            self.topLevelOutputList = []
-            self.outputString = ""
-            self.runOutput = nil
-            self.exportContent = ""
-            self.safeHeaderAttribs = XmlHeaderAttribs()
-            self.outSents = []
-            self.outErrors = []
-        }
         mutating func reset(){
             self = Self() // reinit
         }
@@ -843,7 +837,6 @@ struct TaggerConfig{
         print("Running resetters")
         
     }
-    
 }
 
 struct TaggerRawOutput {
@@ -860,7 +853,6 @@ struct TaggerRawOutput {
     let arcLogits: MLMultiArray
     let labelLogits: MLMultiArray
 }
-
 
 // struct for manually tokenised, modified inputs, before conversion to Token
 struct TempToken: Identifiable, Hashable {
@@ -886,9 +878,6 @@ struct Token : Identifiable, Codable {
         [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8, col9].joined(separator: "\t")
     }
     
-//    var conllRaw: String{
-//        [String(tokid), form, lemma, upos, xpos, feats, head, deprel, "_","_"].joined(separator: "\t") //+ "\n"
-//    }
     var conllRaw: String{
         [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8,col9].joined(separator: "\t") //+ "\n"
     } // this includes NL parser outputs for col8,9, but the funct to make the ExportString doesn't call this prop.
@@ -968,6 +957,7 @@ struct XmlHeaderAttribs : Codable{
     var sourceFile: String
     var runID: String
     var maxPipelineStep: String
+    var modelArchitecture: String
     var runRetokeniser: String
     var tokenizingMethod: String
     var sentencizingMethod: String
@@ -980,21 +970,22 @@ struct XmlHeaderAttribs : Codable{
         sourceFile: String? = nil,
         runID: String? = nil,
         maxPipelineStep: String? = nil,
+        modelArchitecture: ModelArchitecture? = nil,
         runRetokeniser: String? = nil,
         tokenizingMethod: String? = nil,
         sentencizingMethod: String? = nil
     ) {
-        self.xmlTitle = "xmlTitle"
-        self.xmlAuthorName = "xmlAuthorName"
-        self.lang = "lang"
-        self.treebank = "treebank"
-        self.taggingDate = "taggingDate"
-        self.sourceFile = "sourceFile"
-        self.runID = "runID"
-        self.maxPipelineStep = "maxPipelineStep"
-        self.runRetokeniser = "runRetokeniser"
-        self.tokenizingMethod = "tokenizingMethod"
-        self.sentencizingMethod = "sentencizingMethod"
+        self.xmlTitle = xmlTitle ?? "xmlTitle"
+        self.xmlAuthorName = xmlAuthorName ?? "xmlAuthorName"
+        self.lang = lang ?? "lang"
+        self.treebank = treebank ?? "treebank"
+        self.taggingDate = taggingDate ?? "taggingDate"
+        self.sourceFile = sourceFile ?? "sourceFile"
+        self.runID = runID ?? "runID"
+        self.maxPipelineStep = maxPipelineStep ?? "maxPipelineStep"
+        self.modelArchitecture = modelArchitecture?.rawValue ?? "modelArchitecture"
+        self.runRetokeniser = runRetokeniser ?? "runRetokeniser"
+        self.tokenizingMethod = tokenizingMethod ?? "tokenizingMethod"
+        self.sentencizingMethod = sentencizingMethod ?? "sentencizingMethod"
     }
 }
-

@@ -106,70 +106,70 @@ import SwiftUI
 
 
 
-struct BERTPipeTestView: View{
-    @State var outputString: String = ""
-    let languageCode = "FR"
-    let treebank = "gsd"
-    let myConfig: TaggerConfig
-    @State private var pipeline: BERTlikePipeline?
-    @State var alertMessage: String?
-    var body: some View{
-        
-        HStack{
-            Button {
-                outputString = "pressed"//testInstBertPipe(languageCode: languageCode, treebank: treebank)
-            } label: {
-                Text("Test load")
-            }
-            .tint(.orange)
-            .buttonStyle(.borderedProminent)
-            .task(id: languageCode) {
-                pipeline = nil
-                do {
-                    pipeline = try await BERTlikePipeline.load(myConfig: myConfig, version: 2)
-                    alertMessage = "Success !"
-                } catch {
-                    alertMessage = error.localizedDescription
-                }
-            }
-            
-            Button {
-                outputString = "reset"
-            } label: {
-                Text("reset")
-            }
-            .tint(.blue)
-            .buttonStyle(.borderedProminent)
-        }
-        Text(outputString)
-    }
-    
-
-func testInstBertPipe(languageCode: String, treebank: String) -> String {
-        // test instantiation of pipeline class based on params chosen
-        var outputString: String = ""
-        
-        Task{
-            do {
-                let _ = try BERTlikePipeline(myConfig: myConfig, version: 2)
-                await MainActor.run {
-                    outputString = "Success"
-                    print(outputString)
-                }
-            } catch {
-                await MainActor.run {
-                    outputString = "Fail : \(error.localizedDescription)"
-                    print(outputString)
-                }
-            }
-        }
-        return outputString
-}
-}
-#Preview {
-    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
-    BERTPipeTestView(myConfig: myConfig)
-}
+//struct BERTPipeTestView: View{
+//    @State var outputString: String = ""
+//    let languageCode = "FR"
+//    let treebank = "gsd"
+//    let myConfig: TaggerConfig
+//    @State private var pipeline: BERTlikePipeline?
+//    @State var alertMessage: String?
+//    var body: some View{
+//        
+//        HStack{
+//            Button {
+//                outputString = "pressed"//testInstBertPipe(languageCode: languageCode, treebank: treebank)
+//            } label: {
+//                Text("Test load")
+//            }
+//            .tint(.orange)
+//            .buttonStyle(.borderedProminent)
+//            .task(id: languageCode) {
+//                pipeline = nil
+//                do {
+//                    pipeline = try await BERTlikePipeline.load(myConfig: myConfig, version: 2)
+//                    alertMessage = "Success !"
+//                } catch {
+//                    alertMessage = error.localizedDescription
+//                }
+//            }
+//            
+//            Button {
+//                outputString = "reset"
+//            } label: {
+//                Text("reset")
+//            }
+//            .tint(.blue)
+//            .buttonStyle(.borderedProminent)
+//        }
+//        Text(outputString)
+//    }
+//    
 //
+//func testInstBertPipe(languageCode: String, treebank: String) -> String {
+//        // test instantiation of pipeline class based on params chosen
+//        var outputString: String = ""
+//        
+//        Task{
+//            do {
+//                let _ = try BERTlikePipeline(myConfig: myConfig, version: 2)
+//                await MainActor.run {
+//                    outputString = "Success"
+//                    print(outputString)
+//                }
+//            } catch {
+//                await MainActor.run {
+//                    outputString = "Fail : \(error.localizedDescription)"
+//                    print(outputString)
+//                }
+//            }
+//        }
+//        return outputString
+////}
+////}
+//#Preview {
+//    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
+//    BERTPipeTestView(myConfig: myConfig)
+//}
+////
+////
 //
-
