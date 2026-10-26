@@ -14,8 +14,6 @@ struct ConstrainedPickerForLang: View{
         ConfigurationRules.availableLanguages(for: myConfig.parsingConfig.modelArchitecture)
             .sorted {$0.rawValue < $1.rawValue}
     }
-
-    
     var body: some View{
         Picker("Language", selection: $myConfig.parsingConfig.selectedLanguage){
             ForEach(availableLanguages){lang in
@@ -23,8 +21,13 @@ struct ConstrainedPickerForLang: View{
             }
         }
         .onChange(of: myConfig.parsingConfig.modelArchitecture) {
-            if let first = availableLanguages.first {
-                myConfig.parsingConfig.selectedLanguage = first
+            if !myConfig.parsingConfig.selectedLanguage.availableArchs.contains(myConfig.parsingConfig.modelArchitecture) || !myConfig.parsingConfig.selectedLanguage.availableTBs.contains(myConfig.parsingConfig.selectedTreebank){
+                if let first = availableLanguages.first {
+                    myConfig.parsingConfig.selectedLanguage = first
+                    if let firstTB = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
+                        myConfig.parsingConfig.selectedTreebank = firstTB
+                    }
+                }
             }
         }
         .onChange(of: myConfig.parsingConfig.selectedLanguage) {
@@ -34,7 +37,7 @@ struct ConstrainedPickerForLang: View{
         }
         .onChange(of: myConfig.inputConfig.selectedInputFile){
             if myConfig.inputConfig.detectLanguage {
-                if let detectedLang = detectLangInFilename(inputURL:myConfig.inputConfig.selectedInputFile){
+                if let detectedLang = FileIngestionWorkflow.detectLangInFilename(inputURL:myConfig.inputConfig.selectedInputFile){
                     myConfig.parsingConfig.selectedLanguage = detectedLang
                 }
             }
@@ -50,7 +53,6 @@ struct ConstrainedPickerForTB: View{
             for: myConfig.parsingConfig.modelArchitecture,
             language: myConfig.parsingConfig.selectedLanguage
         )
-        .sorted {$0.rawValue < $1.rawValue}
     }
     
     var body: some View{
@@ -60,8 +62,10 @@ struct ConstrainedPickerForTB: View{
             }
         }
         .onChange(of: myConfig.parsingConfig.selectedLanguage) {
-            if let first = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
-                myConfig.parsingConfig.selectedTreebank = first
+            if !myConfig.parsingConfig.selectedLanguage.availableTBs.contains(myConfig.parsingConfig.selectedTreebank){
+                if let first = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
+                    myConfig.parsingConfig.selectedTreebank = first
+                }
             }
         }
     }
@@ -153,5 +157,6 @@ struct DefaultPickerView<T: Hashable & CaseIterable & RawRepresentable>: View wh
         }
     }
 }
+
 
 

@@ -4,6 +4,7 @@
 //
 //  Created by Adam on 11/09/2026.
 //
+import SwiftUI
 
 struct RunErrorSummaryView: View{
     let myConfig: TaggerConfig
@@ -22,12 +23,10 @@ struct RunErrorSummaryView: View{
     var tokCoverage: String {
         if toksIn == 0 || totalOutputToks == 0 {
             return " ??? "
-
-        } else{
+        } else {
             let intermed = Double(totalOutputToks) / Double(toksIn)
             return String(format: "%.2f", (intermed * 100))
         }
-//        >> but this is currenrly run after the sent len guards
     }
     
     var body: some View{
@@ -51,11 +50,9 @@ struct RunErrorSummaryView: View{
         let tokChunk = item.sentence.tokens.prefix(5).joined(separator: " ")
         return "\(numStr): \(tokChunk)"
     }
-    
 }
 
 
-import SwiftUI
 // detail for each run == child
 struct RunOutputDetailView: View{
     @Environment(\.openURL) var openURL
@@ -109,12 +106,8 @@ struct RunOutputDetailView: View{
                             Text("Output files")
                         }
                     }
-                    
                     NavigationLink(destination: RunErrorSummaryView(myConfig: myConfig, toksIn: run.runData.tokCount)){
                         Text("Coverage :: \(myConfig.outputData.outErrors.count) errors")}
-                    
-                        
-                    
                     Text("Sentence count : \(run.runData.sents.count)")
                     Text("Tok count : \(run.runData.tokCount)")
                     Text("Language : \(run.runMetas.lang)")
@@ -209,7 +202,7 @@ struct RunOutputDetailView: View{
         additionalExportFormat: ExportFormat
     ) throws -> RunOutput {
         
-        let exportContent = makeExportContentFromMetas(run: run, additionalExportFormat: additionalExportFormat)
+        let exportContent = GeneralOutputMakingWorkflow.makeExportContentFromMetas(run: run, additionalExportFormat: additionalExportFormat)
         guard !exportContent.isEmpty else { throw PipelineError.makeExportContentError }
         
         let runData = RunData(
@@ -218,7 +211,7 @@ struct RunOutputDetailView: View{
             exportContent: exportContent
         )
 
-        let runMetas = saveFileToChosenLocation(myConfig: myConfig, exportContent: exportContent, runID: run.runID,)
+        let runMetas = WritingWorkflow.saveFileToChosenLocation(myConfig: myConfig, exportContent: exportContent, runID: run.runID,)
         let runOutput = RunOutput(runID: run.runID, runData: runData, runMetas: runMetas)
         return runOutput
     }
@@ -323,7 +316,6 @@ struct RunSelectorModal: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                
             }
             .onAppear {
                 loadRunSummaries()
@@ -362,4 +354,3 @@ struct RunSelectorModal: View {
         }
     }
 }
-

@@ -36,8 +36,6 @@ extension String {
     var asTempToken: TempToken {
             return TempToken(form: String(self))
         }
-    
-
 }
 
 //MARK: sequence extensions extensions
@@ -65,6 +63,25 @@ extension Sequence where Element == Token {
     }
     func makeSentenceXMLconll() -> String {
         return self.map { $0.conllRaw }.joined(separator: "\n")
+    }
+}
+
+// use collection as need to get .Count
+extension Collection where Element == TempToken {
+    
+    func makeHashableSentFromTestToks()-> HashableSentence?{
+        guard self.count > 0 else {return nil}
+        var keepTokens: [String] = []
+        for item in self {
+            if item.form != ""{
+                keepTokens.append(item.form)
+            }
+        }
+        let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens, conllMetas: [])
+        for x in returnObject.tokens{
+            print(x)
+        }
+        return returnObject
     }
 }
 
@@ -118,5 +135,3 @@ extension PipelineSettingsView {
         }
     }
 }
-
-

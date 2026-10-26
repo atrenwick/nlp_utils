@@ -28,7 +28,6 @@ struct ProcessorStepConfigViewSection: View {
             }
             Section("Sentencisation"){
                 Toggle("1. Resentencise", isOn: $myConfig.parsingConfig.runResentenciser)
-                
                 Group{
                     Picker("Sentencising method", selection: $myConfig.parsingConfig.sentencizingMethod) {
                         ForEach(SentencizingMethod.allCases.sorted {$0.rawValue < $1.rawValue} ){sentMethod in

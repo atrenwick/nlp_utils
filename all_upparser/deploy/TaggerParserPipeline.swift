@@ -359,9 +359,9 @@ final class CNNBiLSTMPipeline: PipelineHelper, ObservableObject {
 // this is the loader - not designed to persist or be used for prediction
 final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
     // 1. Published properties for UI progress meter to track
-    @Published var loadingProgress: Double = 0.0
+    @Published var loadingProgress: Double = min(1.0, 0.0)
     @Published var statusMessage: String = "Waiting to load..."
-    @Published var isReady: Bool = false
+    @Published var loadingComplete: Bool = false
     
     // 2. The heavy properties are now optional 'var's, populated during async loading
     var tokenizerModel: MLModel?
@@ -384,9 +384,8 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
         UserDefaults.standard.bool(forKey: "runExplicit")
     }
     
-    // 3. LIGHTWEIGHT INIT: No heavy lifting or throwing here anymore!
+    // 3. LIGHTWEIGHT INIT
     init() {
-        // Just assign quick variables or configurations if needed
     }
     func convertToRealPipeline(
         tokenizerModel: MLModel,
@@ -414,75 +413,63 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
             lemmaRuleVocab: lemmaRuleVocab
         )
     }
-    
-    func loadCNNBiLSTMpipe(myConfig: TaggerConfig) async throws -> CNNBiLSTMPipeline {
+    @concurrent
+    func loadCNNBiLSTMpipe(
+        myConfig: TaggerConfig,
+        onProgress: @MainActor @Sendable (Int, String) -> Void
+    ) async throws -> CNNBiLSTMPipeline {
         let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
-        let treebank = myConfig.parsingConfig.selectedTreebank.short
+        let treebank = await myConfig.parsingConfig.selectedTreebank.short
+        let myConfig: TaggerConfig = myConfig
+        let tokenizerModel: MLModel?
+        let taggerModel: MLModel?
+        let tokenizerCharVocab: Vocab?
+        let wordVocab: Vocab?
+        let taggerCharVocab: Vocab?
+        let uposVocab: Vocab?
+        let featsVocab: Vocab?
+        let deprelVocab: Vocab?
+        let lemmaRuleVocab: Vocab?
+        let lemmatizerRunner: LemmatizerRunner?
         
         // tokenizer model
-        await MainActor.run {
-            self.statusMessage = "Loading Tokenizer model"
-            self.loadingProgress = 0.1
-        }
-        // This can throw, which is fine because the function is marked 'throws'
-        tokenizerModel = try Self.loadMlpackage(named: "\(languageCode)_tokenizer_\(treebank)", myConfig: myConfig)
+        await onProgress(1, "Loading wordpiece tokenizer")
+        tokenizerModel =  try await Self.loadMlpackage(named: "\(languageCode)_tokenizer_\(treebank)", myConfig: myConfig)
         
         // tagger model
-        await MainActor.run {
-            self.statusMessage = "Loading tagger"
-            self.loadingProgress = 0.1
-        }
-        taggerModel = try Self.loadMlpackage(named: "\(languageCode)_tagger_parser_\(treebank)", myConfig: myConfig)
-        // tokcharVocab
-        await MainActor.run{
-            self.statusMessage = "Loading vocabs"
-            self.loadingProgress = 0.1
-        }
-        tokenizerCharVocab = try Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
-        
-        await MainActor.run{
-            self.statusMessage = "Loading vocabs"
-            self.loadingProgress = 0.1
-        }
-        wordVocab = try Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
-        await MainActor.run{
-            self.statusMessage = "Loading vocabs"
-            self.loadingProgress = 0.1
-        }
-        taggerCharVocab = try Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
-        await MainActor.run{
-            self.statusMessage = "Loading vocabs"
-            self.loadingProgress = 0.1
-        }
-        uposVocab = try Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
-        await MainActor.run{
-            self.statusMessage = "Loading vocabs"
-            self.loadingProgress = 0.1
-        }
-        featsVocab = try Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
-        await MainActor.run{
-            self.statusMessage = "Loading vocabs"
-            self.loadingProgress = 0.1
-        }
-        deprelVocab = try Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
-        await MainActor.run{
-            self.statusMessage = "Loading vocabs"
-            self.loadingProgress = 0.1
-        }
-        lemmaRuleVocab = try Vocab.load(named: "\(languageCode)_lemma_rule_vocab_\(treebank)")
-        await MainActor.run{
-            self.statusMessage = "Loading lemmatizer"
-            self.loadingProgress = 0.1
-        }
-        lemmatizerRunner = try LemmatizerRunner(languageCode: languageCode, treebank: treebank)
+        await onProgress(2, "Loading tagger")
+        taggerModel = try await Self.loadMlpackage(named: "\(languageCode)_tagger_parser_\(treebank)", myConfig: myConfig)
+
+        await onProgress(3, "Loading wordpiece vocab 1")
+        tokenizerCharVocab = try await Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
+
+        await onProgress(4, "Loading wordpiece vocab 2")
+        wordVocab = try await Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
+
+        await onProgress(5, "Loading wordpiece vocab 3")
+        taggerCharVocab = try await Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
+
+        await onProgress(6, "Loading wordpiece vocab 4")
+        uposVocab = try await Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
+
+        await onProgress(7, "Loading wordpiece vocab 4")
+        featsVocab = try await Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
+
+        await onProgress(8, "Loading wordpiece vocab 4")
+        deprelVocab = try await Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
+
+        await onProgress(9, "Loading lemmarule vocab")
+        lemmaRuleVocab = try await Vocab.load(named: "\(languageCode)_lemma_rule_vocab_\(treebank)")
+
+        await onProgress(10, "Loading neural lemmatizer")
+        lemmatizerRunner = try await LemmatizerRunner(languageCode: languageCode, treebank: treebank)
+
         print("seems to have succeeeded")
         
         // Step 3: Assign to properties and mark ready
-        try await MainActor.run {
-            self.loadingProgress = 100
-        }
+
         guard let tokenizerModel = tokenizerModel, let taggerModel = taggerModel, let lemmatizerRunner = lemmatizerRunner, let tokenizerCharVocab = tokenizerCharVocab, let wordVocab = wordVocab, let taggerCharVocab = taggerCharVocab, let uposVocab = uposVocab, let featsVocab = featsVocab, let deprelVocab = deprelVocab, let lemmaRuleVocab = lemmaRuleVocab else { throw PipelineError.notReadyToSendToRunner }
-        return try convertToRealPipeline(
+        return try await convertToRealPipeline(
             tokenizerModel: tokenizerModel,
             taggerModel: taggerModel,
             lemmatizerRunner: lemmatizerRunner,

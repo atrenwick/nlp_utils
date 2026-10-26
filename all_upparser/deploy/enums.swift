@@ -8,7 +8,6 @@
 import Foundation
 internal import UniformTypeIdentifiers
 
-
 enum ConllLineContent {
     case row(Token)
     case blank
@@ -97,7 +96,6 @@ enum Language: String, CaseIterable, Identifiable {
     
     var id: Self { self }
     
-    // Readable label for Language
     var displayName: String {
         switch self {
         case .EN: return "en"
@@ -118,7 +116,6 @@ enum Language: String, CaseIterable, Identifiable {
         case .FRO: return .froTB1
         case .FRM: return .frmTB1
         }
-        
     }
     
     // Nested enum for all available models
@@ -247,6 +244,7 @@ enum PipelineError: LocalizedError{
     case modelLoadFailed(Error)
     case noRunOutput
     case noSentencesLoaded
+    case notReadyToSendToRunner
     case outputFolderCreationError
     case packageLoadFailed(String)
     case parserCreationError(file: URL)
@@ -304,6 +302,8 @@ enum PipelineError: LocalizedError{
             return "Couldn't load the model: \(error.localizedDescription)"
         case .noRunOutput:
             return "No run output to return"
+        case .notReadyToSendToRunner:
+            return "Not ready to send to from loader class to runner class"
         case .noSentencesLoaded:
             return "No sentences found when switching on inputFileTYpe"
         case .outputFolderCreationError:
@@ -421,7 +421,7 @@ enum SentencizingMethod: String, Identifiable, CaseIterable, Codable {
         case .eosMark: return "EOS Mark"
         }
     }
-    }
+}
 
 enum TokenizingMethod : String, Identifiable, CaseIterable, Codable{
     var id: Self {self}

@@ -77,6 +77,7 @@ struct ExportConfigViewSection: View {
     @State private var isSelectingFolder: Bool = false
     @State private var isProcessing: Bool = false
     @Binding var myConfig: TaggerConfig
+
     var xmlSettingDisplayText: String{
         switch myConfig.exportConfig.selectedExportFormat {
         case .xml:
@@ -85,8 +86,6 @@ struct ExportConfigViewSection: View {
             return "XML-CoNLL settings"
         case .conll, .conllTxt, .conllTidy:
             return "CoNLL settings"
-        default:
-            return "Settings"
         }
     }
 
@@ -165,8 +164,6 @@ struct FileNameInputViewSection: View {
         // 1. Fallback to a default name if user left it blank
         let cleanName = myConfig.exportConfig.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = cleanName.isEmpty ? "Untitled" : cleanName
-        
-        // 2. Append the extension (e.g., .json or .txt)
         return folderURL
             .appendingPathComponent(finalName)
             .appendingPathExtension("json")
@@ -347,7 +344,7 @@ struct InputTypeEncapsulatorView: View{
                 myConfig.parsingConfig.runRetokeniser = false
             case .conll, .xml, .xmlConll:
                 if myConfig.inputConfig.detectLanguage {
-                    if let detectedLang = detectLangInFilename(inputURL: fileContainerModel.localSandboxFileURL) {
+                    if let detectedLang = FileIngestionWorkflow.detectLangInFilename(inputURL: fileContainerModel.localSandboxFileURL) {
                         myConfig.parsingConfig.selectedLanguage = detectedLang
                     }
                 }
@@ -355,7 +352,6 @@ struct InputTypeEncapsulatorView: View{
         }
     }
 }
-
 
 struct RunExplicitButtonView: View{
     @Binding var myConfig: TaggerConfig
@@ -365,7 +361,7 @@ struct RunExplicitButtonView: View{
         if myConfig.parsingConfig.runExplicit{
             HStack{
                 Button {
-                    outputString = testInstantiatePipeline(myConfig: myConfig)
+//                    outputString = testInstantiatePipeline(myConfig: myConfig)
                 } label: {
                     Text("Test load")
                 }
@@ -387,9 +383,7 @@ struct RunExplicitButtonView: View{
     }
 }
 
-
-
-struct TaggingProgressButtonView: View{
+struct TaggingProgressButton: View{
     let taggingInProgress: Bool
     let isPipelineReady: Bool
     let pipelineSummary: String
