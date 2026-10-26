@@ -21,8 +21,13 @@ struct ConstrainedPickerForLang: View{
             }
         }
         .onChange(of: myConfig.parsingConfig.modelArchitecture) {
-            if let first = availableLanguages.first {
-                myConfig.parsingConfig.selectedLanguage = first
+            if !myConfig.parsingConfig.selectedLanguage.availableArchs.contains(myConfig.parsingConfig.modelArchitecture) || !myConfig.parsingConfig.selectedLanguage.availableTBs.contains(myConfig.parsingConfig.selectedTreebank){
+                if let first = availableLanguages.first {
+                    myConfig.parsingConfig.selectedLanguage = first
+                    if let firstTB = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
+                        myConfig.parsingConfig.selectedTreebank = firstTB
+                    }
+                }
             }
         }
         .onChange(of: myConfig.parsingConfig.selectedLanguage) {
@@ -57,8 +62,10 @@ struct ConstrainedPickerForTB: View{
             }
         }
         .onChange(of: myConfig.parsingConfig.selectedLanguage) {
-            if let first = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
-                myConfig.parsingConfig.selectedTreebank = first
+            if !myConfig.parsingConfig.selectedLanguage.availableTBs.contains(myConfig.parsingConfig.selectedTreebank){
+                if let first = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
+                    myConfig.parsingConfig.selectedTreebank = first
+                }
             }
         }
     }
@@ -150,5 +157,6 @@ struct DefaultPickerView<T: Hashable & CaseIterable & RawRepresentable>: View wh
         }
     }
 }
+
 
 

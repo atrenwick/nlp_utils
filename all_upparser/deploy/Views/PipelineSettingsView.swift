@@ -103,7 +103,7 @@ struct PipelineSettingsView: View {
                         ProcessorStepConfigViewSection(myConfig: $myConfig)
                     }.accessibilityIdentifier("ProcessorStepLink")
                 }
-                // more sections::
+
                 ExportConfigViewSection(myConfig: $myConfig)
                 //#if debug
                 //                RunExplicitButtonView(myConfig: $myConfig)
@@ -270,17 +270,8 @@ struct PipelineSettingsView: View {
                     currentStatus = "Ready to tag"
                     
                     let sentResult = pipeline.runOnSentence(sentence, myConfig: myConfig)
-                    switch sentResult.resultType {
-                    case .success:
-                        myConfig.outputData.outSents.append(
-                            PostPipelineWorkflow.postprocessSentence(sentence: sentence, parsedTokens: sentResult.decoded, myConfig: myConfig)
-                        )
-                    default:
-                        myConfig.outputData.outErrors.append(PostPipelineWorkflow.postprocessErrorSent(sentResult: sentResult))
-                        print("error handled")
-                    }
-                    
-                    if myConfig.parsingConfig.runExplicit { print("awaitng mainactor line 237") }
+                    processSentsFromPipeline(sentResult: sentResult, myConfig: $myConfig )
+                                             
                     await MainActor.run {
                         myConfig.progressConfig.processedCount += 1
                         myConfig.progressConfig.appleProgress.completedUnitCount = Int64(myConfig.progressConfig.processedCount)
@@ -315,6 +306,21 @@ struct PipelineSettingsView: View {
         }
     }
 
+    func processSentsFromPipeline(sentResult: OnSentResult, myConfig: Binding<TaggerConfig>)   {
+        
+        switch sentResult.resultType {
+        case .success:
+            myConfig.wrappedValue.outputData.outSents.append(
+                PostPipelineWorkflow.postprocessSentence(sentence: sentResult.sentence, parsedTokens: sentResult.decoded, myConfig: myConfig.wrappedValue)
+            )
+        default:
+            myConfig.wrappedValue.outputData.outErrors.append(PostPipelineWorkflow.postprocessErrorSent(sentResult: sentResult))
+            print("error handled")
+        }
+        if myConfig.wrappedValue.parsingConfig.runExplicit { print("awaitng mainactor line 237") }
+    }
+
+    
     func callPipelineLoader(myConfig: TaggerConfig) async throws -> PipelineHelper{
         let pipeline: PipelineHelper
         var currentStatus: String = ""

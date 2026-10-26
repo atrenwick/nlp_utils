@@ -346,13 +346,13 @@ enum SentencizationWorkflow{
     //                                                  TXT parsing functions
     //----------------------------------------------------------------------------------------------------------------------------
     //----------------------------------------------------------------------------------------------------------------------------
-    //  1. blob to sents: sentencise based on custom regex Rules 					:: String -> [String] w regex
-    //  2. getSentencesWithNL: sentencise with inbuilt NLTokeniser					:: String -> [String] w nlSentencizer
+    //  1. blob to sents: sentencise based on custom regex Rules                     :: String -> [String] w regex
+    //  2. getSentencesWithNL: sentencise with inbuilt NLTokeniser                    :: String -> [String] w nlSentencizer
     //  2b/ applySentencizingMethodToStirng                                         :: String -> [String] method :  encapsulates 1, 2
-    //  3. textFileToSentStrings : read in TXT file and use 1 or 2 to sentencise	:: File -> String -> [String] : escapsulates load, 2b
+    //  3. textFileToSentStrings : read in TXT file and use 1 or 2 to sentencise    :: File -> String -> [String] : escapsulates load, 2b
     
-    //  4. sentStringToHashableSents: use pipeline or func5 to tokenise				:: [String] -> [Hashable] w choose
-    //  5. getTokenisedSents: use inbuilt NL tagger to tokenise						::[String] -> [Hashable] w pipeline
+    //  4. sentStringToHashableSents: use pipeline or func5 to tokenise                :: [String] -> [Hashable] w choose
+    //  5. getTokenisedSents: use inbuilt NL tagger to tokenise                        ::[String] -> [Hashable] w pipeline
     //  6. textFileToHashableSets : use func3 to sentencise then 4 to tokenise      :: File -> Hashable
     
     //1
@@ -1449,7 +1449,7 @@ func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: I
 //func testInstantiatePipeline(myConfig: TaggerConfig)   -> String {
 //    // test instantiation of pipeline class based on params chosen
 //    var outputString: String = ""
-//    
+//
 //    Task{
 //        do {
 //            let _ = try CNNBiLSTMPipeline(myConfig: myConfig)
@@ -1477,3 +1477,4 @@ func dumpScalars(_ text: String, maxChars: Int = 50) {
 func makeFilename() -> String {
     return String(UUID().uuidString.prefix(6))
 }
+
