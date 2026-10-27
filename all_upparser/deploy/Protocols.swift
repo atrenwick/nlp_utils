@@ -37,6 +37,11 @@ protocol PipelineHelper {
     func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) -> OnSentResult
     var description: String { get }
     var maxWords: Int { get }
+    
+}
+
+protocol SubtokenAwarePipelineHelper: PipelineHelper{
+    var seqLen: Int { get }
 }
 
 extension PipelineHelper {

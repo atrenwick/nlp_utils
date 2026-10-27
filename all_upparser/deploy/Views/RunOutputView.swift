@@ -62,7 +62,7 @@ struct RunOutputDetailView: View{
     @Binding var run: RunOutput
     @Binding var builtSents: [BuiltSentHolder]
     @Binding var tempTokens: [TempToken]
-    @State var runOutputFileList: [URL] = []
+    @State var runOutputFileList: [OutputFileListHelper] = []
     @State var hasAppeared: Bool = false
     @State var fileToView: URL? =   nil
     @State var alertMessage: String?
@@ -129,7 +129,14 @@ struct RunOutputDetailView: View{
                                     additionalExportFormat: additionalExportFormat
                                 )
                                 if let hasURL = runOutput.runMetas.savedURL{
-                                    runOutputFileList.append(hasURL)
+                                    
+                                    runOutputFileList.append(
+                                        OutputFileListHelper(
+                                            id: UUID(),
+                                            runID: runOutput.runMetas.runID,
+                                            url: hasURL
+                                        )
+                                        )
                                 }
                                 topLevelOutput.append(runOutput)
                             } catch {
@@ -174,7 +181,14 @@ struct RunOutputDetailView: View{
                 if hasAppeared == false{
                     hasAppeared = true
                     if let hasURL = run.runMetas.savedURL{
-                        runOutputFileList.append(hasURL)
+
+                        runOutputFileList.append(
+                            OutputFileListHelper(
+                                id: UUID(),
+                                runID: run.runMetas.runID,
+                                url: hasURL
+                            )
+                            )
                         fileToView = hasURL
                     }
                 }
@@ -202,19 +216,38 @@ struct RunOutputDetailView: View{
         additionalExportFormat: ExportFormat
     ) throws -> RunOutput {
         
-        let exportContent = GeneralOutputMakingWorkflow.makeExportContentFromMetas(run: run, additionalExportFormat: additionalExportFormat)
-        guard !exportContent.isEmpty else { throw PipelineError.makeExportContentError }
+        let exportContent = GeneralOutputMakingWorkflow.makeExportContent(
+            headers: run.runMetas.safeHeaderAttribs,
+            sents: run.runData.sents,
+            exportFormat: additionalExportFormat,
+            includeConllSentText: run.runMetas.includeConllSentText
+            )
+        print("exportformat found= \(additionalExportFormat.rawValue)")
+        guard !exportContent.isEmpty else {
+            print("throw @213")
+            throw PipelineError.makeExportContentError }
         
         let runData = RunData(
             runID: run.runID,
             sents: run.runData.sents,
             exportContent: exportContent
         )
-
-        let runMetas = WritingWorkflow.saveFileToChosenLocation(myConfig: myConfig, exportContent: exportContent, runID: run.runID,)
+        let additionalExportParams = AdditionalExportParams(exportFormat: additionalExportFormat, includeConllSentText: run.runMetas.includeConllSentText)
+        let runMetas = WritingWorkflow.saveFileToChosenLocation(myConfig: myConfig, exportContent: exportContent, runID: run.runID, additional: additionalExportParams)
         let runOutput = RunOutput(runID: run.runID, runData: runData, runMetas: runMetas)
         return runOutput
     }
+}
+
+struct AdditionalExportParams{
+    let exportFormat: ExportFormat
+    let includeConllSentText: Bool
+}
+
+struct OutputFileListHelper: Identifiable{
+    let id: UUID
+    let runID: String
+    let url: URL
 }
 
 

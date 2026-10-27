@@ -96,6 +96,7 @@ struct ExporterService {
         }
         // 2. Format sanitized filename
         var safeName = customName.sanitizedFileName
+        print(safeName)
         if !safeName.hasSuffix(".\(fileExtension)") {
                     safeName += ".\(fileExtension)"
                 }
@@ -105,7 +106,8 @@ struct ExporterService {
         // 3. Construct destination path inside the chosen directory
         let destinationFileURL = targetFolderURL.appendingPathComponent(safeName)
         if runExplicit{
-            print("step3 success")
+        
+            print("step3 success:: -> \(destinationFileURL)")
         }
         // 4. Elevate security permissions for external directory write
         let gotAccess = targetFolderURL.startAccessingSecurityScopedResource()
@@ -352,7 +354,6 @@ struct RunFileWrapper: Decodable {
 }
 
 struct RunMetas: Identifiable, Codable {
-    //mod
     let id = UUID()
     let runID: String
     let exportFormat: ExportFormat
@@ -385,7 +386,6 @@ struct RunMetas: Identifiable, Codable {
     }
 }
 
-
 struct RunOutput: Identifiable, Codable {
     var id = UUID()
     let runID: String
@@ -399,12 +399,9 @@ struct RunSelectorHelper{
 }
 
 struct SandboxImporter {
-    /// Copies or writes external file data into the app's local Documents directory.
     static func importToSandbox(from externalURL: URL) throws -> URL {
         let fileManager = FileManager.default
         let docsDir = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        
-        // Ensure a unique local filename so existing files aren't overwritten
         let targetURL = docsDir.appendingPathComponent(externalURL.lastPathComponent)
         
         // Remove old instance if it exists at target path
@@ -412,7 +409,7 @@ struct SandboxImporter {
             try fileManager.removeItem(at: targetURL)
         }
         
-        // Copy the file into your app's local sandbox memory space
+        // Copy the file to sandbox
         try fileManager.copyItem(at: externalURL, to: targetURL)
         
         return targetURL
@@ -592,7 +589,7 @@ struct TaggerConfig{
             displayName: String? = nil,
             selectedInputFile: URL? = nil
         ){
-            self.inputFileType = TaggerConfig.resolveRepresentable(passed: inputFileType, key: "inputFileTypeDefault", fallback: InputFileType.txt )
+            self.inputFileType = TaggerConfig.resolveRawRep(passed: inputFileType, key: "inputFileTypeDefault", fallback: InputFileType.txt )
             self.detectLanguage = TaggerConfig.resolveBool(passed: detectLanguage, key: "detectLangDefault", default: false)
             self.matchFileNameType = TaggerConfig.resolveBool(passed: matchFileNameType, key: "matchFileNameTypeDefault", default: false)
             self.displayName = String(UUID().uuidString.prefix(5))
@@ -618,6 +615,9 @@ struct TaggerConfig{
         var loadingStatusMessage: String
         var loadingProgress: Double
         var loadingComplete: Bool
+        var maxSeqLen: Int
+        var maxWords: Int
+        
         // need to add = nil in init of it's to truly allow no parameters to be specified
         init(
             selectedArchitecture: ModelArchitecture? = nil,
@@ -637,28 +637,32 @@ struct TaggerConfig{
             runExplicit: Bool? = nil,
             loadingStatusMessage: String? = nil,
             loadingProgress: Double? = nil,
-            loadingComplete: Bool? = nil
+            loadingComplete: Bool? = nil,
+            maxSeqLen: Int? = nil,
+            maxWords: Int? = nil
         ){
-            self.selectedArchitecture = TaggerConfig.resolveRepresentable(passed: selectedArchitecture, key: "modelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
-            self.selectedLanguage = TaggerConfig.resolveRepresentable(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
-            self.selectedTreebank = TaggerConfig.resolveRepresentable(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
+            self.selectedArchitecture = TaggerConfig.resolveRawRep(passed: selectedArchitecture, key: "modelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
+            self.selectedLanguage = TaggerConfig.resolveRawRep(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
+            self.selectedTreebank = TaggerConfig.resolveRawRep(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
             self.runResentenciser = TaggerConfig.resolveBool(passed: runResentenciser, key: "runResentenciserDefault", default: false)
             self.runRetokeniser = TaggerConfig.resolveBool(passed: runRetokeniser, key: "runRetokeniserDefault", default: false)
-            self.modelArchitecture = TaggerConfig.resolveRepresentable(passed: modelArchitecture, key: "modelArchitectureDefault", fallback: .cnnBiLSTM)
-            self.maxPipelineStep = TaggerConfig.resolveRepresentable(passed: maxPipelineStep, key: "maxPipelineStepDefault", fallback: .step5 )
-            self.tokenizingMethod = TaggerConfig.resolveRepresentable(passed: tokenizingMethod, key: "tokenizingMethodDefault", fallback: .nltokeniser )
-            self.sentencizingMethod = TaggerConfig.resolveRepresentable(passed: sentencizingMethod, key: "sentencizingMethodDefault", fallback: .nlSentencizer )
-            self.insertNewTokPosition = TaggerConfig.resolveRepresentable(passed: insertNewTokPosition, key: "insertNewTokPositionDefault", fallback: .after )
-            self.selectedRetokenisationType = TaggerConfig.resolveRepresentable(passed: selectedRetokenisationType, key: "retokenisationTypeDefault", fallback: .predict )
-            self.priLemSource = TaggerConfig.resolveRepresentable(passed: priLemSource, key: "priLemSourceDefault", fallback: .hybrid )
-            self.secLemSource = TaggerConfig.resolveRepresentable(passed: secLemSource, key: "secLemSourceDefault", fallback: .rule )
+            self.modelArchitecture = TaggerConfig.resolveRawRep(passed: modelArchitecture, key: "modelArchitectureDefault", fallback: .cnnBiLSTM)
+            self.maxPipelineStep = TaggerConfig.resolveRawRep(passed: maxPipelineStep, key: "maxPipelineStepDefault", fallback: .step5 )
+            self.tokenizingMethod = TaggerConfig.resolveRawRep(passed: tokenizingMethod, key: "tokenizingMethodDefault", fallback: .nltokeniser )
+            self.sentencizingMethod = TaggerConfig.resolveRawRep(passed: sentencizingMethod, key: "sentencizingMethodDefault", fallback: .nlSentencizer )
+            self.insertNewTokPosition = TaggerConfig.resolveRawRep(passed: insertNewTokPosition, key: "insertNewTokPositionDefault", fallback: .after )
+            self.selectedRetokenisationType = TaggerConfig.resolveRawRep(passed: selectedRetokenisationType, key: "retokenisationTypeDefault", fallback: .predict )
+            self.priLemSource = TaggerConfig.resolveRawRep(passed: priLemSource, key: "priLemSourceDefault", fallback: .hybrid )
+            self.secLemSource = TaggerConfig.resolveRawRep(passed: secLemSource, key: "secLemSourceDefault", fallback: .rule )
             self.getSecLems = TaggerConfig.resolveBool(passed: getSecLems, key: "getSecLemsDefault")
             self.runExplicit = TaggerConfig.resolveBool(passed: runExplicit, key: "runExplicifDefault")
+            self.maxWords = -1
+            self.maxSeqLen = 2
             self.loadingStatusMessage = ""
             self.loadingProgress  = 0.0
             self.loadingComplete = false
-
         }
+        
     }
     struct ExportConfig{
         var fileName: String
@@ -684,7 +688,7 @@ struct TaggerConfig{
             ?? URL(string: UserDefaults.standard.string(forKey: "outputDirDefault") ?? "")
             ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
             
-            self.selectedExportFormat = TaggerConfig.resolveRepresentable(passed: selectedExportFormat, key: "selectedExportFormatDefault", fallback: .xml )
+            self.selectedExportFormat = TaggerConfig.resolveRawRep(passed: selectedExportFormat, key: "selectedExportFormatDefault", fallback: .xml )
             self.xmlAuthorName = TaggerConfig.resolveString(passed: xmlAuthorName, key: "xmlAuthorDefault" )
             self.xmlTitle = TaggerConfig.resolveString(passed: xmlTitle, key: "xmlTitleDefault")
             self.includeConllSentIdLine = TaggerConfig.resolveBool(passed: includeConllSentIdLine, key: "includeConllSentIdLineDefault", default: true )
@@ -718,7 +722,7 @@ struct TaggerConfig{
             loadingComplete: Bool? = nil
         ){
             self.appleProgress = Progress(totalUnitCount: 1)
-            self.progressBarStyle = TaggerConfig.resolveRepresentable(passed: progressBarStyle, key: "progressBarStyleDefault", fallback: .apple)
+            self.progressBarStyle = TaggerConfig.resolveRawRep(passed: progressBarStyle, key: "progressBarStyleDefault", fallback: .apple)
             self.startTime = nil
             self.alertMessage = nil
             self.exportStatusMessage = nil
@@ -809,7 +813,7 @@ struct TaggerConfig{
         return UserDefaults.standard.string(forKey: key) ?? fallback
     }
     // Overloaded resolvers for string and Int backed enums
-    static func resolveRepresentable<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == String {
+    static func resolveRawRep<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == String {
         if let value = passed { return value }
         
         // Try reading the raw string from UserDefaults and converting it back to the enum
@@ -819,7 +823,7 @@ struct TaggerConfig{
         }
         return fallback
     }
-        static func resolveRepresentable<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == Int {
+        static func resolveRawRep<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == Int {
         if let value = passed { return value }
         
         // Note: Using object(forKey:) as? Int avoids UserDefaults' default '0' bug
@@ -949,6 +953,7 @@ struct XMLConllElement {
 }
 
 struct XmlHeaderAttribs : Codable{
+    // get lengths for sequences, subtokens, defaulting to 1 and, for latter, -99 if CNN-BiLSTM, -1 if error, or, if supplied value, this value
     var xmlTitle: String
     var xmlAuthorName: String
     var lang: String
@@ -961,6 +966,8 @@ struct XmlHeaderAttribs : Codable{
     var runRetokeniser: String
     var tokenizingMethod: String
     var sentencizingMethod: String
+    var maxWords: String
+    var maxSeqLen: String
     init(
         xmlTitle: String? = nil,
         xmlAuthorName: String? = nil,
@@ -973,7 +980,10 @@ struct XmlHeaderAttribs : Codable{
         modelArchitecture: ModelArchitecture? = nil,
         runRetokeniser: String? = nil,
         tokenizingMethod: String? = nil,
-        sentencizingMethod: String? = nil
+        sentencizingMethod: String? = nil,
+        maxWords: String? = nil,
+        maxSeqLen: String? = nil
+
     ) {
         self.xmlTitle = xmlTitle ?? "xmlTitle"
         self.xmlAuthorName = xmlAuthorName ?? "xmlAuthorName"
@@ -987,5 +997,7 @@ struct XmlHeaderAttribs : Codable{
         self.runRetokeniser = runRetokeniser ?? "runRetokeniser"
         self.tokenizingMethod = tokenizingMethod ?? "tokenizingMethod"
         self.sentencizingMethod = sentencizingMethod ?? "sentencizingMethod"
+        self.maxWords = maxWords ?? "0"
+        self.maxSeqLen = modelArchitecture?.rawValue == "distilbert" ? maxSeqLen ?? "NA" : "ERR"
     }
 }
