@@ -998,6 +998,6 @@ struct XmlHeaderAttribs : Codable{
         self.tokenizingMethod = tokenizingMethod ?? "tokenizingMethod"
         self.sentencizingMethod = sentencizingMethod ?? "sentencizingMethod"
         self.maxWords = maxWords ?? "0"
-        self.maxSeqLen = modelArchitecture?.rawValue == "distilbert" ? maxSeqLen ?? "NA" : "ERR"
+        self.maxSeqLen = modelArchitecture?.rawValue == "distilbert" ? maxSeqLen ?? "ERR" : "NA"
     }
 }

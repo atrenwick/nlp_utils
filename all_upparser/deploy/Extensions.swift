@@ -225,9 +225,11 @@ extension PipelineSettingsView {
                     currentStatus = "Loading pipeline"
                     pipeline = try await callPipelineLoader(myConfig: myConfig)
                     myConfig.parsingConfig.maxWords = pipeline.maxWords
+                    myConfig.outputData.safeHeaderAttribs.maxWords = String(pipeline.maxWords)
 //MARK: set pipeline maxwords, seqlen
                     print("Pipelinemax_words = \(pipeline.maxWords) @ 228")
                     if let pipeline = pipeline as? SubtokenAwarePipelineHelper {
+                        myConfig.outputData.safeHeaderAttribs.maxSeqLen = String(pipeline.seqLen)
                         myConfig.parsingConfig.maxSeqLen = pipeline.seqLen
                         print("maxSeqLen = \(pipeline.seqLen) @ 232")
                     }
@@ -303,7 +305,7 @@ extension PipelineSettingsView {
                         myConfig.progressConfig.appleProgress.completedUnitCount = Int64(myConfig.progressConfig.processedCount)
                     }
                 }
-                
+//MARK: print
                 try PrintWorkflow.dumpDetailsForRunExplicit(myConfig: myConfig, taggingInProgress: $taggingInProgress)
                 runOutput = PostPipelineWorkflow.makeTidyRunOutput(myConfig: myConfig)
                 
