@@ -469,6 +469,9 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
         // Step 3: Assign to properties and mark ready
 
         guard let tokenizerModel = tokenizerModel, let taggerModel = taggerModel, let lemmatizerRunner = lemmatizerRunner, let tokenizerCharVocab = tokenizerCharVocab, let wordVocab = wordVocab, let taggerCharVocab = taggerCharVocab, let uposVocab = uposVocab, let featsVocab = featsVocab, let deprelVocab = deprelVocab, let lemmaRuleVocab = lemmaRuleVocab else { throw PipelineError.notReadyToSendToRunner }
+//        myConfig.parsingConfig.maxWords = maxWords
+//        myConfig.parsingConfig.maxSeqLen = -88 // subtoks not relevant here, so -88 is an ignore value
+
         return try await convertToRealPipeline(
             tokenizerModel: tokenizerModel,
             taggerModel: taggerModel,
@@ -483,4 +486,5 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
         )
     }
 }
+
 

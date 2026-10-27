@@ -88,6 +88,8 @@ final class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         
         guard
             let wordPieceTokenizer = wordPieceTokenizer, let taggerModel = taggerModel, let labels = labels, let seqLen = seqLen, let maxWords = maxWords else { throw PipelineError.notReadyToSendToRunner }
+//        myConfig.parsingConfig.maxWords = maxWords
+//        myConfig.parsingConfig.maxSeqLen = seqLen
         return try await convertToRealPipeline(
             wordPieceTokenizer: wordPieceTokenizer,
             taggerModel: taggerModel,
@@ -122,7 +124,7 @@ final class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
     
 }
 
-final class BERTlikePipeline: PipelineHelper,PipelineLoader {
+final class BERTlikePipeline: PipelineHelper, SubtokenAwarePipelineHelper,PipelineLoader {
     private let taggerModel: MLModel
     let labels: LabelVocabsForBERTlike
     let description: String = "BERTlikePipeline"

@@ -3,7 +3,6 @@
 //  Tagger
 //
 //  Created by Adam on 06/09/2026.
-// functs for general use
 
 import CoreML
 import Foundation
@@ -41,7 +40,6 @@ enum FileIngestionWorkflow {
     }
     //3
     static func detectLangInFilename(inputURL: URL?)-> Language?{
-        // actions
         guard let urlExists = inputURL else { return nil }
         let targetPartOfString = urlExists.lastPathComponent.lowercased()
         var langGuess: Language? = nil
@@ -67,7 +65,6 @@ enum FileIngestionWorkflow {
             return nil
         }
     }
-
 }
 
 enum ConLLParsingWorkflow{
@@ -492,7 +489,6 @@ enum SentencizationWorkflow{
             }
         }
         return sentencesAsStrings
-        
     }
     
     //3
@@ -516,20 +512,15 @@ enum SentencizationWorkflow{
             let sentencesAsString = try _applySentencizingMethodToString(normalizedText: normalizedText, myConfig: myConfig)
             return sentencesAsString
         }
-        
     }
-    
     
     static func desentenciseAndResentencise(sentsToDiscard: [HashableSentence], myConfig: TaggerConfig) throws -> [String]{
         
         let initialString = (sentsToDiscard.map {$0.detokenised}).joined(separator: " ")
         let normalizedText = initialString.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
         let resentencizerOutputStrings = try _applySentencizingMethodToString(normalizedText: normalizedText, myConfig: myConfig)
-        
         return resentencizerOutputStrings
     }
-    
-    
     
     static func retokenisationEncapsulator(myConfig: TaggerConfig, pipeline: PipelineHelper, taggingInProgress: Binding<Bool>) throws -> [HashableSentence]{
         
@@ -562,7 +553,6 @@ enum SentencizationWorkflow{
     ) throws -> [HashableSentence] {
         
         // need to filter sentences that are over len acceptable
-        let maxSentLenForPipe = pipeline.maxWords
         var allSentences: [HashableSentence] = []
         switch myConfig.inputConfig.inputFileType {
         case .conll:
@@ -602,7 +592,6 @@ enum SentencizationWorkflow{
     }
     static func ingestSentences(currentStatus: String, myConfig: TaggerConfig, pipeline: PipelineHelper) throws -> [HashableSentence]{
         
-        let currentStatus = "Ingesting sentences"
         do {
             return try SentencizationWorkflow.ingestSentEncapsulator(myConfig: myConfig, pipeline: pipeline)
         } catch {
@@ -702,7 +691,7 @@ enum TokenisationWorkflow{
     }
     
     //2 ultra simple tokenisation : spaces = only boundary
-    static   func applySimplexTokenisation(inputText: String) -> [String] {
+    static func applySimplexTokenisation(inputText: String) -> [String] {
         
         let tokensRaw = inputText.split(separator: " ")
         var tidyTokens: [String] = []
@@ -809,8 +798,6 @@ enum TokenisationWorkflow{
             }
         return result
     }
-
-    
 }
 
 enum PostPipelineWorkflow{
@@ -822,8 +809,14 @@ enum PostPipelineWorkflow{
     //MARK: settings updaters
     static func makeTidyRunOutput(myConfig: TaggerConfig ) -> RunOutput {
         let runID = myConfig.outputData.safeHeaderAttribs.runID
-        let exportContent = GeneralOutputMakingWorkflow.makeExportContent(myConfig: myConfig)
+        let exportContent = GeneralOutputMakingWorkflow.makeExportContent(
+            headers: myConfig.outputData.safeHeaderAttribs,
+            sents: myConfig.outputData.outSents,
+            exportFormat: myConfig.exportConfig.selectedExportFormat,
+            includeConllSentText: myConfig.exportConfig.includeConllSentText
+        )
         print("export content as made @ 1228 :: count == \(exportContent.count)")
+        print("@lin819, maxLenWords == \(myConfig.parsingConfig.maxWords) and max SeqLen == \(myConfig.parsingConfig.maxSeqLen)")
         let runData: RunData = RunData(
             runID: runID,
             sents: myConfig.outputData.outSents,
@@ -894,34 +887,19 @@ enum GeneralOutputMakingWorkflow{
     //                                                 Agnostic output making functions
     //----------------------------------------------------------------------------------------------------------------------------
     //----------------------------------------------------------------------------------------------------------------------------
-    //1. convert sent to dumpable string for selected format
-    static func makeExportContent(myConfig: TaggerConfig) -> String{
-        var returnString: String = ""
-        switch myConfig.exportConfig.selectedExportFormat {
-        case .conll, .conllTxt:
-            returnString = myConfig.outputData.outSents.generateExportText()
-        case .conllTidy:
-            returnString = myConfig.outputData.outSents.generateExportTextTidy()
-        case .xml, .xmlConll:
-            returnString = XMLMakingWorkflow.sentListToXML(myConfig: myConfig)
+
+    static func makeExportContent(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool)-> String{
+            var returnString: String = ""
+            switch exportFormat{
+            case .conll, .conllTxt:
+                returnString = sents.generateExportText()
+            case .conllTidy:
+                returnString = sents.generateExportTextTidy()
+            case .xml, .xmlConll:
+                returnString = XMLMakingWorkflow.sentListToXML(headers: headers, sents: sents, exportFormat: exportFormat, includeConllSentText: includeConllSentText)
+            }
+            return returnString
         }
-        return returnString
-    }
-
-    static func makeExportContentFromMetas(run: RunOutput, additionalExportFormat: ExportFormat) -> String {
-    var returnString: String = ""
-    switch additionalExportFormat {
-    case .conll, .conllTxt:
-        returnString = run.runData.sents.generateExportText()
-    case .conllTidy:
-        returnString = run.runData.sents.generateExportTextTidy()
-    case .xml, .xmlConll:
-        returnString = XMLMakingWorkflow.sentListToXMLFromMetas(run: run, additionalExportFormat: additionalExportFormat)
-    }
-    return returnString
-
-    
-}
 }
 
 enum XMLMakingWorkflow{
@@ -934,35 +912,25 @@ enum XMLMakingWorkflow{
     //1. make safe header attributes
     //2. Make XML string from list of sentences with output of 1, 2
     
-    //1. why are there two of these
-    static func makeSafeXmlHeaderAttribs(
-        xmlTitle: String,
-        xmlAuthorName: String,
-        selectedLanguage: Language,
-        selectedTreebank: Language.Treebank,
-        sourceFile: URL,
-        maxPipelineStep: PipelineStep,
-        runRetokeniser: Bool,
-        tokenizingMethod: TokenizingMethod,
-        sentencizingMethod: SentencizingMethod
-    )-> XmlHeaderAttribs {
-        let xmlSafeXMLAuthor = xmlAuthorName.xmlEscaped != "" ? xmlAuthorName.xmlEscaped : "author_unknown"
-        let xmlSafeXMLTitle = xmlTitle.xmlEscaped != "" ? xmlTitle.xmlEscaped : "title"
-        let xmlSafeLang = selectedLanguage.displayName.lowercased()
-        let xmlsafeTreebank = selectedTreebank.short.xmlEscaped
-        
+    static func makeSafeHeaderAttribs(myConfig: TaggerConfig, fileContainerModel: SourceFileContainerModel) -> XmlHeaderAttribs {
+        let xmlSafeXMLAuthor = myConfig.exportConfig.xmlAuthorName.xmlEscaped != "" ? myConfig.exportConfig.xmlAuthorName.xmlEscaped : "author_unknown"
+        let xmlSafeXMLTitle = myConfig.exportConfig.xmlTitle.xmlEscaped != "" ? myConfig.exportConfig.xmlTitle.xmlEscaped : "title"
+        let xmlSafeLang = myConfig.parsingConfig.selectedLanguage.displayName.lowercased()
+        let xmlsafeTreebank = myConfig.parsingConfig.selectedTreebank.short.xmlEscaped
+
         let formatter = DateFormatter()
         formatter.dateFormat = "y-MM-dd HH:mm"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         let dateString = formatter.string(from:Date())
         let xmlsafeDate = dateString.xmlEscaped
         
-        let xmlsafeSourceFile = sourceFile.path().xmlEscaped
+        let xmlsafeSourceFile = fileContainerModel.localSandboxFileURL?.path().xmlEscaped ?? "unk"
         let runID = UUID().uuidString
-        let xmlSafeMaxPipelineStep = maxPipelineStep.title.xmlEscaped
-        let xmlSafeRunRetokeniser = String(runRetokeniser).xmlEscaped
-        let xmlSafeTokenizingMethod = tokenizingMethod.rawValue.xmlEscaped
-        let xmlSafeSentencizingMethod = sentencizingMethod.rawValue.xmlEscaped
+        let xmlSafeMaxPipelineStep = myConfig.parsingConfig.maxPipelineStep.title.xmlEscaped
+        let xmlSafeRunRetokeniser = String(myConfig.parsingConfig.runRetokeniser).xmlEscaped
+        let xmlSafeTokenizingMethod = myConfig.parsingConfig.tokenizingMethod.rawValue.xmlEscaped
+        let xmlSafeSentencizingMethod = myConfig.parsingConfig.sentencizingMethod.rawValue.xmlEscaped
+        let xmlSafeArchitecture = myConfig.parsingConfig.modelArchitecture
         
         let outputStruct = XmlHeaderAttribs(
             xmlTitle: xmlSafeXMLTitle,
@@ -973,54 +941,19 @@ enum XMLMakingWorkflow{
             sourceFile: xmlsafeSourceFile,
             runID: runID,
             maxPipelineStep: xmlSafeMaxPipelineStep,
+            modelArchitecture: xmlSafeArchitecture,
             runRetokeniser: xmlSafeRunRetokeniser,
             tokenizingMethod: xmlSafeTokenizingMethod,
             sentencizingMethod: xmlSafeSentencizingMethod,
+            maxWords: String(myConfig.parsingConfig.maxWords),
+            maxSeqLen: String(myConfig.parsingConfig.maxSeqLen)
         )
         return outputStruct
     }
-    static func makeSafeHeaderAttribs(myConfig: TaggerConfig, fileContainerModel: SourceFileContainerModel) -> XmlHeaderAttribs {
-        let xmlSafeXMLAuthor = myConfig.exportConfig.xmlAuthorName.xmlEscaped != "" ? myConfig.exportConfig.xmlAuthorName.xmlEscaped : "author_unknown"
-        let xmlSafeXMLTitle = myConfig.exportConfig.xmlTitle.xmlEscaped != "" ? myConfig.exportConfig.xmlTitle.xmlEscaped : "title"
-        let xmlSafeLang = myConfig.parsingConfig.selectedLanguage.displayName.lowercased()
-        let xmlsafeTreebank = myConfig.parsingConfig.selectedTreebank.short.xmlEscaped
-    //    print(xmlsafeTreebank, xmlSafeLang, xmlSafeXMLTitle)
-        let formatter = DateFormatter()
-        formatter.dateFormat = "y-MM-dd HH:mm"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        let dateString = formatter.string(from:Date())
-        let xmlsafeDate = dateString.xmlEscaped
-        
-        let xmlsafeSourceFile = fileContainerModel.localSandboxFileURL?.path().xmlEscaped ?? "unk"
-        let runID = UUID().uuidString
-        let maxPipelineStep = myConfig.parsingConfig.maxPipelineStep.title.xmlEscaped
-        let runRetokeniser = String(myConfig.parsingConfig.runRetokeniser).xmlEscaped
-        let tokenizingMethod = myConfig.parsingConfig.tokenizingMethod.rawValue.xmlEscaped
-        let sentencizingMethod = myConfig.parsingConfig.sentencizingMethod.rawValue.xmlEscaped
-        let modelArchitecture = myConfig.parsingConfig.modelArchitecture
-        
-        let outputStruct = XmlHeaderAttribs(
-            xmlTitle: xmlSafeXMLTitle,
-            xmlAuthorName: xmlSafeXMLAuthor,
-            lang: xmlSafeLang,
-            treebank: xmlsafeTreebank,
-            taggingDate: xmlsafeDate,
-            sourceFile: xmlsafeSourceFile,
-            runID: runID,
-            maxPipelineStep: maxPipelineStep,
-            modelArchitecture: modelArchitecture,
-            runRetokeniser: runRetokeniser,
-            tokenizingMethod: tokenizingMethod,
-            sentencizingMethod: sentencizingMethod,
-        )
-        return outputStruct
-    }
-
-    //3.
-    static func sentListToXML(myConfig: TaggerConfig) -> String {
-        
-        let safeHeaderAttribs = myConfig.outputData.safeHeaderAttribs
-        let sentences = myConfig.outputData.outSents
+//v2
+    static func sentListToXML(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool) -> String {
+        let safeHeaderAttribs = headers
+        let sentences = sents
         let sentCount = String(sentences.count)
         print("sentCount inside sentlist to xml = \(sentCount)")
         let tokCount = String(sentences.generateTokCount())
@@ -1039,8 +972,21 @@ enum XMLMakingWorkflow{
             <publisher />
             <date />
             <pubDate />
-            </publicationStmt>
-                <sourceDesc model="\(safeHeaderAttribs.lang.lowercased())" treebank="\(safeHeaderAttribs.treebank)" tagging_date="\(safeHeaderAttribs.taggingDate)" sourcefile="\(safeHeaderAttribs.sourceFile)" runID="\(safeHeaderAttribs.runID)" maxPipelineStep="\(safeHeaderAttribs.maxPipelineStep)" runRetokeniser="\(safeHeaderAttribs.runRetokeniser)" tokenizingMethod="\(safeHeaderAttribs.tokenizingMethod)" sentencizingMethod="\(safeHeaderAttribs.sentencizingMethod)" sentCount="\(sentCount)" tokenCount="\(tokCount)">
+                <sourceDesc 
+                    model="\(safeHeaderAttribs.lang.lowercased())"
+                    treebank="\(safeHeaderAttribs.treebank)"
+                    tagging_date="\(safeHeaderAttribs.taggingDate)"
+                    sourcefile="\(safeHeaderAttribs.sourceFile)"
+                    runID="\(safeHeaderAttribs.runID)"
+                    maxPipelineStep="\(safeHeaderAttribs.maxPipelineStep)"
+                    modelArchitecture="\(safeHeaderAttribs.modelArchitecture)",
+                    runRetokeniser="\(safeHeaderAttribs.runRetokeniser)"
+                    tokenizingMethod="\(safeHeaderAttribs.tokenizingMethod)"
+                    sentencizingMethod="\(safeHeaderAttribs.sentencizingMethod)"
+                    maxWords="\(safeHeaderAttribs.maxWords)"
+                    maxSeqLen="\(safeHeaderAttribs.maxSeqLen)">
+                    sentCount="\(sentCount)"
+                    tokenCount="\(tokCount)">
                 </sourceDesc>
             </fileDesc>
             <profileDesc>
@@ -1068,8 +1014,8 @@ enum XMLMakingWorkflow{
                 outputStore.append(contentsOf: sentence.conllMetas)
             }
             outputStore.append(sentence.makeXMLsent(
-                exportFormat: myConfig.exportConfig.selectedExportFormat,
-                includeConllSentText: myConfig.exportConfig.includeConllSentText
+                exportFormat: exportFormat,
+                includeConllSentText: includeConllSentText
             )
             )
         }
@@ -1077,66 +1023,6 @@ enum XMLMakingWorkflow{
         let returnItem = outputStore.joined(separator: "\n")
         print("returnItem 937 count = \(returnItem.count)")
         return returnItem
-        
-    }
-    static func sentListToXMLFromMetas(run: RunOutput, additionalExportFormat: ExportFormat) -> String {
-        
-        let safeHeaderAttribs = run.runMetas.safeHeaderAttribs
-        let sentences = run.runData.sents
-        let sentCount = String(sentences.count)
-        let tokCount = String(sentences.generateTokCount())
-        var outputStore: [String] = []
-        
-        let xmlHeader = """
-        <?xml version="1.0" encoding="utf-8"?>
-          <TEI.2>
-          <teiHeader>
-            <fileDesc>
-            <titleStmt>
-            <title>\(safeHeaderAttribs.xmlTitle)</title>
-            <author>\(safeHeaderAttribs.xmlAuthorName)</author>
-            </titleStmt>
-            <publicationStmt>
-            <publisher />
-            <date />
-            <pubDate />
-            </publicationStmt>
-                <sourceDesc model="\(safeHeaderAttribs.lang.lowercased())" treebank="\(safeHeaderAttribs.treebank)" tagging_date="\(safeHeaderAttribs.taggingDate)" sourcefile="\(safeHeaderAttribs.sourceFile)" runID="\(safeHeaderAttribs.runID)" maxPipelineStep="\(safeHeaderAttribs.maxPipelineStep)" runRetokeniser="\(safeHeaderAttribs.runRetokeniser)" tokenizingMethod="\(safeHeaderAttribs.tokenizingMethod)" sentencizingMethod="\(safeHeaderAttribs.sentencizingMethod)" sentCount="\(sentCount)" tokenCount="\(tokCount)">
-                </sourceDesc>
-            </fileDesc>
-            <profileDesc>
-                <langUsage>
-                <language ident="\(safeHeaderAttribs.lang)"/>
-                </langUsage>
-            <textDesc thema=\"\" type="unk" sub_genre=\"\" />
-            </profileDesc>
-        </teiHeader>
-        <text>
-        <body>
-        <p>        
-        """
-        let xmlFooter = """
-        </p>
-        </body>
-        </text>
-        </TEI.2>
-        """
-        
-        outputStore.append(xmlHeader)
-        for sentence in sentences {
-            let addConllMetas: Bool = true
-            if addConllMetas{
-                outputStore.append(contentsOf: sentence.conllMetas)
-            }
-            outputStore.append(sentence.makeXMLsent(
-                exportFormat: additionalExportFormat,
-                includeConllSentText: run.runMetas.includeConllSentText
-            )
-            )
-        }
-        outputStore.append(xmlFooter)
-        
-        return outputStore.joined(separator: "\n")
         
     }
 }
@@ -1152,21 +1038,29 @@ enum WritingWorkflow{
     // 2. Run write coordinator :: run 3  with diff outputs then 4. No longer used
     // 3. write string dump :: write string to named files on macOS AND iOS device ; No longer used
     // 4. writtoFile ; No longer used
-    
-    
     // write string to location
-    static func saveFileToChosenLocation(myConfig: TaggerConfig, exportContent: String, runID: String) -> RunMetas{
+    static func saveFileToChosenLocation(myConfig: TaggerConfig, exportContent: String, runID: String, additional: AdditionalExportParams? = nil) -> RunMetas{
         var savedURL: URL?
         var exportStatusMessage: String
-        // deal with bad URL case
+
+        print("@line1046, maxLenWords == \(myConfig.parsingConfig.maxWords) and max SeqLen == \(myConfig.parsingConfig.maxSeqLen)")
+
+        var updatedExportFormat: ExportFormat = myConfig.exportConfig.selectedExportFormat
+        var updatedIncludeConllSentText: Bool = myConfig.exportConfig.includeConllSentText
+        // if running an additional export, use these values passed through the optional
+        if let additionalParams = additional{
+            updatedExportFormat = additionalParams.exportFormat
+            updatedIncludeConllSentText = additionalParams.includeConllSentText
+        }
+        
         guard let folderURL = myConfig.exportConfig.targetFolderURL else {
             if myConfig.parsingConfig.runExplicit{ print("Guard 661 fail") }
             exportStatusMessage = "Guard failure in save file to chosen location"
             return RunMetas(
                 runID: runID,
-                exportFormat: myConfig.exportConfig.selectedExportFormat,
+                exportFormat: updatedExportFormat,
                 includeConllSentIdLine: myConfig.exportConfig.includeConllSentIdLine,
-                includeConllSentText: myConfig.exportConfig.includeConllSentText,
+                includeConllSentText: updatedIncludeConllSentText,
                 inputFileType: myConfig.inputConfig.inputFileType,
                 lang: myConfig.parsingConfig.selectedLanguage.rawValue,
                 maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
@@ -1185,20 +1079,18 @@ enum WritingWorkflow{
                 tokenizingMethod: myConfig.parsingConfig.tokenizingMethod,
                 totalCount: myConfig.progressConfig.totalCount,
                 treebank: myConfig.parsingConfig.selectedTreebank.short,
-                unread:  true,
-                
+                unread: true
             )
         }
         if myConfig.parsingConfig.runExplicit{ print("Guard 661 pass")  }
         
         do {
             print("export content inside Exporter service count == \(exportContent.count)")
-            
             savedURL = try ExporterService.exportDataToFile(
                 exportContent: exportContent,
-                customName: "\(myConfig.exportConfig.fileName)_\(myConfig.parsingConfig.selectedTreebank.short)_\(myConfig.exportConfig.selectedExportFormat.rawValue)",
+                customName: "\(myConfig.exportConfig.fileName)_\(myConfig.parsingConfig.selectedTreebank.short)_\(updatedExportFormat.rawValue)",
                 targetFolderURL: folderURL,
-                exportFormat: myConfig.exportConfig.selectedExportFormat,
+                exportFormat: updatedExportFormat,
                 runExplicit: myConfig.parsingConfig.runExplicit,
             )
             exportStatusMessage = "Successfully exported to"
@@ -1248,7 +1140,6 @@ enum WritingWorkflow{
             unread:  true,
         )
     }
-    
     
     static func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
         try writeStringDump(lines)

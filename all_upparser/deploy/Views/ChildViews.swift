@@ -194,13 +194,15 @@ struct InputFileViewEncapsulator: View {
     }
 }
 
+
+
 struct OutputFileListView: View{
-    let runOutputFileList: [URL]
+    let runOutputFileList: [OutputFileListHelper]
     var body: some View{
         Form{
-            ForEach(runOutputFileList, id:\.self){link in
-                NavigationLink(destination: FileViewerView(fileURL: link)) {
-                    Text("Output : \(link.lastPathComponent)")
+            ForEach(runOutputFileList){listItem in
+                NavigationLink(destination: FileViewerView(fileURL: listItem.url)) {
+                    Text("Output : \(listItem.url.lastPathComponent)")
                 }
             }
         }
