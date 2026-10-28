@@ -21,7 +21,7 @@ enum FileIngestionWorkflow {
     // 2 starting points for data ingestion in pipeline: read from inside, outside bundle
     //1
     static func readFromFile(inputURL: URL?) throws -> String {
-        guard let inputFile = inputURL else { throw PipelineError.missingURL}
+        guard let inputFile = inputURL else { throw PipelineError.GenericError.missingURL}
         do {
             let returnString = try String(contentsOf: inputFile, encoding: .utf8)
             return returnString
@@ -35,7 +35,7 @@ enum FileIngestionWorkflow {
             let normalizedText: String = try Bundle.main.loadText(inputFile, format: thisExtension)
             return normalizedText
         } catch {
-            return PipelineError.fileLoadError.localizedDescription
+            return PipelineError.LoadingError.fileLoadError.localizedDescription
         }
     }
     //3
@@ -83,7 +83,7 @@ enum ConLLParsingWorkflow{
     // note XML-Conll parsing needs access to these functions
     static func conllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSentence]{
         guard let inputFile = inputURL else {
-            throw PipelineError.missingURL
+            throw PipelineError.GenericError.missingURL
         }
         var allSentences: [HashableSentence] = []
         let hashableTokenList: [[String]] = try _makeConllLinesFromURL(inputURL: inputFile) // funct4, calls 1,2
@@ -135,7 +135,7 @@ enum ConLLParsingWorkflow{
                     
                     guard lineChunks.count == 10 else {
                         let errorstring = lineChunks.count == 0 ?  "no chunks " :lineChunks.joined(separator: "<TAB>")
-                        throw PipelineError.conllParsingError(
+                        throw PipelineError.IngestionError.conllParsingError(
                             line: String("Sent:\(sentNum + 1) line \(lineNum + 1) :: \(errorstring)"),
                             filename: String(inputURL.lastPathComponent))
                         
@@ -171,27 +171,27 @@ enum ConLLParsingWorkflow{
     //4.
     static func _makeConllLinesFromURL(inputURL: URL?) throws -> [[String]]{
         guard let inputURL else {
-            throw PipelineError.missingURL
+            throw PipelineError.GenericError.missingURL
         }
         do {
             let normalizedText = try FileIngestionWorkflow.readFromFile(inputURL: inputURL)
             guard  !normalizedText.isEmpty else {
-                throw PipelineError.readFromSandboxError
+                throw PipelineError.IngestionError.readFromSandboxError
             }
             
             let sentenceChunks: [String] = _conllBlobToChunks(conllBlob: normalizedText)
             guard !sentenceChunks.isEmpty else {
-                throw PipelineError.conllLineIdentificationError
+                throw PipelineError.IngestionError.conllLineIdentificationError
             }
             
             let hashableTokenLists: [[String]] = _conllChunksToLines(conllChunks: sentenceChunks)
             guard !hashableTokenLists.isEmpty else {
-                throw PipelineError.conllChunkToLineError
+                throw PipelineError.IngestionError.conllChunkToLineError
             }
             return hashableTokenLists
             
         } catch {
-            throw PipelineError.makeConllLinesFromURLError
+            throw PipelineError.IngestionError.makeConllLinesFromURLError
         }
     }
 
@@ -243,11 +243,11 @@ enum xmlConllParsingWorkflow{
     //1. parse xml-conll to get conll blob-pairs identical to CoNLL parsing
     static func _xmlConllToIdBlobPairs(from url: URL?) throws -> [XMLConllElement] {
         guard let url = url else {
-            throw PipelineError.missingURL
+            throw PipelineError.GenericError.missingURL
         }
         
         guard let parser = XMLParser(contentsOf: url) else {
-            throw PipelineError.parserCreationError(file: url)
+            throw PipelineError.IngestionError.parserCreationError(file: url)
         }
         
         let delegate = SParser()
@@ -259,7 +259,7 @@ enum xmlConllParsingWorkflow{
             if let parserError = parser.parserError{
                 throw parserError
             } else {
-                throw PipelineError.xmlParserFailure(line: 0, reason:"Unknown XML parsing error")
+                throw PipelineError.IngestionError.xmlParserFailure(line: 0, reason:"Unknown XML parsing error")
             }
         }
         return delegate.results
@@ -267,7 +267,7 @@ enum xmlConllParsingWorkflow{
     //2. call 1. then apply CoNLL parsing functions
     static func xmlConllFileToHashableSentForPipeline(inputURL: URL?) throws -> [HashableSentence]{
         guard let inputURL else {
-            throw PipelineError.missingURL
+            throw PipelineError.GenericError.missingURL
         }
         
         var allSentences: [HashableSentence] = []
@@ -291,11 +291,11 @@ enum xmlParsingWorkflow{
     // 1 function with SWParser, delegate, for std xml -> hashable sent. XMLConll needs 2 steps to conllise
     static func xmlToHashableSentForPipeline(inputURL: URL?) throws  -> [HashableSentence]{
         guard let inputURL else {
-            throw PipelineError.missingURL
+            throw PipelineError.GenericError.missingURL
         }
         
         guard let parser = XMLParser(contentsOf: inputURL) else {
-            throw PipelineError.parserCreationError(file: inputURL)
+            throw PipelineError.IngestionError.parserCreationError(file: inputURL)
         }
         
         let delegate = SWParser()
@@ -306,7 +306,7 @@ enum xmlParsingWorkflow{
             if let parserError = parser.parserError{
                 throw parserError
             } else {
-                throw PipelineError.xmlParserFailure(line: 0, reason:"Unknown XML parsing error")
+                throw PipelineError.IngestionError.xmlParserFailure(line: 0, reason:"Unknown XML parsing error")
             }
         }
         return delegate.results
@@ -502,7 +502,7 @@ enum SentencizationWorkflow{
         }
         let inputString = try FileIngestionWorkflow.readFromFile(inputURL: myConfig.inputConfig.selectedInputFile)
         guard !inputString.isEmpty else {
-            throw PipelineError.fileLoadError
+            throw PipelineError.LoadingError.fileLoadError
         }
         do {
             let normalizedText = inputString.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
@@ -542,7 +542,7 @@ enum SentencizationWorkflow{
         
         guard !retokenisedSents.isEmpty else {
             taggingInProgress.wrappedValue = false
-            throw PipelineError.retokenisationError
+            throw PipelineError.IngestionError.retokenisationError
         }
         
         return retokenisedSents
@@ -595,7 +595,7 @@ enum SentencizationWorkflow{
         do {
             return try SentencizationWorkflow.ingestSentEncapsulator(myConfig: myConfig, pipeline: pipeline)
         } catch {
-            throw PipelineError.noSentencesLoaded
+            throw PipelineError.IngestionError.noSentencesLoaded
         }
     }
 
@@ -638,7 +638,7 @@ enum TokenisationWorkflow{
     //1.
     static func applyNaiveTokenisation(language: Language, myString: String) throws -> [String]{
         guard ![.DE, .ANG].contains(language) else {
-            throw PipelineError.languageMethodConflict(language: language)
+            throw PipelineError.ConfigurationError.languageMethodConflict(language: language)
         }
         
         let input: String = myString
@@ -766,7 +766,7 @@ enum TokenisationWorkflow{
         case .trained:
             switch myConfig.parsingConfig.modelArchitecture {
             case .distilbert:
-                throw PipelineError.architectureConflict
+                throw PipelineError.ConfigurationError.architectureConflict
             case .cnnBiLSTM:
                 // retokenize everything with model
                 // MARK: can change this IN to be testSentences
@@ -833,7 +833,6 @@ enum PostPipelineWorkflow{
             runData: runData,
             runMetas: runMetas
         )
-        
         return runOutput
     }
     
@@ -900,6 +899,10 @@ enum GeneralOutputMakingWorkflow{
             }
             return returnString
         }
+    static func makeFilename() -> String {
+        return String(UUID().uuidString.prefix(6))
+    }
+
 }
 
 enum XMLMakingWorkflow{
@@ -1086,7 +1089,7 @@ enum WritingWorkflow{
         
         do {
             print("export content inside Exporter service count == \(exportContent.count)")
-            savedURL = try ExporterService.exportDataToFile(
+            savedURL = try PipelineServices.ExporterService.exportDataToFile(
                 exportContent: exportContent,
                 customName: "\(myConfig.exportConfig.fileName)_\(myConfig.parsingConfig.selectedTreebank.short)_\(updatedExportFormat.rawValue)",
                 targetFolderURL: folderURL,
@@ -1239,7 +1242,7 @@ enum PrintWorkflow{
     static func dumpDetailsForRunExplicit(myConfig: TaggerConfig, taggingInProgress:Binding<Bool>) throws  {
         guard myConfig.outputData.outSents.count > 0 else {
             taggingInProgress.wrappedValue = false
-            throw PipelineError.noRunOutput
+            throw PipelineError.ProcessingError.noRunOutput
         }
         
         if myConfig.parsingConfig.runExplicit {
@@ -1256,6 +1259,14 @@ enum PrintWorkflow{
         }
         //no returns
     }
+    
+    static func dumpScalars(_ text: String, maxChars: Int = 50) {
+        // called in runTest() function
+        for scalar in text.unicodeScalars.prefix(maxChars) {
+            print("\(scalar) -> \(scalar.value)")
+        }
+    }
+
 }
 
 
@@ -1322,21 +1333,6 @@ func getNLTags(text: String) -> NLParseResults{
 }
 
 
-
-func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: IndexSet) {
-    // 1. Guard against empty inputs
-    guard !offsets.isEmpty else { return }
-    
-    // 2. Filter the offsets to ensure they are actually within the current bounds.
-    let validOffsets = IndexSet(offsets.filter { $0 < array.count })
-    // If no offsets are valid (e.g., the user swiped on a deleted cell), just bail.
-    guard !validOffsets.isEmpty else { return }
-    
-    // 3. Perform the removal
-    // We use the validOffsets to ensure we only touch existing indices.
-    array.remove(atOffsets: validOffsets)
-}
-
 //func testInstantiatePipeline(myConfig: TaggerConfig)   -> String {
 //    // test instantiation of pipeline class based on params chosen
 //    var outputString: String = ""
@@ -1356,16 +1352,7 @@ func removeFromBuiltSentArray(from array: inout [BuiltSentHolder], at offsets: I
 //    return outputString
 //}
 //5
-func dumpScalars(_ text: String, maxChars: Int = 50) {
-    // called in runTest() function
-    for scalar in text.unicodeScalars.prefix(maxChars) {
-        print("\(scalar) -> \(scalar.value)")
-    }
-}
 
 ////3.
 
-func makeFilename() -> String {
-    return String(UUID().uuidString.prefix(6))
-}
 

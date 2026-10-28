@@ -88,6 +88,11 @@ extension Collection where Element == TempToken {
     }
 }
 
+
+extension URL {
+    var normalizedDir: URL {
+        standardizedFileURL.resolvingSymlinksInPath()
+    }
 extension PipelineSettingsView {
     //MARK:  calculated properties
     var loadTotal: Int {

@@ -8,6 +8,11 @@
 import Foundation
 import CoreML
 
+struct AdditionalExportParams{
+    let exportFormat: ExportFormat
+    let includeConllSentText: Bool
+}
+
 struct BuiltSentHolder: Identifiable, Hashable{
     var id = UUID()
     var tempToks: [TempToken]
@@ -22,8 +27,7 @@ struct BuiltSentHolder: Identifiable, Hashable{
         guard tempToks.count > 0 else {return "error1" }
         if let hashableSent = tempToks.makeHashableSentFromTestToks(){
             return TokenisationWorkflow.markupTokenisationInSent(hashableSent: hashableSent)
-        }
-        else {return "error2"}
+        } else { return "error2" }
     }
 }
 
@@ -63,7 +67,6 @@ struct ConfigurationRules {
     }
 }
 
-
 //TODO: update calculated property to use Extension method
 struct Document {
     var id = UUID()
@@ -79,56 +82,6 @@ struct Document {
     }
 }
 
-struct ExporterService {
-    /// Writes processing output string directly to a user-selected folder URL
-    static func exportDataToFile(
-        exportContent: String,
-        customName: String,
-        targetFolderURL: URL,
-        exportFormat: ExportFormat,
-        runExplicit: Bool
-        
-    ) throws -> URL {
-        let fileExtension = exportFormat.fileExtension
-      
-        if runExplicit{
-            print("step1 success")
-        }
-        // 2. Format sanitized filename
-        var safeName = customName.sanitizedFileName
-        print(safeName)
-        if !safeName.hasSuffix(".\(fileExtension)") {
-                    safeName += ".\(fileExtension)"
-                }
-        if runExplicit{
-            print("step2 success")
-        }
-        // 3. Construct destination path inside the chosen directory
-        let destinationFileURL = targetFolderURL.appendingPathComponent(safeName)
-        if runExplicit{
-        
-            print("step3 success:: -> \(destinationFileURL)")
-        }
-        // 4. Elevate security permissions for external directory write
-        let gotAccess = targetFolderURL.startAccessingSecurityScopedResource()
-        defer {
-            if gotAccess {
-                targetFolderURL.stopAccessingSecurityScopedResource()
-                if runExplicit{
-                    print("step4 success")
-                }
-            }
-        }
-        
-        // 5. Write
-        try exportContent.write(to: destinationFileURL, atomically: true, encoding: .utf8)
-        if runExplicit{
-            print("step5 success URL == \(destinationFileURL.path())")
-        }
-        return destinationFileURL
-    }
-}
-
 struct HashableSentence: Hashable {
     // sentence as id + list of strings as input for parser
     let id: String
@@ -136,133 +89,6 @@ struct HashableSentence: Hashable {
     let conllMetas: [String]
     var detokenised: String {
         tokens.joined(separator: " ")
-    }
-}
-
-struct LabelVocabsForBERTlike {
-// MARK: - Label vocabularies for BERT derived models :: 4x vocabs with loader
-/// The  vocabularies that turn output indices back into labels, from same training as model
-/// these are not the same as for BiLSTM models
-    let upos: Vocab
-    let feats: Vocab
-    let deprel: Vocab
-    let lemmaRule: Vocab
-    
-    static func loadLabelVocabularies(languageCode: String,
-                                      treebank: String,
-                                      bundle: Bundle = .main,
-                                      vx: String
-    ) throws -> LabelVocabsForBERTlike {
-        
-        func vocab(_ label: String, vx: String) throws -> Vocab {
-            let name = "\(languageCode)_distilbert_\(label)_vocab_\(treebank)\(vx)"
-            guard let url = bundle.url(forResource: name, withExtension: "json") else {
-                throw PipelineError.missingResource("\(name).json")
-            }
-            let data = try Data(contentsOf: url)
-            let decoded = try JSONDecoder().decode(VocabData.self, from: data)
-            return Vocab(data: decoded)
-        }
-
-        return LabelVocabsForBERTlike(
-            upos: try vocab("upos", vx: vx),
-            feats: try vocab("feats", vx: vx),
-            deprel: try vocab("deprel", vx: vx),
-            lemmaRule: try vocab("lemma_rule", vx: vx)
-        )
-    }
-}
-
-struct LogitReaderForBERTlike {
-// MARK: - Reading Core ML output arrays for bert-derived models to deal with padding
-/// Reads values out of an MLMultiArray without boxing every element. Honours the array's
-/// strides (Core ML may pad rows) and its element type (the model's outputs are normally
-/// float16; float32 and double are handled too).
-
-    private let array: MLMultiArray             // keeps the buffer alive
-    private let base: UnsafeRawPointer
-    private let dataType: MLMultiArrayDataType
-    private let strides: [Int]
-    private let shape: [Int]
-
-    /// - Parameters:
-    ///   - rank: expected number of dimensions (3 = [1, rows, width], 4 = [1, channels, rows, columns])
-    ///   - rows: how many rows the caller will read (words + 1)
-    ///   - labels: the vocabulary size this array's label dimension must match (nil to skip)
-    init(_ output: MLFeatureProvider, _ name: String, rank: Int, rows: Int,
-         labels: Int? = nil) throws  {
-        guard let array = output.featureValue(for: name)?.multiArrayValue else {
-            throw PipelineError.unexpectedOutput("\(name) is missing")
-        }
-
-        let shape = array.shape.map { $0.intValue }
-        guard shape.count == rank, shape[rank - 2] >= rows else {
-            throw PipelineError.unexpectedOutput("\(name) has shape \(shape); expected rank \(rank) with at least \(rows) rows")
-        }
-        if let labels {
-            let width = rank == 3 ? shape[2] : shape[1]
-            guard width == labels else {
-                throw PipelineError.unexpectedOutput("\(name) has \(width) labels but the vocabulary has \(labels); the vocabulary files and the model are from different training runs")
-            }
-        }
-       switch array.dataType {
-        case .float16, .float32, .double: break
-        default: throw PipelineError.unexpectedOutput("\(name) has an unsupported element type")
-        }
-        self.array = array
-        self.base = UnsafeRawPointer(array.dataPointer)
-        self.dataType = array.dataType
-        self.strides = array.strides.map { $0.intValue }
-        self.shape = shape
-    }
-
-    /// rank 3: value at [0, row, column]
-    func value(row: Int, column: Int) -> Float {
-        load(strides[1] * row + strides[2] * column)
-    }
-
-    /// rank 3: index of the largest value in a row (over the last dimension)
-    func argmax(row: Int) -> Int {
-        var best = 0
-        var bestValue = -Float.infinity
-        for k in 0..<shape[2] {
-            let v = value(row: row, column: k)
-            if v > bestValue { bestValue = v; best = k }
-        }
-        return best
-    }
-
-    /// rank 4 ([1, channels, rows, columns]): value at [0, channel, row, column]
-    func value(channel: Int, row: Int, column: Int) -> Float {
-        load(strides[1] * channel + strides[2] * row + strides[3] * column)
-    }
-
-    private func load(_ offset: Int) -> Float {
-        switch dataType {
-        case .float32:
-            return base.load(fromByteOffset: offset * 4, as: Float.self)
-        case .double:
-            return Float(base.load(fromByteOffset: offset * 8, as: Double.self))
-        default:                                    // .float16, checked in init
-            return Self.float(fromHalfBits: base.load(fromByteOffset: offset * 2, as: UInt16.self))
-        }
-    }
-
-    /// IEEE half -> Float by bit manipulation, so no Float16 type is needed (it isn't
-    /// available when building for Intel simulators).
-    private static func float(fromHalfBits h: UInt16) -> Float {
-        let sign = UInt32(h >> 15) << 31
-        let exponent = UInt32((h >> 10) & 0x1F)
-        let mantissa = UInt32(h & 0x3FF)
-        switch exponent {
-        case 0:
-            let magnitude = Float(mantissa) / 16_777_216        // subnormal (or zero): mantissa * 2^-24
-            return sign == 0 ? magnitude : -magnitude
-        case 0x1F:
-            return Float(bitPattern: sign | 0x7F80_0000 | (mantissa << 13))   // infinity / NaN
-        default:
-            return Float(bitPattern: sign | ((exponent + 112) << 23) | (mantissa << 13))
-        }
     }
 }
 
@@ -280,7 +106,12 @@ struct OutputError: Identifiable {
     let tokCount: Int
     let subtokCount: Int
     let errorType: OnSentResultType
-    
+    }
+
+struct OutputFileListHelper: Identifiable{
+    let id: UUID
+    let runID: String
+    let url: URL
 }
 
 struct RegexLangPatternToLangMap: Identifiable{
@@ -290,50 +121,6 @@ struct RegexLangPatternToLangMap: Identifiable{
     
     var asRegex: Regex<Substring>{
         try! Regex(string)
-    }
-}
-
-struct ResultStorageManager {
-    @discardableResult
-    static func getRunsDirectory() throws -> URL? {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let runsURL = documents.appendingPathComponent("runs", isDirectory: true)
-
-        do {  // Automatically creates the folder if it's missing
-            try FileManager.default.createDirectory(at: runsURL, withIntermediateDirectories: true, attributes: nil)
-            return runsURL
-        } catch {
-            print("Failed to create 'runs' directory: \(error)")
-            throw PipelineError.outputFolderCreationError
-        }
-    }
-
-    static func save(_ runOutput: RunOutput) throws ->URL? {
-        guard let runsFolder = try getRunsDirectory() else { throw PipelineError.outputFolderCreationError }
-        let fileURL = runsFolder.appendingPathComponent("\(runOutput.id).json")
-        
-        do {
-            let data = try JSONEncoder().encode(runOutput)
-            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
-            print("Successfully saved to: \(fileURL.path)")
-            return fileURL
-        } catch {
-            print("Failed to save result: \(error)")
-            throw PipelineError.fileSaveError(filename: fileURL.absoluteString)
-        }
-    }
-
-    static func load(runID: String) throws -> RunOutput? {
-        guard let runsFolder = try getRunsDirectory() else { throw PipelineError.outputFolderCreationError }
-        let fileURL = runsFolder.appendingPathComponent("\(runID).json")
-        
-        do {
-            let data = try Data(contentsOf: fileURL)
-            return try JSONDecoder().decode(RunOutput.self, from: data)
-        } catch {
-            print("Failed to load result: \(error)")
-            return nil
-        }
     }
 }
 
@@ -566,283 +353,6 @@ struct Sentence : Identifiable, Codable {
     }
 }
 
-struct TaggerConfig{
-    // MARK: vars to bring in substructs
-    var id = UUID()
-    var inputConfig: InputConfig
-    var parsingConfig: ParsingConfig
-    var exportConfig: ExportConfig
-    var progressConfig: ProgressConfig
-    var inputData: InputData
-    var outputData : OutputData
-    
-    struct InputConfig{
-        var inputFileType: InputFileType
-        var selectedInputFile: URL?
-        var displayName: String
-        var detectLanguage: Bool
-        var matchFileNameType: Bool
-        init(
-            inputFileType: InputFileType? = nil,
-            detectLanguage: Bool? = nil,
-            matchFileNameType: Bool? = nil,
-            displayName: String? = nil,
-            selectedInputFile: URL? = nil
-        ){
-            self.inputFileType = TaggerConfig.resolveRawRep(passed: inputFileType, key: "inputFileTypeDefault", fallback: InputFileType.txt )
-            self.detectLanguage = TaggerConfig.resolveBool(passed: detectLanguage, key: "detectLangDefault", default: false)
-            self.matchFileNameType = TaggerConfig.resolveBool(passed: matchFileNameType, key: "matchFileNameTypeDefault", default: false)
-            self.displayName = String(UUID().uuidString.prefix(5))
-        }
-    }
-    
-    struct ParsingConfig{
-        var selectedArchitecture: ModelArchitecture
-        var selectedLanguage: Language
-        var selectedTreebank: Language.Treebank
-        var maxPipelineStep: PipelineStep
-        var modelArchitecture: ModelArchitecture
-        var runResentenciser: Bool
-        var runRetokeniser: Bool
-        var tokenizingMethod: TokenizingMethod
-        var sentencizingMethod: SentencizingMethod
-        var insertNewTokPosition: InsertPosition
-        var selectedRetokenisationType: RetokenisationType
-        var priLemSource: LemmaSource
-        var secLemSource: LemmaSource
-        var getSecLems: Bool
-        var runExplicit: Bool
-        var loadingStatusMessage: String
-        var loadingProgress: Double
-        var loadingComplete: Bool
-        var maxSeqLen: Int
-        var maxWords: Int
-        
-        // need to add = nil in init of it's to truly allow no parameters to be specified
-        init(
-            selectedArchitecture: ModelArchitecture? = nil,
-            selectedLanguage: Language? = nil,
-            selectedTreebank: Language.Treebank? = nil,
-            maxPipelineStep: PipelineStep? = nil,
-            modelArchitecture: ModelArchitecture? = nil,
-            runResentenciser: Bool? = nil,
-            runRetokeniser: Bool? = nil,
-            tokenizingMethod: TokenizingMethod? = nil,
-            sentencizingMethod: SentencizingMethod? = nil,
-            insertNewTokPosition: InsertPosition? = nil,
-            selectedRetokenisationType: RetokenisationType? = nil,
-            priLemSource: LemmaSource? = nil,
-            secLemSource: LemmaSource? = nil,
-            getSecLems: Bool? = nil,
-            runExplicit: Bool? = nil,
-            loadingStatusMessage: String? = nil,
-            loadingProgress: Double? = nil,
-            loadingComplete: Bool? = nil,
-            maxSeqLen: Int? = nil,
-            maxWords: Int? = nil
-        ){
-            self.selectedArchitecture = TaggerConfig.resolveRawRep(passed: selectedArchitecture, key: "modelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
-            self.selectedLanguage = TaggerConfig.resolveRawRep(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
-            self.selectedTreebank = TaggerConfig.resolveRawRep(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
-            self.runResentenciser = TaggerConfig.resolveBool(passed: runResentenciser, key: "runResentenciserDefault", default: false)
-            self.runRetokeniser = TaggerConfig.resolveBool(passed: runRetokeniser, key: "runRetokeniserDefault", default: false)
-            self.modelArchitecture = TaggerConfig.resolveRawRep(passed: modelArchitecture, key: "modelArchitectureDefault", fallback: .cnnBiLSTM)
-            self.maxPipelineStep = TaggerConfig.resolveRawRep(passed: maxPipelineStep, key: "maxPipelineStepDefault", fallback: .step5 )
-            self.tokenizingMethod = TaggerConfig.resolveRawRep(passed: tokenizingMethod, key: "tokenizingMethodDefault", fallback: .nltokeniser )
-            self.sentencizingMethod = TaggerConfig.resolveRawRep(passed: sentencizingMethod, key: "sentencizingMethodDefault", fallback: .nlSentencizer )
-            self.insertNewTokPosition = TaggerConfig.resolveRawRep(passed: insertNewTokPosition, key: "insertNewTokPositionDefault", fallback: .after )
-            self.selectedRetokenisationType = TaggerConfig.resolveRawRep(passed: selectedRetokenisationType, key: "retokenisationTypeDefault", fallback: .predict )
-            self.priLemSource = TaggerConfig.resolveRawRep(passed: priLemSource, key: "priLemSourceDefault", fallback: .hybrid )
-            self.secLemSource = TaggerConfig.resolveRawRep(passed: secLemSource, key: "secLemSourceDefault", fallback: .rule )
-            self.getSecLems = TaggerConfig.resolveBool(passed: getSecLems, key: "getSecLemsDefault")
-            self.runExplicit = TaggerConfig.resolveBool(passed: runExplicit, key: "runExplicifDefault")
-            self.maxWords = -1
-            self.maxSeqLen = 2
-            self.loadingStatusMessage = ""
-            self.loadingProgress  = 0.0
-            self.loadingComplete = false
-        }
-        
-    }
-    struct ExportConfig{
-        var fileName: String
-        var targetFolderURL: URL?
-        var selectedExportFormat: ExportFormat
-        var xmlAuthorName: String
-        var xmlTitle: String
-        var includeConllSentIdLine: Bool
-        var includeConllSentText: Bool
-        var getsubtokens: Bool
-        init(
-            fileName: String? = nil,
-            targetFolderURL: URL? = nil,
-            selectedExportFormat: ExportFormat? = nil,
-            xmlAuthorName: String? = nil,
-            xmlTitle: String? = nil,
-            includeConllSentIdLine: Bool? = nil,
-            includeConllSentText: Bool? = nil,
-            getsubtokens: Bool? = nil
-        ) {
-            self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileName") == "" ? makeFilename() : TaggerConfig.resolveString(passed: fileName, key: "fileName")
-            self.targetFolderURL = targetFolderURL
-            ?? URL(string: UserDefaults.standard.string(forKey: "outputDirDefault") ?? "")
-            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            
-            self.selectedExportFormat = TaggerConfig.resolveRawRep(passed: selectedExportFormat, key: "selectedExportFormatDefault", fallback: .xml )
-            self.xmlAuthorName = TaggerConfig.resolveString(passed: xmlAuthorName, key: "xmlAuthorDefault" )
-            self.xmlTitle = TaggerConfig.resolveString(passed: xmlTitle, key: "xmlTitleDefault")
-            self.includeConllSentIdLine = TaggerConfig.resolveBool(passed: includeConllSentIdLine, key: "includeConllSentIdLineDefault", default: true )
-            self.includeConllSentText = TaggerConfig.resolveBool(passed: includeConllSentText, key: "includeConllSentTextDefault", default: true )
-            self.getsubtokens = TaggerConfig.resolveBool(passed: getsubtokens, key: "getsubtokensDefault", default: true )
-        }
-    }
-    struct ProgressConfig{
-        var appleProgress: Progress
-        var progressBarStyle: ProgressBarStyle
-        var startTime: Date?
-        var alertMessage: String?
-        var exportStatusMessage: String?
-        var processedCount: Int
-        var totalCount: Int
-        var hasStarted: Bool
-        var loadTotalCount: Int
-        var loadedCount: Int
-        var loadingComplete: Bool
-        init(
-            appleProgress: Progress? = nil,
-            progressBarStyle: ProgressBarStyle? = nil,
-            startTime: Date? = nil,
-            alertMessage: String? = nil,
-            exportStatusMessage: String? = nil,
-            processedCount: Int? = nil,
-            totalCount: Int? = nil,
-            hasStarted: Bool? = nil,
-            loadTotalCount: Int? = nil,
-            loadedCount: Int? = nil,
-            loadingComplete: Bool? = nil
-        ){
-            self.appleProgress = Progress(totalUnitCount: 1)
-            self.progressBarStyle = TaggerConfig.resolveRawRep(passed: progressBarStyle, key: "progressBarStyleDefault", fallback: .apple)
-            self.startTime = nil
-            self.alertMessage = nil
-            self.exportStatusMessage = nil
-            self.processedCount = 0
-            self.totalCount = 0
-            self.hasStarted = false
-            self.loadTotalCount = 0
-            self.loadedCount = 0
-            self.loadingComplete = false
-        }
-        
-        mutating func reset(){
-            self.appleProgress = Progress(totalUnitCount: 1)
-            self.startTime = nil
-            self.alertMessage = nil
-            self.exportStatusMessage = nil
-            self.processedCount = 0
-            self.totalCount = 0
-            self.hasStarted = false
-            self.loadTotalCount = 0
-            self.loadedCount = 0
-            self.loadingComplete = false
-        }
-    }
-    //    // sentences ::
-    struct InputData{
-        var allSentences: [HashableSentence]
-        var builtSents: [BuiltSentHolder]
-        var sentsToRetokenise: [String]
-        var resentencizerOutputStrings: [String]
-        init(
-            allSentences: [HashableSentence]? = nil,
-            builtSents: [BuiltSentHolder]? = nil,
-            sentsToRetokenise: [String]? = nil,
-            resentencizerOutputStrings: [String]? = nil,
-        )
-        {
-            self.allSentences = []
-            self.builtSents = []
-            self.sentsToRetokenise = []
-            self.resentencizerOutputStrings = []
-        }
-        mutating func reset(){
-            self = Self()
-        }
-    }
-    
-    struct OutputData{
-        var topLevelOutputList: [RunOutput] = []
-        var outputString: String = ""
-        var runOutput: RunOutput?
-        var exportContent: String = ""
-        var safeHeaderAttribs: XmlHeaderAttribs = XmlHeaderAttribs()
-        var outSents: [Sentence] = []
-        var outErrors: [OutputError] = []
-        
-        mutating func reset(){
-            self = Self() // reinit
-        }
-    }
-    
-    // top level init
-    init(
-        parsingConfig: ParsingConfig = ParsingConfig(),
-        inputConfig: InputConfig = InputConfig(),
-        exportConfig: ExportConfig = ExportConfig(),
-        progressConfig: ProgressConfig = ProgressConfig(),
-        inputData: InputData = InputData(),
-        outputData: OutputData = OutputData()
-    ) {
-        self.parsingConfig = parsingConfig
-        self.inputConfig = inputConfig
-        self.exportConfig = exportConfig
-        self.progressConfig = progressConfig
-        self.inputData = inputData
-        self.outputData = outputData
-    }
-    
-    // MARK: - Centralized Static Solvers
-    static func resolveBool(passed: Bool?, key: String, default fallback: Bool = false) -> Bool {
-        if let value = passed { return value }
-        // Check if key exists, otherwise return the fallback default
-        return UserDefaults.standard.object(forKey: key) != nil ? UserDefaults.standard.bool(forKey: key) : fallback
-    }
-    // for strings,
-    static func resolveString(passed: String?, key: String, default fallback: String = "") -> String {
-        if let value = passed { return value }
-        return UserDefaults.standard.string(forKey: key) ?? fallback
-    }
-    // Overloaded resolvers for string and Int backed enums
-    static func resolveRawRep<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == String {
-        if let value = passed { return value }
-        
-        // Try reading the raw string from UserDefaults and converting it back to the enum
-        if let savedString = UserDefaults.standard.string(forKey: key),
-           let enumValue = T(rawValue: savedString) {
-            return enumValue
-        }
-        return fallback
-    }
-        static func resolveRawRep<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == Int {
-        if let value = passed { return value }
-        
-        // Note: Using object(forKey:) as? Int avoids UserDefaults' default '0' bug
-        // if the key hasn't been saved yet.
-        if let savedInt = UserDefaults.standard.object(forKey: key) as? Int,
-           let enumValue = T(rawValue: savedInt) {
-            return enumValue
-        }
-        return fallback
-    }
-    mutating func runResetters(){
-        progressConfig.reset()
-        inputData.reset()
-        outputData.reset() // full reinit
-        print("Running resetters")
-        
-    }
-}
-
 struct TaggerRawOutput {
 // for CNN-BiLSTM model
     /// Holds the raw tensors from 1 tagger_parser model call for 1 sent
@@ -907,44 +417,6 @@ struct VocabData: Decodable {
     let pad: String
     let unk: String
 }
-//define the vocab class
-final class Vocab {
-    let itos: [String]
-    let stoi: [String: Int]
-    let pad: String
-    let unk: String
-    
-    //   //init method for the vocab class
-    init(data: VocabData) {
-        itos = data.itos
-        pad = data.pad
-        unk = data.unk
-        var map = [String: Int](minimumCapacity: data.itos.count)
-        for (i, s) in data.itos.enumerated() { map[s] = i }
-        stoi = map
-    }
-
-    var unkId: Int { stoi[unk] ?? 1 }
-
-    func encode(_ token: String) -> Int {
-        stoi[token] ?? unkId
-    }
-
-    func decode(_ id: Int) -> String {
-        (id >= 0 && id < itos.count) ? itos[id] : unk
-    }
-
-    //func to get path to file, load, decode and return decoded data based on name of json file
-    static func load(named name: String, bundle: Bundle = .main) throws -> Vocab {
-        guard let url = bundle.url(forResource: name, withExtension: "json") else {
-            throw PipelineError.missingResource("\(name).json")
-        }
-        let data = try Data(contentsOf: url)
-        let decoded = try JSONDecoder().decode(VocabData.self, from: data)
-        return Vocab(data: decoded)
-    }
-}
-
 
 /* dealing with XMLconll docs as input */
 struct XMLConllElement {
@@ -1001,3 +473,4 @@ struct XmlHeaderAttribs : Codable{
         self.maxSeqLen = modelArchitecture?.rawValue == "distilbert" ? maxSeqLen ?? "ERR" : "NA"
     }
 }
+
