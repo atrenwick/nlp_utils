@@ -84,7 +84,6 @@ enum InsertPosition : String, Identifiable, CaseIterable{
     case after
 }
 
-
 enum Language: String, CaseIterable, Identifiable {
     // uppercase lang code as used in file paths
     case EN
@@ -220,121 +219,6 @@ enum OnSentResultType: String, RawRepresentable, CaseIterable{
     case otherError
 }
 
-enum PipelineError: LocalizedError{
-    
-    case architectureConflict
-    case badTempTokens
-    case configFileLoadError(name: String)
-    case conllParsingError(line: String, filename:String)
-    case conllLineIdentificationError
-    case conllChunkToLineError
-    case emptyInput
-    case fileLoadError
-    case fileNotInBundle
-    case fileSaveError(filename: String)
-    case inputFileFormatChoiceError
-    case invalidLevel(Int)
-    case invalidModelInputs(String)
-    case languageMethodConflict(language: Language)
-    case lemmatizationFailed(String)
-    case makeConllLinesFromURLError
-    case makeExportContentError
-    case missingResource(String)
-    case missingURL
-    case modelLoadFailed(Error)
-    case noRunOutput
-    case noSentencesLoaded
-    case notReadyToSendToRunner
-    case outputFolderCreationError
-    case packageLoadFailed(String)
-    case parserCreationError(file: URL)
-    case predictionFailed(Error)
-    case predictionFailedAtLogits(String)
-    case resourceMissing(String)
-    case readFromSandboxError
-    case retokenisationError
-    case tokenizationFail(String)
-    case unexpectedOutput(String)
-    case utf8DecodeError
-    case xmlParserFailure(line: Int, reason: String)
-    
-    var errorDescription: String? {
-        switch self{
-        case .architectureConflict:
-            return "conflict between architecture and available models"
-        case .badTempTokens:
-            return "Error makiing hashable sentence from temp tokens"
-        case .configFileLoadError(let filename):
-            return "Failed to load file config file \(filename)"
-        case .conllParsingError(let lineNumber, let filename):
-            return "Error parsing conll lines : 10 fields not found in file \(filename) line \(lineNumber)"
-        case .conllLineIdentificationError:
-            return "Error getting finding sentence chunks in conll input"
-        case .conllChunkToLineError:
-            return "Error in conllChunkToLineError function"
-        case .emptyInput:
-            return "There are no words to annotate"
-        case .fileLoadError:
-            return "Failed to load file"
-        case .fileSaveError(let filename):
-            return "Failed to save to file \(filename)"
-        case .fileNotInBundle:
-            return "File not in bundle"
-        case .inputFileFormatChoiceError:
-            return "Not an XML format"
-        case .invalidLevel(let level):
-            return "Invalid pipeline level \(level): must be between 1 and 5."
-        case .invalidModelInputs(let detail):
-            return "Unexpected model inputs: \(detail)"
-        case .languageMethodConflict(let language):
-            return "Language \(language.rawValue) cannot be used with naive tokenisation"
-        case .lemmatizationFailed(let msg):
-            return "Lemmatization failed: \(msg)"
-        case .makeConllLinesFromURLError:
-            return "Error in makeConllLinesFromURL function"
-        case .makeExportContentError:
-            return "Error in makeExportContent function"
-        case .missingResource(let name):
-            return "Missing bundled resource: \(name). Did you add it to the app target?"
-        case .missingURL:
-            return "No URL provided"
-        case .modelLoadFailed(let error):
-            return "Couldn't load the model: \(error.localizedDescription)"
-        case .noRunOutput:
-            return "No run output to return"
-        case .notReadyToSendToRunner:
-            return "Not ready to send to from loader class to runner class"
-        case .noSentencesLoaded:
-            return "No sentences found when switching on inputFileTYpe"
-        case .outputFolderCreationError:
-            return "Can't create the output folder in sandbox"
-        case .packageLoadFailed(let name):
-            return "Failed to load model from package \(name)"
-        case .parserCreationError(let file):
-            return "Couldn't create XML parser from \(file.lastPathComponent)"
-        case .predictionFailed(let error):
-            return "The model failed to run: \(error.localizedDescription)"
-        case .predictionFailedAtLogits(let message):
-            return message
-        case .resourceMissing(let name):
-            return "Missing resource: \(name)"
-        case .retokenisationError:
-            return "Error retokenising: no sentences found"
-        case .readFromSandboxError:
-            return "Error reading the file from the sandbox"
-        case .tokenizationFail(let message):
-            return "Tokenisation failed :: \(message)"
-        case .unexpectedOutput(let detail):
-            return "Unexpected model output: \(detail)"
-        case .utf8DecodeError:
-            return "Failed to decode as UTF-8"
-        case .xmlParserFailure:
-            return "Unknown XML parsing error with XML parser + delegate"
-        }
-    }
-}
-
-
 enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
     // RawValue type (Int) links each case to an integer (1, 2, 3, 4).
     // Comparable conformance allows using <, >, <=, >= on enum cases.
@@ -422,6 +306,14 @@ enum SentencizingMethod: String, Identifiable, CaseIterable, Codable {
         }
     }
 }
+
+
+
+enum StoreKey {
+    static let outputDir = "outputDirDefault"        // URL (for comparison/display)
+    static let outputBookmark = "outputDirBookmark"  // Data (for access)
+}
+
 
 enum TokenizingMethod : String, Identifiable, CaseIterable, Codable{
     var id: Self {self}

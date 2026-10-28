@@ -6,53 +6,6 @@
 //
 import SwiftUI
 
-struct RunErrorSummaryView: View{
-    let myConfig: TaggerConfig
-    let toksIn: Int
-    var errorCases: [OutputError] { myConfig.outputData.outErrors}
-    var totalSents: Int {
-        errorCases.count + myConfig.outputData.outSents.count
-    }
-    var totalOutputToks: Int {
-        myConfig.outputData.outSents.reduce(0) {$0 + $1.tokCount}
-    }
-    var sentCoverage: String {
-        let intermed = 1 - (Double(errorCases.count) / Double(totalSents))
-        return String(format: "%.2f", (intermed * 100))
-    }
-    var tokCoverage: String {
-        if toksIn == 0 || totalOutputToks == 0 {
-            return " ??? "
-        } else {
-            let intermed = Double(totalOutputToks) / Double(toksIn)
-            return String(format: "%.2f", (intermed * 100))
-        }
-    }
-    
-    var body: some View{
-        Form{
-            Text("Sents: \(errorCases.count) errors in \(totalSents) sents -> \(sentCoverage) % coverage")
-            Text("Toks: \(toksIn) in -> \(totalOutputToks) out :: \(tokCoverage) %")
-            
-            ForEach(errorCases.enumerated(), id: \.offset){(num,item) in
-                VStack{
-                    Text(makeString(num: num, item: item))
-                    HStack{
-                        Text(item.errorType.rawValue)
-                        Text("Toks: \(item.tokCount) :: Subtoks: \(item.subtokCount)")
-                    }
-                }
-            }
-        }
-    }
-    func makeString(num: Int, item: OutputError)-> String{
-        let numStr = String(num+1)
-        let tokChunk = item.sentence.tokens.prefix(5).joined(separator: " ")
-        return "\(numStr): \(tokChunk)"
-    }
-}
-
-
 // detail for each run == child
 struct RunOutputDetailView: View{
     @Environment(\.openURL) var openURL
@@ -159,7 +112,7 @@ struct RunOutputDetailView: View{
                         Spacer()
                         Button {
                             do{
-                                if let savedURL = try ResultStorageManager.save(run){
+                                if let savedURL = try PipelineServices.ResultStorageManager.saveRun(run){
                                     print("Saved to \(savedURL)")}
                             } catch {
                                 switch error {
@@ -181,7 +134,6 @@ struct RunOutputDetailView: View{
                 if hasAppeared == false{
                     hasAppeared = true
                     if let hasURL = run.runMetas.savedURL{
-
                         runOutputFileList.append(
                             OutputFileListHelper(
                                 id: UUID(),
@@ -212,7 +164,7 @@ struct RunOutputDetailView: View{
     }
 
     func additionalExportRunner(
-        run:RunOutput,
+        run: RunOutput,
         additionalExportFormat: ExportFormat
     ) throws -> RunOutput {
         
@@ -225,7 +177,7 @@ struct RunOutputDetailView: View{
         print("exportformat found= \(additionalExportFormat.rawValue)")
         guard !exportContent.isEmpty else {
             print("throw @213")
-            throw PipelineError.makeExportContentError }
+            throw PipelineError.ExportError.makeExportContentError }
         
         let runData = RunData(
             runID: run.runID,
@@ -238,18 +190,6 @@ struct RunOutputDetailView: View{
         return runOutput
     }
 }
-
-struct AdditionalExportParams{
-    let exportFormat: ExportFormat
-    let includeConllSentText: Bool
-}
-
-struct OutputFileListHelper: Identifiable{
-    let id: UUID
-    let runID: String
-    let url: URL
-}
-
 
 // overview list of runs == parent
 struct RunOutputView: View {
@@ -362,7 +302,7 @@ struct RunSelectorModal: View {
     }
 
     private func loadRunSummaries() {
-        guard let runsDir = try? ResultStorageManager.getRunsDirectory() else { return }
+        guard let runsDir = try? PipelineServices.ResultStorageManager.getRunsDirectory() else { return }
         
         do {
             let contents = try FileManager.default.contentsOfDirectory(
@@ -387,3 +327,51 @@ struct RunSelectorModal: View {
         }
     }
 }
+
+
+struct RunErrorSummaryView: View{
+    let myConfig: TaggerConfig
+    let toksIn: Int
+    var errorCases: [OutputError] { myConfig.outputData.outErrors}
+    var totalSents: Int {
+        errorCases.count + myConfig.outputData.outSents.count
+    }
+    var totalOutputToks: Int {
+        myConfig.outputData.outSents.reduce(0) {$0 + $1.tokCount}
+    }
+    var sentCoverage: String {
+        let intermed = 1 - (Double(errorCases.count) / Double(totalSents))
+        return String(format: "%.2f", (intermed * 100))
+    }
+    var tokCoverage: String {
+        if toksIn == 0 || totalOutputToks == 0 {
+            return " ??? "
+        } else {
+            let intermed = Double(totalOutputToks) / Double(toksIn)
+            return String(format: "%.2f", (intermed * 100))
+        }
+    }
+    
+    var body: some View{
+        Form{
+            Text("Sents: \(errorCases.count) errors in \(totalSents) sents -> \(sentCoverage) % coverage")
+            Text("Toks: \(toksIn) in -> \(totalOutputToks) out :: \(tokCoverage) %")
+            
+            ForEach(errorCases.enumerated(), id: \.offset){(num,item) in
+                VStack{
+                    Text(makeSentStartString(num: num, item: item))
+                    HStack{
+                        Text(item.errorType.rawValue)
+                        Text("Toks: \(item.tokCount) :: Subtoks: \(item.subtokCount)")
+                    }
+                }
+            }
+        }
+    }
+    func makeSentStartString(num: Int, item: OutputError)-> String{
+        let numStr = String(num+1)
+        let tokChunk = item.sentence.tokens.prefix(5).joined(separator: " ")
+        return "\(numStr): \(tokChunk)"
+    }
+}
+

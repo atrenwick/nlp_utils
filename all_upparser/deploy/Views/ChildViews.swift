@@ -7,7 +7,7 @@
 
 import SwiftUI
 internal import UniformTypeIdentifiers
-
+//look at built sentences
 struct BuiltSentsViewer: View {
     @Binding var myConfig: TaggerConfig
     @Binding var builtSents:[BuiltSentHolder]
@@ -29,7 +29,7 @@ struct BuiltSentsViewer: View {
         }
     }
 }
-
+//choose which file to omport
 struct ChooseInputFileViewSection: View {
     // for choosing the source file to get, parse
     @State private var isSelectingFile: Bool = false
@@ -72,7 +72,7 @@ struct ChooseInputFileViewSection: View {
         }
     }
 }
-
+//choose where to export file
 struct ExportConfigViewSection: View {
     @State private var isSelectingFolder: Bool = false
     @State private var isProcessing: Bool = false
@@ -135,7 +135,7 @@ struct ExportConfigViewSection: View {
         }
     }
 }
-
+// set name of file to export
 struct FileNameInputViewSection: View {
     // contains TextField for entering name of file to export
     @Binding var myConfig: TaggerConfig
@@ -169,7 +169,7 @@ struct FileNameInputViewSection: View {
             .appendingPathExtension("json")
     }
 }
-
+// view for choosing input file type
 struct InputFileViewEncapsulator: View {
     @Binding var myConfig: TaggerConfig
     @Binding var builtSents: [BuiltSentHolder]
@@ -193,9 +193,7 @@ struct InputFileViewEncapsulator: View {
         }
     }
 }
-
-
-
+//list of output files
 struct OutputFileListView: View{
     let runOutputFileList: [OutputFileListHelper]
     var body: some View{
@@ -208,8 +206,8 @@ struct OutputFileListView: View{
         }
     }
 }
-
-struct OutputLinesViewSection: View {
+// list of output lines
+struct OutputLinesExtractedView: View {
     let outputLines: [String]
     
     private var visibleSents: [String] {
@@ -231,8 +229,8 @@ struct OutputLinesViewSection: View {
         .cornerRadius(8)
     }
 }
-
-struct PretokenisedSentViewSection : View {
+// look at pretok sents
+struct PretokenisedSentExtractedView : View {
     @Binding var pretokSentsOut: [HashableSentence]
     var body: some View{
         ScrollView{
@@ -254,7 +252,7 @@ struct PretokenisedSentViewSection : View {
         pretokSentsOut.remove(atOffsets: offsets)
     }
 }
-
+// edit tok
 struct TokenisationEditView: View {
     @Binding var toks: [TempToken]
     @FocusState var isFocused
@@ -308,7 +306,7 @@ struct TokenisationEditView: View {
 
 
 
-struct BigGoButtonReadinessView: View{
+struct BigGoButtonReadinessExtractedView: View{
     let isPipelineReady: Bool
     let missingReqsMessage: String
     var body: some View{
@@ -329,7 +327,7 @@ struct BigGoButtonReadinessView: View{
     }
 }
 
-struct InputTypeEncapsulatorView: View{
+struct InputTypeExtractedView: View{
     @Binding var myConfig: TaggerConfig
     @Binding var fileContainerModel: SourceFileContainerModel
     var body: some View{
@@ -355,7 +353,7 @@ struct InputTypeEncapsulatorView: View{
     }
 }
 
-struct RunExplicitButtonView: View{
+struct RunExplicitButtonExtractedView: View{
     @Binding var myConfig: TaggerConfig
     @State var outputString: String = "not yet run"
     
@@ -385,7 +383,7 @@ struct RunExplicitButtonView: View{
     }
 }
 
-struct TaggingProgressButton: View{
+struct TaggingProgressButtonExtractedView: View{
     let taggingInProgress: Bool
     let isPipelineReady: Bool
     let pipelineSummary: String
@@ -408,7 +406,7 @@ struct TaggingProgressButton: View{
     }
 }
 
-struct ToolbarLinkToOutputView: View {
+struct ToolbarLinkToOutputExtractedView: View {
     @Binding var myConfig: TaggerConfig
     @Binding var topLevelOutputList: [RunOutput]
     @Binding var builtSents: [BuiltSentHolder]

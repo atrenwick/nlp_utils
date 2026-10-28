@@ -14,13 +14,13 @@ extension Bundle {
     func loadText(_ file: String, format: String) throws -> String {
         let normalizedText: String
         guard let url = self.url(forResource: file, withExtension: nil) else {
-            throw PipelineError.fileNotInBundle
+            throw PipelineError.LoadingError.fileNotInBundle
         }
         guard let data = try? Data(contentsOf: url) else {
-            throw PipelineError.fileLoadError
+            throw PipelineError.LoadingError.fileLoadError
         }
         guard let text = String(data: data, encoding: .utf8) else {
-            throw PipelineError.utf8DecodeError
+            throw PipelineError.IngestionError.utf8DecodeError
         }
         // BBEdit yields texts with tab = 4 spaces so send to \t here
         if format == "conllu" {
@@ -58,7 +58,7 @@ extension Bundle {
                 let _ = try JSONSerialization.jsonObject(with: data)
             }
             catch {
-                printJSONError(error)
+                PrintWorkflow.printJSONError(error)
             }
 
         } catch DecodingError.typeMismatch(_, let context){
@@ -69,7 +69,7 @@ extension Bundle {
                 let _ = try JSONSerialization.jsonObject(with: data)
             }
             catch {
-                printJSONError(error)
+                PrintWorkflow.printJSONError(error)
             }
             
         } catch DecodingError.valueNotFound(let type, let context){
@@ -78,7 +78,7 @@ extension Bundle {
                 let _ = try JSONSerialization.jsonObject(with: data)
             }
             catch {
-                printJSONError(error)
+                PrintWorkflow.printJSONError(error)
             }
         } catch DecodingError.dataCorrupted(let context){
             fatalError("Failed to decode file \(file) : the file is not valid JSON:: \(context)")
@@ -86,7 +86,7 @@ extension Bundle {
                 let _ = try JSONSerialization.jsonObject(with: data)
             }
             catch {
-                printJSONError(error)
+                PrintWorkflow.printJSONError(error)
             }
         } catch {
             fatalError("Failed to decode \(file) : \(error.localizedDescription)")

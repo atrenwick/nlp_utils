@@ -61,7 +61,7 @@ struct ManualTokenisationView: View {
                             let toksAsStrings = try TokenisationWorkflow.applyNaiveTokenisation(language: myConfig.parsingConfig.selectedLanguage, myString: thisSentence)
                             tempTokens = toksAsStrings.map {$0.asTempToken}
                         } catch {
-                            PipelineError.retokenisationError
+                            PipelineError.IngestionError.retokenisationError
                             // what's this catch doing………
                         }
                     } label: {

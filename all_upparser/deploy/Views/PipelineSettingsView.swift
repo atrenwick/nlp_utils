@@ -9,20 +9,20 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
 
+
 struct PipelineSettingsView: View {
     // input file
     @State var fileContainerModel = SourceFileContainerModel()
     @State var myConfig: TaggerConfig = TaggerConfig()
     @State var tempTokens: [TempToken] = []
-    
     // reporting
-    @State private var isLoading = false
-    @State private var loadedCount = 0
-    @State private var loadStatus = ""
-    @State private var topLevelOutputList: [RunOutput] = []
-    @State private var exportStatusMessage: String?
-    @State private var runOutput: RunOutput?
-    @State private var taggingInProgress: Bool = false
+    @State internal var isLoading = false
+    @State internal var loadedCount = 0
+    @State internal var loadStatus = ""
+    @State internal var topLevelOutputList: [RunOutput] = []
+    @State internal var exportStatusMessage: String?
+    @State internal var runOutput: RunOutput?
+    @State internal var taggingInProgress: Bool = false
     @State var isFirstRun: Bool = true
     @State var pipelineSummary: String = ""
     @State var currentStatus: String = ""
@@ -30,15 +30,6 @@ struct PipelineSettingsView: View {
     @State var builtSents: [BuiltSentHolder] = []
     @State var sentsToRetokenise: [String] = []
     @State var exportContent: String = ""
-    
-
-    var loadTotal: Int {
-        if myConfig.parsingConfig.modelArchitecture == .distilbert {
-            return 4
-        } else {
-            return 10
-        }
-    }
     
     var unreadCount: Int {
         topLevelOutputList.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
@@ -50,7 +41,7 @@ struct PipelineSettingsView: View {
     var body: some View {
         NavigationStack{
             Form {
-                InputTypeEncapsulatorView(myConfig: $myConfig, fileContainerModel: $fileContainerModel)
+                InputTypeExtractedView(myConfig: $myConfig, fileContainerModel: $fileContainerModel)
                     .accessibilityIdentifier("InputTypePicker")
                 // watch this with $matchFileNameTypeDefault
                 
@@ -106,14 +97,14 @@ struct PipelineSettingsView: View {
 
                 ExportConfigViewSection(myConfig: $myConfig)
                 //#if debug
-                //                RunExplicitButtonView(myConfig: $myConfig)
+                //                RunExplicitButtonExtractedView(myConfig: $myConfig)
                 //#endif
                 // MARK: the Go button
                 Section {
                     var myNum: Int = 0
-                    BigGoButtonReadinessView(
+                    BigGoButtonReadinessExtractedView(
                         isPipelineReady: isPipelineReady,
-                        missingReqsMessage: missingRequirementsMessage
+                        missingReqsMessage: missingReqsMessage
                     )
                     if isLoading {
                         VStack {
@@ -136,7 +127,7 @@ struct PipelineSettingsView: View {
                         } // close action brace
                     ) // close button bracket
                     {
-                        TaggingProgressButton(taggingInProgress: taggingInProgress, isPipelineReady: isPipelineReady, pipelineSummary: pipelineSummary)
+                        TaggingProgressButtonExtractedView(taggingInProgress: taggingInProgress, isPipelineReady: isPipelineReady, pipelineSummary: pipelineSummary)
                     }
                     .buttonStyle(.borderedProminent)
                     .clipShape(Capsule())
@@ -164,7 +155,7 @@ struct PipelineSettingsView: View {
             // MARK: toolbar :
             .toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
-                    ToolbarLinkToOutputView(
+                    ToolbarLinkToOutputExtractedView(
                         myConfig: $myConfig,
                         topLevelOutputList: $topLevelOutputList,
                         builtSents: $builtSents,
@@ -177,7 +168,124 @@ struct PipelineSettingsView: View {
         }
     }
     
-    private func runTagging(
+
+}
+
+#Preview {
+    PipelineSettingsView()
+}
+
+
+
+extension PipelineSettingsView {
+    //MARK:  calculated properties
+    var loadTotal: Int {
+        if myConfig.parsingConfig.modelArchitecture == .distilbert {
+            return 4
+        } else {
+            return 10
+        }
+    }
+
+    // 1. Array of missing configuration items
+    var missingReqs: [String] {
+        var missing: [String] = []
+        
+        // Rule 1: Check input file exists in sandbox
+        if fileContainerModel.localSandboxFileURL == nil && myConfig.inputConfig.inputFileType != .manual{
+            missing.append("Input File")
+        }
+        
+        let ext = fileContainerModel.localSandboxFileURL?.pathExtension ?? "nil"
+        if  myConfig.inputConfig.inputFileType.allowedReadExt.contains(ext) == false  && myConfig.inputConfig.inputFileType != .manual {
+            missing.append("extension-InputType Mismatch")
+        }
+        
+        if myConfig.inputConfig.inputFileType == .manual && myConfig.inputData.builtSents.count == 0 {
+            missing.append("No built sents found")
+        }
+        
+        // Rule 2: Check custom output filename is typed
+        if myConfig.exportConfig.fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            missing.append("Output Filename")
+        }
+        
+        // Rule 3: Check target folder (or destination setting)
+        if myConfig.exportConfig.targetFolderURL == nil { // and in sandbox || has auth.
+            
+            missing.append("Export Directory")
+        }
+        
+        return missing
+    }
+    
+    // 2. Boolean check for the .disabled() modifier
+    var isPipelineReady: Bool {
+        return missingReqs.isEmpty
+    }
+    
+    // 3. User-friendly warning message
+    var missingReqsMessage: String {
+        guard !missingReqs.isEmpty else { return "" }
+        
+        if missingReqs.count == 1 {
+            return "Set: \(missingReqs[0])"
+        } else {
+            // Lists items cleanly: "Missing required settings: Input File, Output Filename, Export Directory"
+            return "Missing required settings: \(missingReqs.joined(separator: ", "))"
+        }
+    }
+    
+    //MARK: instance methods
+    func processSentsFromPipeline(sentResult: OnSentResult, myConfig: Binding<TaggerConfig>)   {
+        
+        switch sentResult.resultType {
+        case .success:
+            myConfig.wrappedValue.outputData.outSents.append(
+                PostPipelineWorkflow.postprocessSentence(sentence: sentResult.sentence, parsedTokens: sentResult.decoded, myConfig: myConfig.wrappedValue)
+            )
+        default:
+            myConfig.wrappedValue.outputData.outErrors.append(PostPipelineWorkflow.postprocessErrorSent(sentResult: sentResult))
+            print("error handled")
+        }
+        if myConfig.wrappedValue.parsingConfig.runExplicit { print("awaitng mainactor line 237") }
+    }
+    
+    func callPipelineLoader(myConfig: TaggerConfig) async throws -> PipelineHelper{
+        let pipeline: PipelineHelper
+        var currentStatus: String = ""
+        isLoading = true
+        do {
+            switch myConfig.parsingConfig.modelArchitecture {
+            case .distilbert:
+                let loader = BERTlikePipelineLoader()
+                pipeline = try await loader.loadBERTlikePipe(myConfig: myConfig) {step, message in
+                    loadedCount = step
+                    loadStatus = message
+                }
+                if myConfig.parsingConfig.runExplicit { print("bert pipeline called") }
+            case .cnnBiLSTM:
+                let loader = CNNBiLSTMPipelineLoader()
+                pipeline = try await loader.loadCNNBiLSTMpipe(myConfig: myConfig) {step, message in
+                    loadedCount = step
+                    loadStatus = message
+                }
+                currentStatus = "loaded cnnBiLSTM"
+                if myConfig.parsingConfig.runExplicit { print("loaded cnnBiLSTM") }
+            }
+        } catch {
+            if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)")}
+            currentStatus = "Error loading pipeline."
+            throw PipelineError.ConfigurationError.notReadyToSendToRunner
+        }
+        
+        if myConfig.parsingConfig.runExplicit { print(currentStatus) }
+        isLoading = false
+        return pipeline
+        
+    }
+
+    func runTagging(
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
         taggingInProgress: Binding<Bool>,
@@ -205,10 +313,19 @@ struct PipelineSettingsView: View {
                 do {
                     currentStatus = "Loading pipeline"
                     pipeline = try await callPipelineLoader(myConfig: myConfig)
+                    myConfig.parsingConfig.maxWords = pipeline.maxWords
+                    myConfig.outputData.safeHeaderAttribs.maxWords = String(pipeline.maxWords)
+//MARK: set pipeline maxwords, seqlen
+                    print("Pipelinemax_words = \(pipeline.maxWords) @ 228")
+                    if let pipeline = pipeline as? SubtokenAwarePipelineHelper {
+                        myConfig.outputData.safeHeaderAttribs.maxSeqLen = String(pipeline.seqLen)
+                        myConfig.parsingConfig.maxSeqLen = pipeline.seqLen
+                        print("maxSeqLen = \(pipeline.seqLen) @ 232")
+                    }
                 } catch {
                     print("Failed to load pipeline: \(error)")
                     currentStatus = "Error loading pipeline."
-                    throw PipelineError.notReadyToSendToRunner
+                    throw PipelineError.ConfigurationError.notReadyToSendToRunner
                 }
                 if myConfig.parsingConfig.runExplicit { print(currentStatus) }
                 
@@ -216,7 +333,7 @@ struct PipelineSettingsView: View {
                 allSentences = try SentencizationWorkflow.ingestSentences(currentStatus: currentStatus, myConfig: myConfig, pipeline: pipeline)
                 guard !allSentences.isEmpty else {
                     taggingInProgress.wrappedValue = false
-                    throw PipelineError.noSentencesLoaded
+                    throw PipelineError.IngestionError.noSentencesLoaded
                 }
                 
                 //MARK: run resentenciser on request
@@ -277,14 +394,14 @@ struct PipelineSettingsView: View {
                         myConfig.progressConfig.appleProgress.completedUnitCount = Int64(myConfig.progressConfig.processedCount)
                     }
                 }
-                
+//MARK: print
                 try PrintWorkflow.dumpDetailsForRunExplicit(myConfig: myConfig, taggingInProgress: $taggingInProgress)
                 runOutput = PostPipelineWorkflow.makeTidyRunOutput(myConfig: myConfig)
                 
                 try await MainActor.run {
                     taggingInProgress.wrappedValue = false
                     currentStatus = "Done"
-                    guard let runOutput else { throw PipelineError.noRunOutput }
+                    guard let runOutput else { throw PipelineError.ProcessingError.noRunOutput }
                     topLevelOutputList.append(runOutput)
                     if myConfig.parsingConfig.runExplicit{
                         print("topLevelOutputList length == \(topLevelOutputList.count)")
@@ -306,57 +423,4 @@ struct PipelineSettingsView: View {
         }
     }
 
-    func processSentsFromPipeline(sentResult: OnSentResult, myConfig: Binding<TaggerConfig>)   {
-        
-        switch sentResult.resultType {
-        case .success:
-            myConfig.wrappedValue.outputData.outSents.append(
-                PostPipelineWorkflow.postprocessSentence(sentence: sentResult.sentence, parsedTokens: sentResult.decoded, myConfig: myConfig.wrappedValue)
-            )
-        default:
-            myConfig.wrappedValue.outputData.outErrors.append(PostPipelineWorkflow.postprocessErrorSent(sentResult: sentResult))
-            print("error handled")
-        }
-        if myConfig.wrappedValue.parsingConfig.runExplicit { print("awaitng mainactor line 237") }
-    }
-
-    
-    func callPipelineLoader(myConfig: TaggerConfig) async throws -> PipelineHelper{
-        let pipeline: PipelineHelper
-        var currentStatus: String = ""
-        isLoading = true
-        do {
-            switch myConfig.parsingConfig.modelArchitecture {
-            case .distilbert:
-                let loader = BERTlikePipelineLoader()
-                pipeline = try await loader.loadBERTlikePipe(myConfig: myConfig) {step, message in
-                    loadedCount = step
-                    loadStatus = message
-                }
-                if myConfig.parsingConfig.runExplicit { print("bert pipeline called") }
-            case .cnnBiLSTM:
-                let loader = CNNBiLSTMPipelineLoader()
-                pipeline = try await loader.loadCNNBiLSTMpipe(myConfig: myConfig) {step, message in
-                    loadedCount = step
-                    loadStatus = message
-                }
-                currentStatus = "loaded cnnBiLSTM"
-                if myConfig.parsingConfig.runExplicit { print("loaded cnnBiLSTM") }
-            }
-        } catch {
-            if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)")}
-            currentStatus = "Error loading pipeline."
-            throw PipelineError.notReadyToSendToRunner
-        }
-        
-        if myConfig.parsingConfig.runExplicit { print(currentStatus) }
-        isLoading = false
-        return pipeline
-        
-    }
 }
-
-#Preview {
-    PipelineSettingsView()
-}
-

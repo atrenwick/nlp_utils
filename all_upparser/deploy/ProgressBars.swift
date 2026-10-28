@@ -15,7 +15,6 @@ enum ProgressBarStyle: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-
 struct ProgressBarStylePicker: View {
     @Binding var selection: ProgressBarStyle
 
@@ -28,7 +27,6 @@ struct ProgressBarStylePicker: View {
         .pickerStyle(.segmented)
     }
 }
-
 
 /// tqdm-style text line. uses  caller to track processed/total/startTime
 struct TqdmProgressView: View {
@@ -61,17 +59,10 @@ struct TqdmProgressView: View {
 }
 
 struct AppleProgressView: View {
-
     @Binding var myConfig: TaggerConfig
-
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             ProgressView(myConfig.progressConfig.appleProgress)
-//            if let description = progress.localizedDescription {
-//                Text(description)
-//                    .font(.caption2)
-//                    .foregroundColor(.secondary)
-//            }
         }
     }
 }
@@ -81,10 +72,6 @@ struct PipelineProgressView: View {
     @Binding var currentStatus: String
 
     var body: some View {
-//        HStack{
-//            Text("Status = \(currentStatus)")
-//        }
-//        
         if myConfig.progressConfig.hasStarted{
             switch myConfig.progressConfig.progressBarStyle {
             case .tqdm:
@@ -103,10 +90,8 @@ struct RunProgressButton: View {
     let isPipelineReady: Bool
     let inputFileType: InputFileType
     let maxPipelineStep: PipelineStep
-//    @Binding var currentStatus: String
     
     var body: some View {
-//        Text(currentStatus)
             HStack {
                 Image(systemName: taggingInProgress ? "hourglass" : "play.fill")
                 Text(taggingInProgress ? "(\(processed)/\(total))" : "Run")

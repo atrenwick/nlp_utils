@@ -40,10 +40,12 @@ struct SetDefaultsView: View {
     //export
     @AppStorage("xmlAuthorDefault")  var xmlAuthorDefault: String = "XML Author"
     @AppStorage("xmlTitleDefault")  var xmlTitleDefault: String = "XML Title"
-    @AppStorage("fileNameDefault") var fileNameDefault: String = makeFilename() //"fileName"
+    @AppStorage("fileNameDefault") var fileNameDefault: String = GeneralOutputMakingWorkflow.makeFilename()
     @AppStorage("selectedExportFormatDefault")  var selectedExportFormatDefault: ExportFormat = .xml
     @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
     @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
+
+    @AppStorage("outputDirBookmark") private var outputDirBookmark: Data?
     @AppStorage("outputDirDefault") var outputDirDefault: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         
     @State var sentences: [String] = []
@@ -165,11 +167,18 @@ struct SetDefaultsView: View {
                 ) { result in
                     switch result {
                     case .success(let urls):
-                        if let url = urls.first {
-                            // Gain security access to folder
-                            if url.startAccessingSecurityScopedResource() {
-                                outputDirDefault = url
-                            }
+                        guard let url = urls.first else { return }
+                        guard url.startAccessingSecurityScopedResource() else { return }
+                        defer { url.stopAccessingSecurityScopedResource() }
+
+                        do {
+                            outputDirBookmark = try url.bookmarkData(   // send bookmark to @AppStorage
+                                options: [],                      // on iOS, no .withSecurityScope option
+                                includingResourceValuesForKeys: nil,
+                                relativeTo: nil
+                            )
+                        } catch {
+                            print("Bookmark error: \(error)")
                         }
                     case .failure(let error):
                         print("Folder selection error: \(error.localizedDescription)")

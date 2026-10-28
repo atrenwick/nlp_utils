@@ -11,7 +11,7 @@ import SwiftUI
 struct TaggerApp: App {
     init() {
         // Ensure the runs directory exists the second the app opens
-        try? ResultStorageManager.getRunsDirectory()
+        try? PipelineServices.ResultStorageManager.getRunsDirectory()
     }
     var body: some Scene {
         WindowGroup {
