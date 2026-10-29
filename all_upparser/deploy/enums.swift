@@ -282,6 +282,11 @@ enum RegexStash{
     }
 }
 
+enum ResetDirOption{
+    case defaultvalue
+    case sandbox
+}
+
 enum RetokenisationType: String, Identifiable, CaseIterable, Codable{
     var id: Self {self}
     case predict = "Predict"
@@ -307,13 +312,10 @@ enum SentencizingMethod: String, Identifiable, CaseIterable, Codable {
     }
 }
 
-
-
 enum StoreKey {
     static let outputDir = "outputDirDefault"        // URL (for comparison/display)
     static let outputBookmark = "outputDirBookmark"  // Data (for access)
 }
-
 
 enum TokenizingMethod : String, Identifiable, CaseIterable, Codable{
     var id: Self {self}

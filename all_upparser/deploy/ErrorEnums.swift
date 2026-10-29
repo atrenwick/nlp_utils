@@ -1,12 +1,11 @@
 //
-//  Errors.swift
+//  PipelineErrors.swift
 //  Tagger
 //
 //  Created by Adam on 28/10/2026.
 //
 
 import Foundation
-
 
 enum PipelineError: LocalizedError{
     
@@ -128,9 +127,7 @@ enum PipelineError: LocalizedError{
                 return "No run output to return"
             case .lemmatizationFailed(let msg):
                 return "Lemmatization failed: \(msg)"
-                
             }
-            // pipeline
         }
     }
     // errors when tryign to save what pipeline returned
@@ -167,5 +164,4 @@ enum PipelineError: LocalizedError{
             }
         }
     }
-
 }

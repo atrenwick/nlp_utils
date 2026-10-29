@@ -123,9 +123,8 @@ struct PipelineSettingsView: View {
                                 isFirstRun: $isFirstRun
                             )
                             myNum += 1
-                            // close runTagging bracket
-                        } // close action brace
-                    ) // close button bracket
+                        }
+                    )
                     {
                         TaggingProgressButtonExtractedView(taggingInProgress: taggingInProgress, isPipelineReady: isPipelineReady, pipelineSummary: pipelineSummary)
                     }
@@ -135,7 +134,7 @@ struct PipelineSettingsView: View {
                     .disabled(taggingInProgress || !isPipelineReady)
                     .padding()
                     
-                } //close Go button section
+                }
                 .alert(
                     " Error",
                     isPresented: Binding(
@@ -167,8 +166,6 @@ struct PipelineSettingsView: View {
             }
         }
     }
-    
-
 }
 
 #Preview {
@@ -212,7 +209,6 @@ extension PipelineSettingsView {
         
         // Rule 3: Check target folder (or destination setting)
         if myConfig.exportConfig.targetFolderURL == nil { // and in sandbox || has auth.
-            
             missing.append("Export Directory")
         }
         
@@ -282,7 +278,6 @@ extension PipelineSettingsView {
         if myConfig.parsingConfig.runExplicit { print(currentStatus) }
         isLoading = false
         return pipeline
-        
     }
 
     func runTagging(
@@ -291,7 +286,6 @@ extension PipelineSettingsView {
         taggingInProgress: Binding<Bool>,
         isFirstRun: Binding<Bool>
     ) {
-        
         if !isFirstRun.wrappedValue {
             myConfig.runResetters()
         } else {
@@ -302,7 +296,7 @@ extension PipelineSettingsView {
         taggingInProgress.wrappedValue = true
         myConfig.progressConfig.hasStarted = true
         let theseHeaderAttribs = XMLMakingWorkflow.makeSafeHeaderAttribs(myConfig: myConfig, fileContainerModel: fileContainerModel)
-        print("Build header attribs: \(theseHeaderAttribs)")
+        if myConfig.parsingConfig.runExplicit { print("Build header attribs: \(theseHeaderAttribs)") }
         myConfig.outputData.safeHeaderAttribs = theseHeaderAttribs
         
         // MARK: tagging :
@@ -315,15 +309,15 @@ extension PipelineSettingsView {
                     pipeline = try await callPipelineLoader(myConfig: myConfig)
                     myConfig.parsingConfig.maxWords = pipeline.maxWords
                     myConfig.outputData.safeHeaderAttribs.maxWords = String(pipeline.maxWords)
-//MARK: set pipeline maxwords, seqlen
-                    print("Pipelinemax_words = \(pipeline.maxWords) @ 228")
+                    //MARK: set pipeline maxwords, seqlen
+                    if myConfig.parsingConfig.runExplicit { print("Pipelinemax_words = \(pipeline.maxWords) @ 228") }
                     if let pipeline = pipeline as? SubtokenAwarePipelineHelper {
                         myConfig.outputData.safeHeaderAttribs.maxSeqLen = String(pipeline.seqLen)
                         myConfig.parsingConfig.maxSeqLen = pipeline.seqLen
-                        print("maxSeqLen = \(pipeline.seqLen) @ 232")
+                        if myConfig.parsingConfig.runExplicit { print("maxSeqLen = \(pipeline.seqLen) @ 232")}
                     }
                 } catch {
-                    print("Failed to load pipeline: \(error)")
+                    if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)") }
                     currentStatus = "Error loading pipeline."
                     throw PipelineError.ConfigurationError.notReadyToSendToRunner
                 }

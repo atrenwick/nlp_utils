@@ -295,7 +295,7 @@ struct RunSelectorModal: View {
             }
         }
     }
-    func descTexts(helper: RunSelectorHelper) -> [String] {
+    private func descTexts(helper: RunSelectorHelper) -> [String] {
         let line1 = String("\(helper.runMetas.sourceFileName) -> \(helper.runMetas.exportFormat.rawValue)")
         let line2 = "\(helper.runMetas.processedCount) sents :: \(helper.runMetas.lang) :: \(helper.runMetas.treebank) :: Steps 2- \(helper.runMetas.maxPipelineStep.rawValue)"
         return [line1, line2]

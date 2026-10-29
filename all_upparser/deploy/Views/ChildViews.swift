@@ -5,6 +5,7 @@
 //  Created by Adam on 10/09/2026.
 // :: child views which get rendered in parent view :: all have ViewSection as part of name
 
+
 import SwiftUI
 internal import UniformTypeIdentifiers
 //look at built sentences
@@ -77,7 +78,7 @@ struct ExportConfigViewSection: View {
     @State private var isSelectingFolder: Bool = false
     @State private var isProcessing: Bool = false
     @Binding var myConfig: TaggerConfig
-
+    
     var xmlSettingDisplayText: String{
         switch myConfig.exportConfig.selectedExportFormat {
         case .xml:
@@ -88,7 +89,7 @@ struct ExportConfigViewSection: View {
             return "CoNLL settings"
         }
     }
-
+    
     var body: some View {
         Section("Export Configuration") {
             Picker("Export (sub)type", selection: $myConfig.exportConfig.selectedExportFormat){
@@ -108,7 +109,34 @@ struct ExportConfigViewSection: View {
                 Button("Choose...") {
                     isSelectingFolder = true
                 }
-            }
+            }.contentShape(Rectangle())
+                .swipeActions(edge: .leading){
+                    let generator = UIImpactFeedbackGenerator(style: .medium)
+                    HStack{
+                        Button(role: .confirm){
+                            setOutputDirTo(.defaultvalue)
+                            generator.impactOccurred()
+                        } label: {
+                            VStack{
+                                Text("Default")
+                                    .foregroundStyle(.primary)
+                                Image(systemName: "house.fill")
+                            }
+                            .tint(.blue)
+                        }
+                        Button(role: .confirm){
+                            setOutputDirTo(.sandbox)
+                            generator.impactOccurred()
+                        } label: {
+                            VStack(spacing: 2) {
+                                Image(systemName: "iphone")
+                                    .font(.body)
+                                Text("Sandbox")
+                                    .font(.caption)
+                            }
+                        }.tint(.green)
+                    }
+                }
             NavigationLink {
                 ExportSettingsDetailView(myConfig: $myConfig)
             } label: {
@@ -123,18 +151,34 @@ struct ExportConfigViewSection: View {
         ) { result in
             switch result {
             case .success(let urls):
+                // get user chosen
                 if let url = urls.first {
                     // Gain security access to folder
                     if url.startAccessingSecurityScopedResource() {
                         myConfig.exportConfig.targetFolderURL = url
                     }
                 }
+                
             case .failure(let error):
                 print("Folder selection error: \(error.localizedDescription)")
             }
         }
     }
+    private func setOutputDirTo(_ dir: ResetDirOption) {
+        // Re-assign the default bookmark URL back to the config instance
+        switch dir {
+        case .defaultvalue:
+            myConfig.exportConfig.targetFolderURL = PipelineServices.ExporterService.resolveDefaultBookmark()
+        case .sandbox:
+            myConfig.exportConfig.targetFolderURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        }
+    }
 }
+#Preview {
+    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
+    ExportConfigViewSection(myConfig: $myConfig)
+}
+
 // set name of file to export
 struct FileNameInputViewSection: View {
     // contains TextField for entering name of file to export

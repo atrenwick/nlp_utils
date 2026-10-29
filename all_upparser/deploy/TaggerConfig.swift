@@ -126,9 +126,7 @@ struct TaggerConfig{
             getsubtokens: Bool? = nil
         ) {
             self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileName") == "" ? GeneralOutputMakingWorkflow.makeFilename() : TaggerConfig.resolveString(passed: fileName, key: "fileName")
-            self.targetFolderURL = targetFolderURL
-            ?? URL(string: UserDefaults.standard.string(forKey: "outputDirDefault") ?? "")
-            ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            self.targetFolderURL = PipelineServices.ExporterService.resolveDefaultBookmark()
             
             self.selectedExportFormat = TaggerConfig.resolveRawRep(passed: selectedExportFormat, key: "selectedExportFormatDefault", fallback: .xml )
             self.xmlAuthorName = TaggerConfig.resolveString(passed: xmlAuthorName, key: "xmlAuthorDefault" )

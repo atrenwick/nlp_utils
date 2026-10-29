@@ -9,35 +9,31 @@ import SwiftUI
 
 
 struct ExportSettingsDetailView: View{
-    @Binding var selectedExportFormat: ExportFormat
-    @Binding var xmlAuthorName: String
-    @Binding var xmlTitle: String
-    @Binding var includeConllSentIdLine: Bool
-    @Binding var includeConllSentText: Bool
+    @Binding var myConfig: TaggerConfig
     @FocusState var isFocused
     
     var body: some View{
         Form{
-            if [.xmlConll, .conll, .conllTxt, .conllTidy].contains(selectedExportFormat){
+            if [.xmlConll, .conll, .conllTxt, .conllTidy].contains(myConfig.exportConfig.selectedExportFormat){
                 Section("CoNLL Settings"){
-                    Toggle(isOn: $includeConllSentIdLine) {
+                    Toggle(isOn: $myConfig.exportConfig.includeConllSentIdLine) {
                         Text("Add Conll Meta sent_ID")
                     }
-                    Toggle(isOn: $includeConllSentText) {
+                    Toggle(isOn: $myConfig.exportConfig.includeConllSentText) {
                         Text("Add conll meta sent_text")
                     }
                 }
             }
                 //XML settings
-                if [.xmlConll, .xml].contains(selectedExportFormat){
+            if [.xmlConll, .xml].contains(myConfig.exportConfig.selectedExportFormat){
                     Section("XML Settings"){
-                        TextField("XML Author", text: $xmlAuthorName)
+                        TextField("XML Author", text: $myConfig.exportConfig.xmlAuthorName)
                             .textInputAutocapitalization(TextInputAutocapitalization.never)
                             .autocorrectionDisabled()
-                            .onChange(of: xmlAuthorName) { _, newValue in
-                                let cleaned = xmlAuthorName.xmlEscaped
+                            .onChange(of: myConfig.exportConfig.xmlAuthorName) { _, newValue in
+                                let cleaned = myConfig.exportConfig.xmlAuthorName.xmlEscaped
                                 if cleaned != newValue {
-                                    xmlAuthorName = cleaned
+                                    myConfig.exportConfig.xmlAuthorName = cleaned
                                 }
                             }
                             .focused($isFocused)
@@ -45,13 +41,13 @@ struct ExportSettingsDetailView: View{
                             .onSubmit {
                                 isFocused = false
                             }
-                        TextField("XML Title", text: $xmlTitle)
+                        TextField("XML Title", text: $myConfig.exportConfig.xmlTitle)
                             .textInputAutocapitalization(TextInputAutocapitalization.never)
                             .autocorrectionDisabled()
-                            .onChange(of: xmlTitle) { _, newValue in
-                                let cleaned = xmlTitle.xmlEscaped
+                            .onChange(of: myConfig.exportConfig.xmlTitle) { _, newValue in
+                                let cleaned = myConfig.exportConfig.xmlTitle.xmlEscaped
                                 if cleaned != newValue {
-                                    xmlTitle = cleaned
+                                    myConfig.exportConfig.xmlTitle = cleaned
                                 }
                             }
                             .focused($isFocused)
@@ -61,25 +57,12 @@ struct ExportSettingsDetailView: View{
                             }
                     }
                 }
-            
         }
     }
 }
 #Preview {
-    @Previewable @State var selectedExportFormat: ExportFormat = .xmlConll
-    @Previewable @State var xmlAuthorName: String = "CustomXML authorname"
-    @Previewable @State var xmlTitle: String = "Custom XML title"
-    @Previewable @State var includeConllSentIdLine: Bool = true
-    @Previewable @State var includeConllSentText: Bool = false
-
-    ExportSettingsDetailView(
-        selectedExportFormat: $selectedExportFormat,
-        xmlAuthorName: $xmlAuthorName,
-        xmlTitle: $xmlTitle,
-        includeConllSentIdLine: $includeConllSentIdLine,
-        includeConllSentText: $includeConllSentText
-
-    )
+    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
+    ExportSettingsDetailView(myConfig: $myConfig)
 }
 
 
