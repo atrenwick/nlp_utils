@@ -44,10 +44,9 @@ struct SetDefaultsView: View {
     @AppStorage("selectedExportFormatDefault")  var selectedExportFormatDefault: ExportFormat = .xml
     @AppStorage("includeConllSentIdLineDefault") var includeConllSentIdLineDefault: Bool = true
     @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
-
-    @AppStorage("outputDirBookmark") private var outputDirBookmark: Data?
-    @AppStorage("outputDirDefault") var outputDirDefault: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    @AppStorage("outputDirBookmark") private var outputBookmarkData: Data?
         
+    private var currentExportDirectory: URL { PipelineServices.ExporterService.resolveDefaultBookmark()}
     @State var sentences: [String] = []
     @State var isSelectingFolder: Bool = false
     
@@ -140,7 +139,7 @@ struct SetDefaultsView: View {
                     HStack{
                         Text("Output dir")
                             Spacer()
-                        Text(outputDirDefault.lastPathComponent)
+                        Text(currentExportDirectory.lastPathComponent)
                             .foregroundColor(.secondary)
                         Button("Choose...") {
                             isSelectingFolder = true
@@ -167,18 +166,21 @@ struct SetDefaultsView: View {
                 ) { result in
                     switch result {
                     case .success(let urls):
-                        guard let url = urls.first else { return }
-                        guard url.startAccessingSecurityScopedResource() else { return }
-                        defer { url.stopAccessingSecurityScopedResource() }
-
-                        do {
-                            outputDirBookmark = try url.bookmarkData(   // send bookmark to @AppStorage
-                                options: [],                      // on iOS, no .withSecurityScope option
-                                includingResourceValuesForKeys: nil,
-                                relativeTo: nil
-                            )
-                        } catch {
-                            print("Bookmark error: \(error)")
+                        if let url = urls.first {
+                            let didStart = url.startAccessingSecurityScopedResource()
+                            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+                            
+                            do {
+                                // Use .minimalBookmark for persistent app-scoped access on iOS
+                                let data = try url.bookmarkData(
+                                    options: .minimalBookmark,
+                                    includingResourceValuesForKeys: nil,
+                                    relativeTo: nil
+                                )
+                                UserDefaults.standard.set(data, forKey: StoreKey.outputBookmark)
+                            } catch {
+                                print("Bookmark creation error: \(error)")
+                            }
                         }
                     case .failure(let error):
                         print("Folder selection error: \(error.localizedDescription)")
@@ -192,4 +194,3 @@ struct SetDefaultsView: View {
 #Preview {
     SetDefaultsView()
 }
-

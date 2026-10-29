@@ -7,19 +7,6 @@
 
 import SwiftUI
 
-struct PrebuiltSentsView: View {
-    let testSents: [String]
-    var body: some View{
-        Form{
-            ForEach(testSents, id:\.self){testSentence in
-                Text("Input: \"\(testSentence)\"")
-                    .font(.subheadline)
-                    .foregroundColor(.primary)
-            }
-        }
-    }
-}
-
 struct ManualTokenisationView: View {
     
     @Binding var myConfig: TaggerConfig
@@ -41,7 +28,7 @@ struct ManualTokenisationView: View {
             HStack{
                 Spacer()
                 NavigationLink {
-                    PrebuiltSentsView(testSents: visibleSents)
+                    PrebuiltSentsView(newSentence: $newSentence, testSents: visibleSents)
                 } label: {
                     Text("-> Prebuilt sents")
                 }.buttonStyle(.borderedProminent)
@@ -113,10 +100,75 @@ struct ManualTokenisationView: View {
     }
 }
 
+//#Preview {
+//    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
+//    @Previewable @State var builtSents: [BuiltSentHolder] = []
+//    @Previewable @State var tempTokens: [TempToken] = []
+//    ManualTokenisationView(myConfig: $myConfig, builtSents: $builtSents, tempTokens: $tempTokens)
+//}
+//
+struct AddSentButton: View {
+    let addSysName: String
+    let successSymbolSysName: String
+    let action: () async throws -> Void
+
+    @State private var succeeded = false
+    @State private var bounceCount = 0
+
+    var body: some View {
+        Button {
+            Task {
+                do {
+                    try await action()
+                    flashSuccess()
+                } catch {
+                    // handle or surface the error
+                }
+            }
+        } label: {
+            Image(systemName: succeeded ? successSymbolSysName : addSysName)
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: bounceCount)
+                .foregroundStyle(.green)
+                .fontWeight(.bold)
+
+        }
+        .sensoryFeedback(.success, trigger: bounceCount)
+    }
+
+    private func flashSuccess() {
+        withAnimation(.spring(duration: 0.3)) { succeeded = true }
+        bounceCount += 1
+        
+    }
+}
+
+struct PrebuiltSentsView: View {
+    @Binding var newSentence: String
+    @State var showSuccess: Bool = false
+    let testSents: [String]
+    
+    var body: some View{
+        Form{
+            ForEach(testSents, id:\.self){testSentence in
+                HStack{
+                    Text(testSentence)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                    Spacer()
+                        AddSentButton(addSysName: "plus.circle", successSymbolSysName: "checkmark.circle.fill"){
+                            newSentence = testSentence
+                        }
+
+                    }
+            }
+        }
+    }
+    
+}
 #Preview {
-    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
-    @Previewable @State var builtSents: [BuiltSentHolder] = []
-    @Previewable @State var tempTokens: [TempToken] = []
-    ManualTokenisationView(myConfig: $myConfig, builtSents: $builtSents, tempTokens: $tempTokens)
+    @Previewable @State var newSentence: String = "this is a sentence"
+    @Previewable @State var testSents: [String] = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, parce que Bonn n'était assez bonne pour tous", "Alors que Paris est une grande ville, elle est plus petite que Tokyo", "Li chevaliers combattent les dragons."]
+    PrebuiltSentsView(newSentence: $newSentence, testSents: testSents)
 }
 

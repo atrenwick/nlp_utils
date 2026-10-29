@@ -55,12 +55,16 @@ struct ImportFileViewSection: View {
                         fileContainerModel.localSandboxFileURL = localURL
                         myConfig.inputConfig.selectedInputFile = localURL
                         myConfig.inputConfig.displayName = localURL.lastPathComponent
+                        if myConfig.inputConfig.matchFileNameType {
+                            let currentExtension = localURL.pathExtension
+                            if let success = InputFileType(rawValue: currentExtension){
+                                myConfig.inputConfig.inputFileType = success
+                            }
+                        }
                         print("Successfully ingested file to sandbox: \(localURL.path)")
-                        
                     } catch {
                         print("Failed to import file to sandbox: \(error)")
                     }
-                    
                 case .failure(let error):
                     print("File picker error: \(error.localizedDescription)")
                 }

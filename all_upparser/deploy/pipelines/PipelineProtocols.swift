@@ -361,6 +361,22 @@ enum PipelineServices {
         }
     }
     struct ExporterService {
+         // 1. A reusable helper function to resolve the bookmark from standard UserDefaults
+        static func resolveDefaultBookmark() -> URL {
+            let defaults = UserDefaults.standard
+            if let data = defaults.data(forKey: "outputDirBookmark") {
+                var isStale = false
+                if let resolved = try? URL(resolvingBookmarkData: data,
+                                         options: .withoutUI,
+                                         relativeTo: nil,
+                                         bookmarkDataIsStale: &isStale) {
+                    return resolved
+                }
+            }
+            // Fallback default if bookmark is missing or fails to resolve
+            return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        }
+        
         /// Writes processing output string directly to a user-selected folder URL
         static func exportDataToFile(
             exportContent: String,
@@ -370,11 +386,13 @@ enum PipelineServices {
             runExplicit: Bool
             
         ) throws -> URL {
+            //1 check file extension
             let fileExtension = exportFormat.fileExtension
-            
+
             if runExplicit{
-                print("step1 success")
+                print("step1 success : file extension exists")
             }
+
             // 2. Format sanitized filename
             var safeName = customName.sanitizedFileName
             if !safeName.hasSuffix(".\(fileExtension)") {
@@ -384,70 +402,164 @@ enum PipelineServices {
                 print(safeName)
                 print("step2 success")
             }
-            // 3. Construct destination path inside the chosen directory
+            // old3. Construct destination path inside the chosen directory
             // if target dir is the default dir, need to allow access
             
             //new func here, returning folder URL with privileges
-            let safeTargetFolderURL = try resolveOutputDir(targetFolderURL: targetFolderURL)
-            let destinationFileURL = safeTargetFolderURL.appendingPathComponent(safeName)
-            
+//            let safeTargetFolderURL = try resolveOutputDir(targetFolderURL: targetFolderURL)
+//            let folder = try resolveOutputDir(targetFolderURL: targetFolderURL)
+//            let destinationFileURL = folder.appendingPathComponent(safeName)
 
-            
-            // 4. Elevate security permissions for external directory write
-            if runExplicit{
-                
-                print("step3 success:: -> \(destinationFileURL)")
+            // 3. Resolve directory & obtain security scope
+            print("start step 3 : resolve dir + scope")
+            let (folder, _) = try resolveOutputDir(targetFolderURL: targetFolderURL)
+
+            // 4a. Elevate security permissions BEFORE constructing child paths
+            let gotAccess = folder.startAccessingSecurityScopedResource()
+            if runExplicit {
+                print("step4a gotAccess == \(gotAccess), scheme == \(folder.scheme ?? "nil")")
             }
-            // 4. Elevate security permissions for external directory write
-            let gotAccess = safeTargetFolderURL.startAccessingSecurityScopedResource()
             defer {
                 if gotAccess {
-                        targetFolderURL.stopAccessingSecurityScopedResource()
-                    if runExplicit { print("step4 gotAccess == \(gotAccess)") }
+                    folder.stopAccessingSecurityScopedResource()
                 }
             }
             
+            
+            // 4b. Construct destination path inside the accessed directory
+            let destinationFileURL = folder.appendingPathComponent(safeName)
+            if runExplicit && destinationFileURL.isFileURL {
+                print("step4b success:: -> \(destinationFileURL)")
+            } else {
+                print("destination file URL failed isURL test")
+            }
+
+            // 4. Elevate security permissions for external directory write
+//            let gotAccess = safeTargetFolderURL.startAccessingSecurityScopedResource()
+//            let gotAccess = folder.startAccessingSecurityScopedResource()
+//            defer {
+//                if gotAccess {
+//                    folder.stopAccessingSecurityScopedResource()
+//                }
+//            }
+            print("line 418")
             // 5. Write
-            try exportContent.write(to: destinationFileURL, atomically: true, encoding: .utf8)
-            if runExplicit{
-                print("step5 success URL == \(destinationFileURL.path())")
+            do {
+                try exportContent.write(to: destinationFileURL, atomically: true, encoding: .utf8)
+                if runExplicit{
+                    print("step5 success URL == \(destinationFileURL.path())")
+                }
+            } catch {
+                let e = error as NSError
+                print("write failed: \(e.domain) \(e.code) \(e.localizedDescription)")
+                throw error
+
             }
             return destinationFileURL
         }
         
 
-        static func resolveOutputDir(targetFolderURL: URL) throws -> URL {
+//        static func resolveOutputDir(targetFolderURL: URL) throws -> URL {
+//            let defaults = UserDefaults.standard
+//
+//            // Repair scheme-less URLs (built with URL(string:) from a plain path)
+//            let target = targetFolderURL.isFileURL
+//                ? targetFolderURL
+//                : URL(fileURLWithPath: targetFolderURL.path, isDirectory: true)
+//
+//            print("resolve: scheme=\(targetFolderURL.scheme ?? "nil") bookmarkBytes=\(defaults.data(forKey: StoreKey.outputBookmark)?.count ?? 0)")
+//
+//            if let data = defaults.data(forKey: StoreKey.outputBookmark) {
+//                var stale = false
+//                if let resolved = try? URL(resolvingBookmarkData: data, options: [],
+//                                           relativeTo: nil, bookmarkDataIsStale: &stale),
+//                   resolved.normalizedDir == target.normalizedDir {
+//                    if stale, resolved.startAccessingSecurityScopedResource() {
+//                        defer { resolved.stopAccessingSecurityScopedResource() }
+//                        if let fresh = try? resolved.bookmarkData(options: [],
+//                                                                  includingResourceValuesForKeys: nil,
+//                                                                  relativeTo: nil) {
+//                            defaults.set(fresh, forKey: StoreKey.outputBookmark)
+//                        }
+//                    }
+//                    return resolved          // proper file URL, scope attached
+//                }
+//            }
+//            return target                    // new pick this session, or inside the sandbox
+//        }
+        static func resolveOutputDir(targetFolderURL: URL) throws -> (url: URL, isSecurityScoped: Bool) {
             let defaults = UserDefaults.standard
 
-            // Not the saved default (new choice, or nothing saved yet), or no bookmark to resolve:
-            // use the URL as given.
-            guard let savedDefault = defaults.url(forKey: StoreKey.outputDir),
-                  targetFolderURL.normalizedDir == savedDefault.normalizedDir,
-                  let data = defaults.data(forKey: StoreKey.outputBookmark)
-            else {
-                return targetFolderURL
-            }
-
-            var stale = false
-            do {
-                let url = try URL(resolvingBookmarkData: data,
-                                  options: [],
-                                  relativeTo: nil,
-                                  bookmarkDataIsStale: &stale)
-                if stale, url.startAccessingSecurityScopedResource() {
-                    defer { url.stopAccessingSecurityScopedResource() }
-                    if let fresh = try? url.bookmarkData(options: [],
-                                                         includingResourceValuesForKeys: nil,
-                                                         relativeTo: nil) {
-                        defaults.set(fresh, forKey: StoreKey.outputBookmark)
+            if let data = defaults.data(forKey: StoreKey.outputBookmark) {
+                var isStale = false
+                do {
+                    // Resolve using security scope options
+                    let resolvedURL = try URL(
+                        resolvingBookmarkData: data,
+                        options: .withoutUI,
+                        relativeTo: nil,
+                        bookmarkDataIsStale: &isStale
+                    )
+                    
+                    // If bookmark is stale, refresh and update stored data
+                    if isStale {
+                        if resolvedURL.startAccessingSecurityScopedResource() {
+                            defer { resolvedURL.stopAccessingSecurityScopedResource() }
+                            if let freshData = try? resolvedURL.bookmarkData(
+                                options: .minimalBookmark,
+                                includingResourceValuesForKeys: nil,
+                                relativeTo: nil
+                            ) {
+                                defaults.set(freshData, forKey: StoreKey.outputBookmark)
+                            }
+                        }
                     }
+                    
+                    return (resolvedURL, true)
+                } catch {
+                    print("Failed to resolve bookmark: \(error)")
                 }
-                return url
-            } catch {
-                defaults.removeObject(forKey: StoreKey.outputBookmark)
-                throw PipelineError.ExportError.outputFolderCreationError
             }
+            
+            // Fallback: URL chosen in current session or internal sandbox
+            let fallback = targetFolderURL.isFileURL
+                ? targetFolderURL
+                : URL(fileURLWithPath: targetFolderURL.path, isDirectory: true)
+                
+            return (fallback, false)
         }
+//        static func resolveOutputDir(targetFolderURL: URL) throws -> URL {
+//            let defaults = UserDefaults.standard
+//
+//            // Not the saved default (new choice, or nothing saved yet), or no bookmark to resolve:
+//            // use the URL as given.
+//            guard let savedDefault = defaults.url(forKey: StoreKey.outputDir),
+//                  targetFolderURL.normalizedDir == savedDefault.normalizedDir,
+//                  let data = defaults.data(forKey: StoreKey.outputBookmark)
+//            else {
+//                return targetFolderURL
+//            }
+//
+//            var stale = false
+//            do {
+//                let url = try URL(resolvingBookmarkData: data,
+//                                  options: [],
+//                                  relativeTo: nil,
+//                                  bookmarkDataIsStale: &stale)
+//                if stale, url.startAccessingSecurityScopedResource() {
+//                    defer { url.stopAccessingSecurityScopedResource() }
+//                    if let fresh = try? url.bookmarkData(options: [],
+//                                                         includingResourceValuesForKeys: nil,
+//                                                         relativeTo: nil) {
+//                        defaults.set(fresh, forKey: StoreKey.outputBookmark)
+//                    }
+//                }
+//                return url
+//            } catch {
+//                defaults.removeObject(forKey: StoreKey.outputBookmark)
+//                throw PipelineError.ExportError.outputFolderCreationError
+//            }
+//        }
     
     }
 }
