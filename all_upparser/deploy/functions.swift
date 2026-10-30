@@ -585,10 +585,6 @@ enum SentencizationWorkflow{
             
         }
         return allSentences //.filter {$0.tokens.count < maxSentLenForPipe }
-        //TODO : report on the sents dropped, add progress for sentencisation as well as pipeline processing
-        // TODO : add stop button
-        // TODO: need to be able to process in batches, size = 500sent
-        // TODO: add subtok filter after subtokenisation :: limit == 128
     }
     static func ingestSentences(currentStatus: String, myConfig: TaggerConfig, pipeline: PipelineHelper) throws -> [HashableSentence]{
         
@@ -598,7 +594,6 @@ enum SentencizationWorkflow{
             throw PipelineError.IngestionError.noSentencesLoaded
         }
     }
-
 }
 
 enum TokenisationWorkflow{
@@ -886,7 +881,6 @@ enum GeneralOutputMakingWorkflow{
     //                                                 Agnostic output making functions
     //----------------------------------------------------------------------------------------------------------------------------
     //----------------------------------------------------------------------------------------------------------------------------
-
     static func makeExportContent(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool)-> String{
             var returnString: String = ""
             switch exportFormat{
@@ -902,7 +896,6 @@ enum GeneralOutputMakingWorkflow{
     static func makeFilename() -> String {
         return String(UUID().uuidString.prefix(6))
     }
-
 }
 
 enum XMLMakingWorkflow{
@@ -1176,7 +1169,6 @@ enum WritingWorkflow{
         )
         try content.write(to: url, atomically: true, encoding: .utf8)
         print("Wrote file to: \(url)")
-        
     }
 }
 
@@ -1235,7 +1227,6 @@ enum PrintWorkflow{
         print("Saved CoNLL dump to: \(newUrl.path)")
         
         return newUrl
-        
     }
     
     //3
@@ -1257,7 +1248,6 @@ enum PrintWorkflow{
             print("output name = \(myConfig.exportConfig.fileName)")
             print("Main actor done, running function 277")
         }
-        //no returns
     }
     
     static func dumpScalars(_ text: String, maxChars: Int = 50) {
@@ -1266,11 +1256,7 @@ enum PrintWorkflow{
             print("\(scalar) -> \(scalar.value)")
         }
     }
-
 }
-
-
-
 
 //                                                  end of main functions; experimental moved to function_dev
 //----------------------------------------------------------------------------------------------------------------------------

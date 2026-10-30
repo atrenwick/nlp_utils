@@ -17,7 +17,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
     
     var wordPieceTokenizer: WordPieceTokenizer?
     var taggerModel: MLModel?
-    var labels: BERTlikePipeline.LabelVocabsForBERTlike?
+    var labels: BERTpipeHelpers.LabelVocabsForBERTlike?
     let description: String = "BERTlikePipeline"
     
     /// fixed lengths the model was converted with, loaded from model for safety
@@ -32,7 +32,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
     func convertToRealPipeline(
         wordPieceTokenizer: WordPieceTokenizer,
         taggerModel: MLModel,
-        labels: BERTlikePipeline.LabelVocabsForBERTlike,
+        labels: BERTpipeHelpers.LabelVocabsForBERTlike,
         seqLen: Int,
         maxWords: Int,
         languageCode: String,
@@ -64,13 +64,13 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         
         let wordPieceTokenizer: WordPieceTokenizer?
         let taggerModel: MLModel?
-        let labels: BERTlikePipeline.LabelVocabsForBERTlike?
+        let labels: BERTpipeHelpers.LabelVocabsForBERTlike?
         var seqLen: Int?
         var maxWords: Int?
         // tokenizer model
         
         await onProgress(1, "Load vocabs")
-        labels = try await BERTlikePipeline.LabelVocabsForBERTlike.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, vx: vX)
+        labels = try await BERTpipeHelpers.LabelVocabsForBERTlike.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, vx: vX)
         
         await onProgress(2, "Load wordpiece tokenizer")
         wordPieceTokenizer = try await WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank, vx: vX)
@@ -116,16 +116,13 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         }
         return (seqLen, maxWords)
     }
-    
     /// convert id -> label as string.
     private static func label(_ vocab: Vocab, _ id: Int) -> String { vocab.decode(id) }
-    
 }
-
 
 final class BERTlikePipeline: PipelineHelper, SubtokenAwarePipelineHelper,PipelineLoader {
     private let taggerModel: MLModel
-    let labels: LabelVocabsForBERTlike
+    let labels: BERTpipeHelpers.LabelVocabsForBERTlike
     let description: String = "BERTlikePipeline"
 
     /// fixed lengths the model was converted with, loaded from model for safety
@@ -137,7 +134,7 @@ final class BERTlikePipeline: PipelineHelper, SubtokenAwarePipelineHelper,Pipeli
     init(
         taggerModel: MLModel,
         wordPieceTokenizer: WordPieceTokenizer,
-        labels: LabelVocabsForBERTlike,
+        labels: BERTpipeHelpers.LabelVocabsForBERTlike,
         seqLen: Int,
         maxWords: Int,
         runExplicitValue: Bool,
@@ -183,6 +180,81 @@ final class BERTlikePipeline: PipelineHelper, SubtokenAwarePipelineHelper,Pipeli
         }
     }
     
+    
+    // MARK: Running the model
+     func predict(_ encoded: WordPieceEncodedSentence) throws -> MLFeatureProvider {
+        let arrays = try encoded.multiArrays()
+        let inputs = try MLDictionaryFeatureProvider(dictionary: [
+            "input_ids": MLFeatureValue(multiArray: arrays.inputIDs),
+            "word_index": MLFeatureValue(multiArray: arrays.wordIndex),
+        ])
+        do {
+            return try taggerModel.prediction(from: inputs)
+        } catch {
+            throw PipelineError.ProcessingError.predictionFailed(error)
+        }
+    }
+    // MARK: Decoding
+     func decode(_ output: MLFeatureProvider, words: [String],
+                        wordPieces: [[String]]?) throws -> [Token] {
+        /// 6 padded output tensors -> labelled tokens. Only the first (words + 1) cols mean anything, rest is PAD
+        let n = words.count + 1
+        let upos = try BERTpipeHelpers.LogitReaderForBERTlike(output, "upos_logits", rank: 3, rows: n, labels: labels.upos.itos.count)
+        let feats = try BERTpipeHelpers.LogitReaderForBERTlike(output, "feats_logits", rank: 3, rows: n, labels: labels.feats.itos.count)
+        let lemmaRules = try BERTpipeHelpers.LogitReaderForBERTlike(output, "lemma_rule_logits", rank: 3, rows: n,
+                                         labels: labels.lemmaRule.itos.count)
+        let arc = try BERTpipeHelpers.LogitReaderForBERTlike(output, "arc_logits", rank: 3, rows: n)
+        let deprels = try BERTpipeHelpers.LogitReaderForBERTlike(output, "label_logits", rank: 4, rows: n,
+                                      labels: labels.deprel.itos.count)
+
+        // deprel, head decoding
+        let parse = decodeParse(
+            runExplicit: true,
+            wordCount: words.count,
+            deprelVocab: labels.deprel,
+            arcScore: { dependent, head in Double(arc.value(row: dependent, column: head)) },
+            labelScore: { label, dependent, head in
+                Double(deprels.value(channel: label, row: dependent, column: head))
+            }
+        )
+        
+        guard parse.count == words.count else {
+            throw PipelineError.GenericError.unexpectedOutput(
+                "parse decoder returned \(parse.count) (head, deprel) pairs for \(words.count) words")
+        }
+        var tokens: [Token] = []
+        tokens.reserveCapacity(words.count)
+        for i in 1..<n {
+            let form = words[i - 1]
+            let rule = labels.lemmaRule.decode(lemmaRules.argmax(row: i))
+            tokens.append(Token(
+                tokid: i,
+                form: form,
+                lemma: applyLemmaRule(form: form, rule: rule),
+                upos: labels.upos.decode(upos.argmax(row: i)),
+                xpos: "_",
+                feats: labels.feats.decode(feats.argmax(row: i)),
+                head: String(parse[i - 1].head),
+                deprel: parse[i - 1].deprel,
+                col8: "_",
+                col9: "_",
+                subTokens: wordPieces?[i - 1]
+            ))
+            if runExplicit{
+                var subels: String = "empty"
+                let tidy1 = wordPieces?[i-1]
+                if let success = tidy1{
+                    subels = success.joined(separator: "/")
+                }
+                print("\(form) :: \(subels)")
+            }
+        }
+        return tokens
+    }
+}
+
+
+enum BERTpipeHelpers{
     struct LabelVocabsForBERTlike {
     // MARK: - Label vocabularies for BERT derived models :: 4x vocabs with loader
     /// The  vocabularies that turn output indices back into labels, from same training as model
@@ -309,75 +381,6 @@ final class BERTlikePipeline: PipelineHelper, SubtokenAwarePipelineHelper,Pipeli
             }
         }
     }
-    
-    // MARK: Running the model
-    private func predict(_ encoded: WordPieceEncodedSentence) throws -> MLFeatureProvider {
-        let arrays = try encoded.multiArrays()
-        let inputs = try MLDictionaryFeatureProvider(dictionary: [
-            "input_ids": MLFeatureValue(multiArray: arrays.inputIDs),
-            "word_index": MLFeatureValue(multiArray: arrays.wordIndex),
-        ])
-        do {
-            return try taggerModel.prediction(from: inputs)
-        } catch {
-            throw PipelineError.ProcessingError.predictionFailed(error)
-        }
-    }
-    // MARK: Decoding
-    private func decode(_ output: MLFeatureProvider, words: [String],
-                        wordPieces: [[String]]?) throws -> [Token] {
-        /// 6 padded output tensors -> labelled tokens. Only the first (words + 1) cols mean anything, rest is PAD
-        let n = words.count + 1
-        let upos = try LogitReaderForBERTlike(output, "upos_logits", rank: 3, rows: n, labels: labels.upos.itos.count)
-        let feats = try LogitReaderForBERTlike(output, "feats_logits", rank: 3, rows: n, labels: labels.feats.itos.count)
-        let lemmaRules = try LogitReaderForBERTlike(output, "lemma_rule_logits", rank: 3, rows: n,
-                                         labels: labels.lemmaRule.itos.count)
-        let arc = try LogitReaderForBERTlike(output, "arc_logits", rank: 3, rows: n)
-        let deprels = try LogitReaderForBERTlike(output, "label_logits", rank: 4, rows: n,
-                                      labels: labels.deprel.itos.count)
 
-        // deprel, head decoding
-        let parse = decodeParse(
-            runExplicit: true,
-            wordCount: words.count,
-            deprelVocab: labels.deprel,
-            arcScore: { dependent, head in Double(arc.value(row: dependent, column: head)) },
-            labelScore: { label, dependent, head in
-                Double(deprels.value(channel: label, row: dependent, column: head))
-            }
-        )
-        
-        guard parse.count == words.count else {
-            throw PipelineError.GenericError.unexpectedOutput(
-                "parse decoder returned \(parse.count) (head, deprel) pairs for \(words.count) words")
-        }
-        var tokens: [Token] = []
-        tokens.reserveCapacity(words.count)
-        for i in 1..<n {
-            let form = words[i - 1]
-            let rule = labels.lemmaRule.decode(lemmaRules.argmax(row: i))
-            tokens.append(Token(
-                tokid: i,
-                form: form,
-                lemma: applyLemmaRule(form: form, rule: rule),
-                upos: labels.upos.decode(upos.argmax(row: i)),
-                xpos: "_",
-                feats: labels.feats.decode(feats.argmax(row: i)),
-                head: String(parse[i - 1].head),
-                deprel: parse[i - 1].deprel,
-                col8: "_",
-                col9: "_",
-                subTokens: wordPieces?[i - 1]
-            ))
-            if runExplicit{
-                var subels: String = "empty"
-                let tidy1 = wordPieces?[i-1]
-                if let success = tidy1{
-                    subels = success.joined(separator: "/")
-                }
-                print("\(form) :: \(subels)")
-            }
-        }
-        return tokens
-    }
+    
 }
