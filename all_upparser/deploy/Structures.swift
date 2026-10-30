@@ -19,7 +19,6 @@ struct BuiltSentHolder: Identifiable, Hashable{
     
     func toHashableSent(tempToks: [TempToken]) -> HashableSentence? {
         guard tempToks.count > 0 else {return nil }
-        
         return tempToks.makeHashableSentFromTestToks()
     }
     
@@ -67,7 +66,6 @@ struct ConfigurationRules {
     }
 }
 
-//TODO: update calculated property to use Extension method
 struct Document {
     var id = UUID()
     let sentences:[Sentence]
@@ -195,7 +193,6 @@ struct SandboxImporter {
         if fileManager.fileExists(atPath: targetURL.path) {
             try fileManager.removeItem(at: targetURL)
         }
-        
         // Copy the file to sandbox
         try fileManager.copyItem(at: externalURL, to: targetURL)
         
@@ -296,7 +293,6 @@ struct Sentence : Identifiable, Codable {
     }
     
     func formatRaw() -> [String]{
-        
         var lines: [ConllLineContent] = conllData.map { .row($0) }
         lines.append(.blank)
         var result = lines.map { line in
@@ -354,9 +350,9 @@ struct Sentence : Identifiable, Codable {
 }
 
 struct TaggerRawOutput {
-// for CNN-BiLSTM model
+    // for CNN-BiLSTM model
     /// Holds the raw tensors from 1 tagger_parser model call for 1 sent
-///`seqLen` includes the synthetic ROOT index 0, so real words are indices 1,2....<seqLen.
+    ///`seqLen` includes the synthetic ROOT index 0, so real words are indices 1,2....<seqLen.
     let sentence: HashableSentence
     let seqLen: Int
     let uposLogits: MLMultiArray
@@ -455,7 +451,6 @@ struct XmlHeaderAttribs : Codable{
         sentencizingMethod: String? = nil,
         maxWords: String? = nil,
         maxSeqLen: String? = nil
-
     ) {
         self.xmlTitle = xmlTitle ?? "xmlTitle"
         self.xmlAuthorName = xmlAuthorName ?? "xmlAuthorName"
@@ -473,4 +468,3 @@ struct XmlHeaderAttribs : Codable{
         self.maxSeqLen = modelArchitecture?.rawValue == "distilbert" ? maxSeqLen ?? "ERR" : "NA"
     }
 }
-
