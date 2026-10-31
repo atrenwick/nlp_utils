@@ -9,6 +9,58 @@ import Foundation
 
 enum PipelineError: LocalizedError{
     
+    // MARK: - Errors
+    enum TokPieceError: Error, LocalizedError {
+        case vocabUnreadable(URL)
+        case missingSpecialToken(String)
+        case missingSetting(String)
+        case tooManyWords(have: Int, limit: Int)
+        case tooManySubwords(have: Int, limit: Int)
+        case tokenizerTryError
+        case wordPieceTokenizerError
+        case other
+        var errorDescription: String? {
+            switch self {
+            case .other:
+                return "Other type of error"
+            case .wordPieceTokenizerError:
+                return "error encoding after tokenizer made"
+            case .tokenizerTryError:
+                return "Try failed in test funct"
+            case .vocabUnreadable(let url):
+                return "Couldn't read the vocabulary file at \(url.lastPathComponent)"
+            case .missingSpecialToken(let name):
+                return "Special token \(name) isn't in the vocabulary"
+            case .missingSetting(let name):
+                return "tokenizer_config.json has no \"\(name)\"; pass it explicitly when creating the tokenizer"
+            case .tooManyWords(let have, let limit):
+                return "Sentence has \(have) words; the model accepts at most \(limit)"
+            case .tooManySubwords(let have, let limit):
+                return "Sentence needs \(have) subword tokens; the model accepts at most \(limit)"
+            }
+        }
+    }
+
+    enum SentencePieceTokenizerError: Error, LocalizedError {
+        case fileUnreadable(URL)
+        case unsupportedModel(String)
+        case missingSpecialToken(String)
+        case tooLong(subwords: Int, seqLen: Int, slots: Int, maxWords: Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .fileUnreadable(let url):
+                return "Could not read tokenizer file at \(url.lastPathComponent)."
+            case .unsupportedModel(let type):
+                return "tokenizer.json holds a \(type) model; this tokenizer only supports Unigram (CamemBERT)."
+            case .missingSpecialToken(let token):
+                return "Special token \(token) not found in the tokenizer vocabulary."
+            case .tooLong(let subwords, let seqLen, let slots, let maxWords):
+                return "Sentence needs \(subwords) subwords (limit \(seqLen)) and \(slots) word slots "
+                     + "(limit \(maxWords)); split or truncate it before encoding."
+            }
+        }
+    }
     // errors in config before calling loader
     enum ConfigurationError: LocalizedError {
         case architectureConflict

@@ -253,9 +253,16 @@ extension PipelineSettingsView {
         isLoading = true
         do {
             switch myConfig.parsingConfig.modelArchitecture {
+            case .camembert:
+                let loader = CamemBERTlikePipelineLoader()
+                pipeline = try await loader.loadCamemBERTlikePipeline(myConfig: myConfig) {step, message in
+                    loadedCount = step
+                    loadStatus = message
+                }
+                if myConfig.parsingConfig.runExplicit { print("camembert pipeline called") }
             case .distilbert:
-                let loader = BERTlikePipelineLoader()
-                pipeline = try await loader.loadBERTlikePipe(myConfig: myConfig) {step, message in
+                let loader = DistilBERTlikePipelineLoader()
+                pipeline = try await loader.loadDistilBERTlikePipe(myConfig: myConfig) {step, message in
                     loadedCount = step
                     loadStatus = message
                 }
@@ -299,6 +306,7 @@ extension PipelineSettingsView {
         if myConfig.parsingConfig.runExplicit { print("Build header attribs: \(theseHeaderAttribs)") }
         myConfig.outputData.safeHeaderAttribs = theseHeaderAttribs
         
+    
         // MARK: tagging :
         Task {
             do {
@@ -379,9 +387,18 @@ extension PipelineSettingsView {
                 for sentence in allSentences {
                     if myConfig.parsingConfig.runExplicit { print("processing line 232") }
                     currentStatus = "Ready to tag"
+                    var sentResult: OnSentResult?
+                    if let bertDerivedPipe = pipeline as? BERTderivedPipelineHelper{
+                        sentResult = try bertDerivedPipe.runOnSentence(sentence, myConfig: myConfig)
+                    } else {
+                        if let cnnPipeline = pipeline as? CNNBiLSTMPipeline {
+                            sentResult =  cnnPipeline.runOnSentence(sentence, myConfig: myConfig)
+                        }
+                    }
+                    if let success =  sentResult {
+                        processSentsFromPipeline(sentResult: success, myConfig: $myConfig )
+                    }
                     
-                    let sentResult = pipeline.runOnSentence(sentence, myConfig: myConfig)
-                    processSentsFromPipeline(sentResult: sentResult, myConfig: $myConfig )
                                              
                     await MainActor.run {
                         myConfig.progressConfig.processedCount += 1

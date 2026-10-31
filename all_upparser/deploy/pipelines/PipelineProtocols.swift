@@ -10,18 +10,198 @@ import CoreML
 
 //MARK: 1 : protocols + extensions
 //1 pipeline loader : keep loader stuff separate
+
+//enum of helper structs
+enum BERTpipeHelperStructs{
+    struct LabelVocabs {
+    // MARK: - Label vocabularies for BERT derived models :: 4x vocabs with loader
+    /// The  vocabularies that turn output indices back into labels, from same training as model
+    /// these are not the same as for BiLSTM models
+        let upos: Vocab
+        let feats: Vocab
+        let deprel: Vocab
+        let lemmaRule: Vocab
+    }
+    
+    struct LogitReader {
+    // MARK: - Reading Core ML output arrays for bert-derived models to deal with padding
+    /// Reads values out of an MLMultiArray without boxing every element. Honours the array's
+    /// strides (Core ML may pad rows) and its element type (the model's outputs are normally
+    /// float16; float32 and double are handled too).
+
+        private let array: MLMultiArray             // keeps the buffer alive
+        private let base: UnsafeRawPointer
+        private let dataType: MLMultiArrayDataType
+        private let strides: [Int]
+        private let shape: [Int]
+
+        /// - Parameters:
+        ///   - rank: expected number of dimensions (3 = [1, rows, width], 4 = [1, channels, rows, columns])
+        ///   - rows: how many rows the caller will read (words + 1)
+        ///   - labels: the vocabulary size this array's label dimension must match (nil to skip)
+        init(_ output: MLFeatureProvider, _ name: String, rank: Int, rows: Int,
+             labels: Int? = nil) throws  {
+            guard let array = output.featureValue(for: name)?.multiArrayValue else {
+                throw PipelineError.GenericError.unexpectedOutput("\(name) is missing")
+            }
+
+            let shape = array.shape.map { $0.intValue }
+            guard shape.count == rank, shape[rank - 2] >= rows else {
+                throw PipelineError.GenericError.unexpectedOutput("\(name) has shape \(shape); expected rank \(rank) with at least \(rows) rows")
+            }
+            if let labels {
+                let width = rank == 3 ? shape[2] : shape[1]
+                guard width == labels else {
+                    throw PipelineError.GenericError.unexpectedOutput("\(name) has \(width) labels but the vocabulary has \(labels); the vocabulary files and the model are from different training runs")
+                }
+            }
+           switch array.dataType {
+            case .float16, .float32, .double: break
+           default: throw PipelineError.GenericError.unexpectedOutput("\(name) has an unsupported element type")
+            }
+            self.array = array
+            self.base = UnsafeRawPointer(array.dataPointer)
+            self.dataType = array.dataType
+            self.strides = array.strides.map { $0.intValue }
+            self.shape = shape
+        }
+
+        /// rank 3: value at [0, row, column]
+        func value(row: Int, column: Int) -> Float {
+            load(strides[1] * row + strides[2] * column)
+        }
+
+        /// rank 3: index of the largest value in a row (over the last dimension)
+        func argmax(row: Int) -> Int {
+            var best = 0
+            var bestValue = -Float.infinity
+            for k in 0..<shape[2] {
+                let v = value(row: row, column: k)
+                if v > bestValue { bestValue = v; best = k }
+            }
+            return best
+        }
+
+        /// rank 4 ([1, channels, rows, columns]): value at [0, channel, row, column]
+        func value(channel: Int, row: Int, column: Int) -> Float {
+            load(strides[1] * channel + strides[2] * row + strides[3] * column)
+        }
+
+        private func load(_ offset: Int) -> Float {
+            switch dataType {
+            case .float32:
+                return base.load(fromByteOffset: offset * 4, as: Float.self)
+            case .double:
+                return Float(base.load(fromByteOffset: offset * 8, as: Double.self))
+            default:                                    // .float16, checked in init
+                return Self.float(fromHalfBits: base.load(fromByteOffset: offset * 2, as: UInt16.self))
+            }
+        }
+
+        /// IEEE half -> Float by bit manipulation, so no Float16 type is needed (it isn't
+        /// available when building for Intel simulators).
+        private static func float(fromHalfBits h: UInt16) -> Float {
+            let sign = UInt32(h >> 15) << 31
+            let exponent = UInt32((h >> 10) & 0x1F)
+            let mantissa = UInt32(h & 0x3FF)
+            switch exponent {
+            case 0:
+                let magnitude = Float(mantissa) / 16_777_216        // subnormal (or zero): mantissa * 2^-24
+                return sign == 0 ? magnitude : -magnitude
+            case 0x1F:
+                return Float(bitPattern: sign | 0x7F80_0000 | (mantissa << 13))   // infinity / NaN
+            default:
+                return Float(bitPattern: sign | ((exponent + 112) << 23) | (mantissa << 13))
+            }
+        }
+    }
+    
+}
+
+protocol BERTpipeEncodedSentence {
+    var inputIDs: [Int32]      { get } // length seqLen
+    var wordIndex: [Int32] { get }
+    var wordCount : Int { get }
+    var length: Int { get }
+    var pieces: [[String]]? { get } // subtokens
+    var validSlots: Int { get }
+}
+
+extension BERTpipeEncodedSentence {
+    /// MLMultiArrays named like the model's inputs: "input_ids" and "word_index" (Int32).
+    func multiArrays() throws -> (inputIDs: MLMultiArray, wordIndex: MLMultiArray) {
+        return (try makeArray(inputIDs), try makeArray(wordIndex))
+    }
+    func makeArray(_ values: [Int32]) throws -> MLMultiArray {
+        let array = try MLMultiArray(shape: [1, NSNumber(value: values.count)], dataType: .int32)
+        let pointer = array.dataPointer.bindMemory(to: Int32.self, capacity: values.count)
+        for (i, v) in values.enumerated() { pointer[i] = v }
+        return array
+    }
+}
+
 protocol PipelineLoader {
 }
 
 extension PipelineLoader{
     // loading
+    /// seqLen and maxWords are the second dimension of the two [1, N] inputs.
+    static func limits(of model: MLModel) throws -> (seqLen: Int, maxWords: Int) {
+        func length(of input: String) throws -> Int {
+            guard let shape = model.modelDescription.inputDescriptionsByName[input]?
+                .multiArrayConstraint?.shape, shape.count == 2 else {
+                throw PipelineError.ConfigurationError.invalidModelInputs("\(input) isn't a [1, N] array input")
+            }
+            return shape[1].intValue
+        }
+        let seqLen = try length(of: "input_ids")
+        let maxWords = try length(of: "word_index")
+        guard maxWords <= seqLen - 1 else {
+            throw PipelineError.ConfigurationError.invalidModelInputs(
+                "word_index length \(maxWords) must be at most input_ids length \(seqLen) - 1")
+        }
+        return (seqLen, maxWords)
+    }
+    
+    static func loadLabelVocabularies(languageCode: String,
+                                      treebank: String,
+                                      bundle: Bundle = .main,
+                                      vx: String,
+                                      base: BERTlikeBase
+    ) throws -> BERTpipeHelperStructs.LabelVocabs {
+        
+        func vocab(_ label: String, vx: String) throws -> Vocab {
+            let name: String
+            switch base {
+            case .distilbert:
+                name = "\(languageCode)_distilbert_\(label)_vocab_\(treebank)\(vx)"
+            case .camembert:
+                name = "\(languageCode)_camembert_\(label)_vocab_\(treebank)\(vx)"
+            case .roberta:
+                name = "\(languageCode)_roberta_\(label)_vocab_\(treebank)\(vx)"
+            }
+            guard let url = bundle.url(forResource: name, withExtension: "json") else {
+                throw PipelineError.GenericError.missingResource("\(name).json")
+            }
+            let data = try Data(contentsOf: url)
+            let decoded = try JSONDecoder().decode(VocabData.self, from: data)
+            return Vocab(data: decoded)
+        }
+
+        return BERTpipeHelperStructs.LabelVocabs(
+            upos: try vocab("upos", vx: vx),
+            feats: try vocab("feats", vx: vx),
+            deprel: try vocab("deprel", vx: vx),
+            lemmaRule: try vocab("lemma_rule", vx: vx)
+        )
+    }
     static func loadMlpackage(named name: String, myConfig: TaggerConfig) throws -> MLModel{
         guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else {
             throw PipelineError.LoadingError.packageLoadFailed(name)
         }
         do {
             switch myConfig.parsingConfig.modelArchitecture {
-            case .distilbert:
+            case .distilbert, .camembert:
                 let configuration = MLModelConfiguration()
                 configuration.computeUnits = .all
                 return try MLModel(contentsOf: url, configuration: configuration)
@@ -34,32 +214,29 @@ extension PipelineLoader{
     }
 }
 
-// protocol for methods, vars used after pipeline loaded
+// protocol to list specifc attribs all pipelines share : no extensions
 protocol PipelineHelper {
-//    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
-    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) -> OnSentResult
+//        func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> [Token]
+    //func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) -> OnSentResult
     var description: String { get }
     var maxWords: Int { get }
+    var taggerModel: MLModel { get }
+    var runExplicit: Bool { get }
+    var seqLen: Int { get  }
     
 }
 
+
 // protocol specific to bert-likes for subtoken awareness
-protocol SubtokenAwarePipelineHelper: PipelineHelper{
+protocol SubtokenAwarePipelineHelper {
     var seqLen: Int { get }
     
 }
 
+protocol LinguisticProcessingHelper{
+}
 
-// extension defining functs used after pipeline loaded
-extension PipelineHelper {
-    func tokenize(_ naughtyString: String) -> HashableSentence{
-        let input = naughtyString
-        let intermediate = input.split(separator: " ")
-        let output = intermediate.map {String($0)}
-        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
-        print("this should't have been callable…")
-        return outputSent
-    }
+extension LinguisticProcessingHelper{
     // MARK: - Lemma edit-script : functional but not superb lemmatisation
     func applyLemmaRule(form: String, rule: String) -> String {
         var result: String
@@ -299,7 +476,160 @@ extension PipelineHelper {
         flushSentence() // in case the input didn't end with a trailing .blank
         return result
     }
+}
 
+protocol BERTderivedPipelineHelper: LinguisticProcessingHelper, PipelineHelper {
+    // things conforming to this protocol will have these
+    var labels: BERTpipeHelperStructs.LabelVocabs { get }
+    var tokenizer: BERTlikeTokenizerHelper { get }
+}
+    
+
+// extension defining functs used after pipeline loaded
+extension BERTderivedPipelineHelper  {
+// make this stuff available for all conforming
+        func tokenize(_ naughtyString: String) -> HashableSentence{
+        let input = naughtyString
+        
+        let intermediate = input.split(separator: " ")
+        let output = intermediate.map {String($0)}
+        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
+        print("this should't have been callable…")
+        return outputSent
+    }
+    
+    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> OnSentResult {
+        if runExplicit { print("running on sents with bert pipeline") }
+        
+        guard !sentence.tokens.isEmpty else {
+            return OnSentResult(sentence: sentence, resultType: .empty, decoded: [])
+        }
+        // maxWords counts the ROOT slot, so the most real words allowed is maxWords - 1
+        guard sentence.tokens.count < maxWords else {
+            return OnSentResult(sentence: sentence, resultType: .tooManyWords, decoded: [])
+        }
+        var thisTokenizer: BERTlikeTokenizerHelper
+        var currentPieceCount: Int = -3
+        
+        switch myConfig.parsingConfig.modelArchitecture{
+        case .camembert:
+            if let useThis = tokenizer as? SentencePieceTokenizer {
+                thisTokenizer = useThis
+                thisTokenizer.showPieces = myConfig.exportConfig.getsubtokens
+        } else {
+            throw PipelineError.GenericError.unexpectedOutput("tok distilbert")
+        }
+        case .distilbert:
+            if let useThis = tokenizer as? WordPieceTokenizer {
+                thisTokenizer = useThis
+                thisTokenizer.showPieces = myConfig.exportConfig.getsubtokens
+            } else {
+                throw PipelineError.GenericError.unexpectedOutput("tok distilbert")
+            }
+            
+        default:
+            throw PipelineError.ConfigurationError.architectureConflict
+        }
+        
+        do {
+            guard let encoded = try? thisTokenizer.encode(words: sentence.tokens, seqLen: seqLen, maxWords: maxWords
+            ) else {
+                return OnSentResult(sentence: sentence, resultType: .otherError, decoded: [])
+            }
+            switch myConfig.parsingConfig.modelArchitecture{
+            case .camembert:
+                currentPieceCount = encoded.validSlots
+            case .distilbert:
+                currentPieceCount = encoded.pieces?.count ?? -4
+            default:
+                throw PipelineError.ConfigurationError.architectureConflict
+                
+            }
+            let output = try predict(encoded) //
+            let decoded = try decode(output, words: sentence.tokens, pieces: encoded.pieces) // same as decode in WP methods ?
+            return OnSentResult(sentence: sentence,  subtokCount: currentPieceCount, resultType: .success, decoded: decoded)
+        } catch PipelineError.TokPieceError.tooManySubwords {
+            return OnSentResult(sentence: sentence,  subtokCount: currentPieceCount, resultType: .tooManySubtoks, decoded: [])
+        } catch PipelineError.TokPieceError.tooManyWords {                              // backstop; the guard above catches this first
+            return OnSentResult(sentence: sentence, resultType: .tooManyWords, decoded: [])
+        } catch {
+            if runExplicit { print("sentence failed: \(error.localizedDescription)") }
+            return OnSentResult(sentence: sentence, resultType: .otherError, decoded: [])
+        }
+    }
+    
+    func predict(_ encoded: BERTpipeEncodedSentence) throws -> MLFeatureProvider {
+            let arrays = try encoded.multiArrays()
+            let inputs = try MLDictionaryFeatureProvider(dictionary: [
+                "input_ids": MLFeatureValue(multiArray: arrays.inputIDs),
+                "word_index": MLFeatureValue(multiArray: arrays.wordIndex),
+            ])
+            do {
+                return try taggerModel.prediction(from: inputs)
+            } catch {
+                throw PipelineError.ProcessingError.predictionFailed(error)
+            }
+        }
+    
+    func decode(_ output: MLFeatureProvider, words: [String],
+                             pieces: [[String]]?) throws -> [Token] {
+        /// 6 padded output tensors -> labelled tokens. Only the first (words + 1) cols mean anything, rest is PAD
+        let n = words.count + 1
+        let upos = try BERTpipeHelperStructs.LogitReader(output, "upos_logits", rank: 3, rows: n, labels: labels.upos.itos.count)
+        let feats = try BERTpipeHelperStructs.LogitReader(output, "feats_logits", rank: 3, rows: n, labels: labels.feats.itos.count)
+        let lemmaRules = try BERTpipeHelperStructs.LogitReader(output, "lemma_rule_logits", rank: 3, rows: n,
+                                                               labels: labels.lemmaRule.itos.count)
+        let arc = try BERTpipeHelperStructs.LogitReader(output, "arc_logits", rank: 3, rows: n)
+        let deprels = try BERTpipeHelperStructs.LogitReader(output, "label_logits", rank: 4, rows: n,
+                                                            labels: labels.deprel.itos.count)
+        
+        // deprel, head decoding
+        let parse = decodeParse(
+            runExplicit: true,
+            wordCount: words.count,
+            deprelVocab: labels.deprel,
+            arcScore: { dependent, head in Double(arc.value(row: dependent, column: head)) },
+            labelScore: { label, dependent, head in
+                Double(deprels.value(channel: label, row: dependent, column: head))
+            }
+        )
+        
+        guard parse.count == words.count else {
+            throw PipelineError.GenericError.unexpectedOutput(
+                "parse decoder returned \(parse.count) (head, deprel) pairs for \(words.count) words")
+        }
+        var tokens: [Token] = []
+        tokens.reserveCapacity(words.count)
+        for i in 1..<n {
+            let form = words[i - 1]
+            let rule = labels.lemmaRule.decode(lemmaRules.argmax(row: i))
+            tokens.append(Token(
+                tokid: i,
+                form: "\(form)_zz",
+                lemma: applyLemmaRule(form: form, rule: rule),
+                upos: labels.upos.decode(upos.argmax(row: i)),
+                xpos: "_",
+                feats: labels.feats.decode(feats.argmax(row: i)),
+                head: String(parse[i - 1].head),
+                deprel: parse[i - 1].deprel,
+                col8: "_zz_",
+                col9: "_",
+                subTokens: pieces?[i - 1]
+            ))
+            if runExplicit{
+                var subels: String = "empty"
+                let tidy1 = pieces?[i-1]
+                if let success = tidy1{
+                    subels = success.joined(separator: "/")
+                }
+                print("\(form) :: \(subels)")
+            }
+        }
+        return tokens
+    }
+        
+    
+    
 }
 
 // combination of extension: Language and a protocol
@@ -402,13 +732,6 @@ enum PipelineServices {
                 print(safeName)
                 print("step2 success")
             }
-            // old3. Construct destination path inside the chosen directory
-            // if target dir is the default dir, need to allow access
-            
-            //new func here, returning folder URL with privileges
-//            let safeTargetFolderURL = try resolveOutputDir(targetFolderURL: targetFolderURL)
-//            let folder = try resolveOutputDir(targetFolderURL: targetFolderURL)
-//            let destinationFileURL = folder.appendingPathComponent(safeName)
 
             // 3. Resolve directory & obtain security scope
             print("start step 3 : resolve dir + scope")
@@ -424,8 +747,6 @@ enum PipelineServices {
                     folder.stopAccessingSecurityScopedResource()
                 }
             }
-            
-            
             // 4b. Construct destination path inside the accessed directory
             let destinationFileURL = folder.appendingPathComponent(safeName)
             if runExplicit && destinationFileURL.isFileURL {
@@ -433,15 +754,6 @@ enum PipelineServices {
             } else {
                 print("destination file URL failed isURL test")
             }
-
-            // 4. Elevate security permissions for external directory write
-//            let gotAccess = safeTargetFolderURL.startAccessingSecurityScopedResource()
-//            let gotAccess = folder.startAccessingSecurityScopedResource()
-//            defer {
-//                if gotAccess {
-//                    folder.stopAccessingSecurityScopedResource()
-//                }
-//            }
             print("line 418")
             // 5. Write
             do {
@@ -457,37 +769,7 @@ enum PipelineServices {
             }
             return destinationFileURL
         }
-        
-
-//        static func resolveOutputDir(targetFolderURL: URL) throws -> URL {
-//            let defaults = UserDefaults.standard
-//
-//            // Repair scheme-less URLs (built with URL(string:) from a plain path)
-//            let target = targetFolderURL.isFileURL
-//                ? targetFolderURL
-//                : URL(fileURLWithPath: targetFolderURL.path, isDirectory: true)
-//
-//            print("resolve: scheme=\(targetFolderURL.scheme ?? "nil") bookmarkBytes=\(defaults.data(forKey: StoreKey.outputBookmark)?.count ?? 0)")
-//
-//            if let data = defaults.data(forKey: StoreKey.outputBookmark) {
-//                var stale = false
-//                if let resolved = try? URL(resolvingBookmarkData: data, options: [],
-//                                           relativeTo: nil, bookmarkDataIsStale: &stale),
-//                   resolved.normalizedDir == target.normalizedDir {
-//                    if stale, resolved.startAccessingSecurityScopedResource() {
-//                        defer { resolved.stopAccessingSecurityScopedResource() }
-//                        if let fresh = try? resolved.bookmarkData(options: [],
-//                                                                  includingResourceValuesForKeys: nil,
-//                                                                  relativeTo: nil) {
-//                            defaults.set(fresh, forKey: StoreKey.outputBookmark)
-//                        }
-//                    }
-//                    return resolved          // proper file URL, scope attached
-//                }
-//            }
-//            return target                    // new pick this session, or inside the sandbox
-//        }
-        static func resolveOutputDir(targetFolderURL: URL) throws -> (url: URL, isSecurityScoped: Bool) {
+                static func resolveOutputDir(targetFolderURL: URL) throws -> (url: URL, isSecurityScoped: Bool) {
             let defaults = UserDefaults.standard
 
             if let data = defaults.data(forKey: StoreKey.outputBookmark) {
@@ -528,39 +810,18 @@ enum PipelineServices {
                 
             return (fallback, false)
         }
-//        static func resolveOutputDir(targetFolderURL: URL) throws -> URL {
-//            let defaults = UserDefaults.standard
-//
-//            // Not the saved default (new choice, or nothing saved yet), or no bookmark to resolve:
-//            // use the URL as given.
-//            guard let savedDefault = defaults.url(forKey: StoreKey.outputDir),
-//                  targetFolderURL.normalizedDir == savedDefault.normalizedDir,
-//                  let data = defaults.data(forKey: StoreKey.outputBookmark)
-//            else {
-//                return targetFolderURL
-//            }
-//
-//            var stale = false
-//            do {
-//                let url = try URL(resolvingBookmarkData: data,
-//                                  options: [],
-//                                  relativeTo: nil,
-//                                  bookmarkDataIsStale: &stale)
-//                if stale, url.startAccessingSecurityScopedResource() {
-//                    defer { url.stopAccessingSecurityScopedResource() }
-//                    if let fresh = try? url.bookmarkData(options: [],
-//                                                         includingResourceValuesForKeys: nil,
-//                                                         relativeTo: nil) {
-//                        defaults.set(fresh, forKey: StoreKey.outputBookmark)
-//                    }
-//                }
-//                return url
-//            } catch {
-//                defaults.removeObject(forKey: StoreKey.outputBookmark)
-//                throw PipelineError.ExportError.outputFolderCreationError
-//            }
-//        }
-    
     }
 }
 
+
+protocol BERTlikeTokenizerHelper{
+    var showPieces: Bool  { get set }
+    func encode(words: [String], seqLen: Int, maxWords: Int) throws -> BERTpipeEncodedSentence?
+}
+
+
+/// Implemented by the existing WordPiece tokenizer (via a small adapter) and by
+/// SentencePieceTokenizer, so the export/prediction code doesn't care which one it has.
+protocol SubwordEncoder {
+    func encode(words: [String], seqLen: Int, maxWords: Int) throws -> BERTpipeEncodedSentence?
+}
