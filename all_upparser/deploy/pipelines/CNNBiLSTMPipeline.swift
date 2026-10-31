@@ -133,8 +133,11 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
     }
 }
 
+
+final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableObject {
+    var seqLen: Int = 256
     
-final class CNNBiLSTMPipeline: PipelineHelper, ObservableObject {
+    
     // the actual pipeline for processing, with no optionals
     let tokenizerModel: MLModel
     let taggerModel: MLModel
@@ -153,7 +156,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, ObservableObject {
     let description = "I'm a CNN-BiLSTM pipeline"
     let maxWords: Int = 256 // prefer parse // extrct from metas
 
-    private var runExplicit: Bool {
+    internal var runExplicit: Bool {
             UserDefaults.standard.bool(forKey: "runExplicit")
         }
 

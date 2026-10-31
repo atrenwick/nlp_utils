@@ -8,6 +8,12 @@
 import Foundation
 internal import UniformTypeIdentifiers
 
+enum BERTlikeBase{
+    case distilbert
+    case roberta
+    case camembert
+}
+
 enum ConllLineContent {
     case row(Token)
     case blank
@@ -202,10 +208,12 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
     var id: Self { self }
     case distilbert
     case cnnBiLSTM
+    case camembert
     var displayName: String{
         switch self{
         case .distilbert: return "DistilBERT"
         case .cnnBiLSTM: return "CNN-BiLSTM"
+        case .camembert: return "CamemBERT"
         }
     }
 }

@@ -32,40 +32,10 @@ import Foundation
 import CoreML
 import SwiftUI
 
-// MARK: - Errors
-enum WordPieceError: Error, LocalizedError {
-    case vocabUnreadable(URL)
-    case missingSpecialToken(String)
-    case missingSetting(String)
-    case tooManyWords(have: Int, limit: Int)
-    case tooManySubwords(have: Int, limit: Int)
-    case tokenizerTryError
-    case wordPieceTokenizerError
-    case other
-    var errorDescription: String? {
-        switch self {
-        case .other:
-            return "Other type of error"
-        case .wordPieceTokenizerError:
-            return "error encoding after tokenizer made"
-        case .tokenizerTryError:
-            return "Try failed in test funct"
-        case .vocabUnreadable(let url):
-            return "Couldn't read the vocabulary file at \(url.lastPathComponent)"
-        case .missingSpecialToken(let name):
-            return "Special token \(name) isn't in the vocabulary"
-        case .missingSetting(let name):
-            return "tokenizer_config.json has no \"\(name)\"; pass it explicitly when creating the tokenizer"
-        case .tooManyWords(let have, let limit):
-            return "Sentence has \(have) words; the model accepts at most \(limit)"
-        case .tooManySubwords(let have, let limit):
-            return "Sentence needs \(have) subword tokens; the model accepts at most \(limit)"
-        }
-    }
-}
+
 
 // MARK: - Output type as struct :: data
-struct WordPieceEncodedSentence {
+struct WordPieceEncodedSentence: BERTpipeEncodedSentence {
     /// Length seqLen, padded with the pad id.
     let inputIDs: [Int32]
     /// Length maxWords, padded with -1. Element 0 is the ROOT slot.
@@ -74,25 +44,17 @@ struct WordPieceEncodedSentence {
     let wordCount: Int
     /// The subword strings for each word (e.g. ["play", "##ing"]), aligned with the input
     /// words. nil unless the tokenizer's showWordPieces is true.
-    let wordPieces: [[String]]?
+    var length: Int
+    let pieces: [[String]]?
+    
+    var validSlots: Int
 }
-// extension on this struct to group all the processing done on the data helf in the struct
-extension WordPieceEncodedSentence {
-    /// int32 MLMultiArrays shaped [1, seqLen] and [1, maxWords], ready for the model.
-    func multiArrays() throws -> (inputIDs: MLMultiArray, wordIndex: MLMultiArray) {
-        return (try Self.makeArray(inputIDs), try Self.makeArray(wordIndex))
-    }
 
-    private static func makeArray(_ values: [Int32]) throws -> MLMultiArray {
-        let array = try MLMultiArray(shape: [1, NSNumber(value: values.count)], dataType: .int32)
-        let pointer = array.dataPointer.bindMemory(to: Int32.self, capacity: values.count)
-        for (i, value) in values.enumerated() { pointer[i] = value }
-        return array
-    }
-}
 
 // MARK: - Tokenizer
-struct WordPieceTokenizer: Sendable {
+struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
+    var showPieces: Bool
+    
     
     var showWordPieces: Bool = false
     let clsID: Int32
@@ -121,12 +83,12 @@ struct WordPieceTokenizer: Sendable {
          stripAccents: Bool? = nil,
          tokenizeChineseChars: Bool? = nil,
          continuingPrefix: String = "##",
+         showPieces: Bool? = nil,
          maxInputCharsPerWord: Int = 100) throws {
-
         // vocab.txt: one token per line, id = line number. Split on the 0x0A byte (not on
         // Characters, which would treat "\r\n" as one line break).
         let data: Data
-        do { data = try Data(contentsOf: vocabURL) } catch { throw WordPieceError.vocabUnreadable(vocabURL) }
+        do { data = try Data(contentsOf: vocabURL) } catch { throw PipelineError.TokPieceError.vocabUnreadable(vocabURL) }
         var lines = data.split(separator: 0x0A, omittingEmptySubsequences: false)
         if lines.last?.isEmpty == true { lines.removeLast() }
         let tokenBytes = lines.map { Array($0) }
@@ -141,8 +103,9 @@ struct WordPieceTokenizer: Sendable {
         }
 
         guard let lower = doLowerCase ?? (config["do_lower_case"] as? Bool) else {
-            throw WordPieceError.missingSetting("do_lower_case")
+            throw PipelineError.TokPieceError.missingSetting("do_lower_case")
         }
+        self.showPieces = false
         self.lowercase = lower
         // strip_accents: explicit -> config (null counts as absent) -> follows lowercasing
         self.stripAccents = stripAccents ?? (config["strip_accents"] as? Bool) ?? lower
@@ -151,7 +114,7 @@ struct WordPieceTokenizer: Sendable {
 
         func special(_ key: String, _ fallback: String) throws -> (name: String, id: Int32) {
             let name = (config[key] as? String) ?? fallback
-            guard let id = table[Array(name.utf8)] else { throw WordPieceError.missingSpecialToken(name) }
+            guard let id = table[Array(name.utf8)] else { throw PipelineError.TokPieceError.missingSpecialToken(name) }
             return (name, id)
         }
         let cls = try special("cls_token", "[CLS]")
@@ -219,23 +182,25 @@ struct WordPieceTokenizer: Sendable {
     }
     /// Padded encoding for the fixed-length Core ML model. Use the same seqLen and maxWords
     /// the model was converted with (convert_bert.py prints them).
-    func encode(words: [String], seqLen: Int, maxWords: Int) throws -> WordPieceEncodedSentence? {
+    func encode(words: [String], seqLen: Int, maxWords: Int) throws ->  BERTpipeEncodedSentence? {
         let detailed = encodeDetailed(words: words, collectPieces: showWordPieces)
         let ids = detailed.inputIDs
         let wordIndex = detailed.wordIndex
         guard wordIndex.count <= maxWords else {
 //            return nil
-            throw WordPieceError.tooManyWords(have: words.count, limit: maxWords - 1)
+            throw PipelineError.TokPieceError.tooManyWords(have: words.count, limit: maxWords - 1)
         }
         guard ids.count <= seqLen else {
 //            return nil
-                        throw WordPieceError.tooManySubwords(have: ids.count, limit: seqLen)
+            throw PipelineError.TokPieceError.tooManySubwords(have: ids.count, limit: seqLen)
         }
         return WordPieceEncodedSentence(
             inputIDs: ids + [Int32](repeating: padID, count: seqLen - ids.count),
             wordIndex: wordIndex + [Int32](repeating: -1, count: maxWords - wordIndex.count),
             wordCount: words.count,
-            wordPieces: showWordPieces ? detailed.pieces.map { strings(for: $0) } : nil
+            length: ids.count,
+            pieces: showWordPieces ? detailed.pieces.map { strings(for: $0) } : nil,
+            validSlots: words.count + 1
         )
     }
     // MARK: Normalisation and pre-tokenisation
@@ -313,7 +278,6 @@ struct WordPieceTokenizer: Sendable {
         }
         return ids
     }
-
 
     // MARK: Character classes (match Hugging Face's BertNormalizer / BertPreTokenizer)
     private static func isWhitespace(_ s: Unicode.Scalar) -> Bool {
@@ -394,10 +358,12 @@ extension WordPieceTokenizer {
 
     static func fromBundle(_ bundle: Bundle = .main, languageCode: String, treebank: String, vx: String) throws -> WordPieceTokenizer {
         guard let vocab = bundle.url(forResource: "\(languageCode)_distilbert_tok_vocab_\(treebank)\(vx)", withExtension: "txt") else {
-            throw WordPieceError.vocabUnreadable(URL(fileURLWithPath: "\(languageCode)_distilbert_tok_vocab_\(treebank)\(vx).txt"))
+            throw PipelineError.TokPieceError.vocabUnreadable(URL(fileURLWithPath: "\(languageCode)_distilbert_tok_vocab_\(treebank)\(vx).txt"))
         }
         print("got vocab txt")
         let settings = bundle.url(forResource: "\(languageCode)_distilbert_wordpiece_settings_\(treebank)\(vx)", withExtension: "json")
         return try WordPieceTokenizer(vocabURL: vocab, configURL: settings)
     }
 }
+
+

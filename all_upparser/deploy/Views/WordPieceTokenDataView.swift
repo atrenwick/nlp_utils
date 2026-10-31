@@ -58,15 +58,15 @@ import SwiftUI
 ////
 ////
 ////            guard !wordPieceTokenizer.clsID.words.isEmpty else {
-////                print("WordPieceError.tokenizerTryError")
-////                throw WordPieceError.tokenizerTryError
+////                print("TokPieceError.tokenizerTryError")
+////                throw TokPieceError.tokenizerTryError
 ////            }
 ////            
 ////            let encoded = try wordPieceTokenizer.encode(words: words, seqLen: 128, maxWords: 96)
 ////            print(encoded.wordCount)
 ////            guard !encoded.inputIDs.isEmpty else {
-////                print("WordPieceError.wordPieceTokenizerError")
-////                throw WordPieceError.wordPieceTokenizerError
+////                print("TokPieceError.wordPieceTokenizerError")
+////                throw TokPieceError.wordPieceTokenizerError
 ////            }
 //////            return TestOutput(tokenizer: wordPieceTokenizer, encoded: encoded)
 ////            let failures = try wordPieceTokenizer.checkAgainstGolden(fileNameChunk: "FR_distilbert_tok_gold_gsd")
@@ -76,7 +76,7 @@ import SwiftUI
 ////
 ////        } catch {
 ////            print("other type of error")
-////            throw WordPieceError.other
+////            throw TokPieceError.other
 ////        }
 ////        
 ////    }

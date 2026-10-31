@@ -10,6 +10,20 @@ import NaturalLanguage
 import SwiftUI
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
+enum ArrayMakingMethods{
+    case cnnbilstm
+    case sentencepieceencodedsentence
+    case wordpieceencodedsentence
+    var methodList: [String]{
+        switch self{
+                case .cnnbilstm : return ["makeIntArray" ,"makeCharIdArray", "parserArgmax"]
+        case .sentencepieceencodedsentence, .wordpieceencodedsentence: return ["multiArrays", "makeArray"]
+            
+        }
+    }
+
+    
+}
 
 enum FileIngestionWorkflow {
     //MARK : helper functions: get data from file, and specialloader from inside bundle
@@ -760,7 +774,7 @@ enum TokenisationWorkflow{
             
         case .trained:
             switch myConfig.parsingConfig.modelArchitecture {
-            case .distilbert:
+            case .distilbert, .camembert:
                 throw PipelineError.ConfigurationError.architectureConflict
             case .cnnBiLSTM:
                 // retokenize everything with model
@@ -769,9 +783,13 @@ enum TokenisationWorkflow{
                 if myConfig.parsingConfig.runExplicit{
                     print("sentencizing with trained")
                 }
+                if let success = pipeline as? CNNBiLSTMPipeline {
+                    
                 for sentence in sents {
-                    let tokenisedSent = try pipeline.tokenize(sentence)
-                    internalSentList.append(tokenisedSent)
+                    // todo :: use tokenize method from cnnpipe
+                    let tokenisedSent = try success.tokenize(sentence)
+                    internalSentList.append(contentsOf: tokenisedSent)
+                }
                 }
             }
         }
@@ -975,7 +993,7 @@ enum XMLMakingWorkflow{
                     sourcefile="\(safeHeaderAttribs.sourceFile)"
                     runID="\(safeHeaderAttribs.runID)"
                     maxPipelineStep="\(safeHeaderAttribs.maxPipelineStep)"
-                    modelArchitecture="\(safeHeaderAttribs.modelArchitecture)",
+                    modelArchitecture="\(safeHeaderAttribs.modelArchitecture)"
                     runRetokeniser="\(safeHeaderAttribs.runRetokeniser)"
                     tokenizingMethod="\(safeHeaderAttribs.tokenizingMethod)"
                     sentencizingMethod="\(safeHeaderAttribs.sentencizingMethod)"
