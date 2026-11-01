@@ -166,19 +166,18 @@ extension PipelineLoader{
     static func loadLabelVocabularies(languageCode: String,
                                       treebank: String,
                                       bundle: Bundle = .main,
-                                      vx: String,
                                       base: BERTlikeBase
     ) throws -> BERTpipeHelperStructs.LabelVocabs {
         
-        func vocab(_ label: String, vx: String) throws -> Vocab {
+        func vocab(_ label: String) throws -> Vocab {
             let name: String
             switch base {
             case .distilbert:
-                name = "\(languageCode)_distilbert_\(label)_vocab_\(treebank)\(vx)"
+                name = "\(languageCode)_distilbert_\(label)_vocab_\(treebank)"
             case .camembert:
-                name = "\(languageCode)_camembert_\(label)_vocab_\(treebank)\(vx)"
+                name = "\(languageCode)_camembert_\(label)_vocab_\(treebank)"
             case .roberta:
-                name = "\(languageCode)_roberta_\(label)_vocab_\(treebank)\(vx)"
+                name = "\(languageCode)_roberta_\(label)_vocab_\(treebank)"
             }
             guard let url = bundle.url(forResource: name, withExtension: "json") else {
                 throw PipelineError.GenericError.missingResource("\(name).json")
@@ -189,10 +188,10 @@ extension PipelineLoader{
         }
 
         return BERTpipeHelperStructs.LabelVocabs(
-            upos: try vocab("upos", vx: vx),
-            feats: try vocab("feats", vx: vx),
-            deprel: try vocab("deprel", vx: vx),
-            lemmaRule: try vocab("lemma_rule", vx: vx)
+            upos: try vocab("upos"),
+            feats: try vocab("feats"),
+            deprel: try vocab("deprel"),
+            lemmaRule: try vocab("lemma_rule")
         )
     }
     static func loadMlpackage(named name: String, myConfig: TaggerConfig) throws -> MLModel{
@@ -201,7 +200,7 @@ extension PipelineLoader{
         }
         do {
             switch myConfig.parsingConfig.modelArchitecture {
-            case .distilbert, .camembert:
+            case .distilbert, .camembert, .roberta:
                 let configuration = MLModelConfiguration()
                 configuration.computeUnits = .all
                 return try MLModel(contentsOf: url, configuration: configuration)
@@ -512,7 +511,7 @@ extension BERTderivedPipelineHelper  {
         var currentPieceCount: Int = -3
         
         switch myConfig.parsingConfig.modelArchitecture{
-        case .camembert:
+        case .camembert, .roberta:
             if let useThis = tokenizer as? SentencePieceTokenizer {
                 thisTokenizer = useThis
                 thisTokenizer.showPieces = myConfig.exportConfig.getsubtokens
@@ -537,7 +536,7 @@ extension BERTderivedPipelineHelper  {
                 return OnSentResult(sentence: sentence, resultType: .otherError, decoded: [])
             }
             switch myConfig.parsingConfig.modelArchitecture{
-            case .camembert:
+            case .camembert, .roberta:
                 currentPieceCount = encoded.validSlots
             case .distilbert:
                 currentPieceCount = encoded.pieces?.count ?? -4

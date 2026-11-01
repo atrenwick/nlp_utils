@@ -253,7 +253,7 @@ extension PipelineSettingsView {
         isLoading = true
         do {
             switch myConfig.parsingConfig.modelArchitecture {
-            case .camembert:
+            case .camembert, .roberta:
                 let loader = CamemBERTlikePipelineLoader()
                 pipeline = try await loader.loadCamemBERTlikePipeline(myConfig: myConfig) {step, message in
                     loadedCount = step
@@ -435,3 +435,10 @@ extension PipelineSettingsView {
     }
 
 }
+
+//let modelURL = Bundle.main.url(
+//    forResource: "my_model",
+//    withExtension: "mlpackage",
+//    subdirectory: "ExternalModels/cnn_bi_lstm" // Reflects the nested path inside the blue folder
+//)
+

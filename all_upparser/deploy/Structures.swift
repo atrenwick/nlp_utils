@@ -34,7 +34,7 @@ struct ConfigurationRules {
     // Define which languages are available per architecture
     static func availableLanguages(for architecture: ModelArchitecture) -> [Language] {
         switch architecture {
-        case .camembert:
+        case .camembert, .roberta:
             return [.FR]
         case .cnnBiLSTM:
             return [.EN, .FR, .ANG, .DE, .FRM, .FRO].sorted {$0.rawValue < $1.rawValue}
@@ -55,8 +55,12 @@ struct ConfigurationRules {
                 case .FRM: return [.frmTB1]
                 case .FRO: return [.froTB1]
             }
-        case .camembert:
-            return [.frTB1]
+        case .camembert, .roberta:
+            switch language {
+            case .FR: return [.frTB1]
+            default : return [.frTB1]
+            }
+            
         case .distilbert:
             switch language {
             case .FR: return [.frTB1, .frTB2, .frTB3]

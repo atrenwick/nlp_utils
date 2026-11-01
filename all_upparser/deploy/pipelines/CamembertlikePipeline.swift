@@ -63,7 +63,6 @@ class CamemBERTlikePipelineLoader: ObservableObject, PipelineLoader{
         onProgress: @MainActor @Sendable (Int, String) -> Void
     ) async throws -> CamemBERTlikePipeline{
         let myConfig: TaggerConfig = myConfig
-        let vX = "v2"
         let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
         let treebank = await myConfig.parsingConfig.selectedTreebank.short
         let runExplicit: Bool = myConfig.parsingConfig.runExplicit
@@ -76,10 +75,10 @@ class CamemBERTlikePipelineLoader: ObservableObject, PipelineLoader{
         var maxWords: Int?
         
         await onProgress(1, "Load vocabs")
-        labels = try await CamemBERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, vx: vX, base: BERTlikeBase.camembert)
+        labels = try await CamemBERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank,  base: BERTlikeBase.camembert)
         
         await onProgress(2, "Load sentpiece tokenizer")
-        let name = "\(languageCode)_camembert_sentpiece_tokenizer_vocab_\(treebank)\(vX)"
+        let name = "\(languageCode)_camembert_tokenizer_\(treebank)"
         guard let url = Bundle.main.url(forResource: name, withExtension: "json") else {
             
             throw PipelineError.GenericError.missingResource("\(name).json")
@@ -87,7 +86,7 @@ class CamemBERTlikePipelineLoader: ObservableObject, PipelineLoader{
         sentencePieceTokenizer = try await SentencePieceTokenizer(tokenizerJSON: url) // .fromBundle(languageCode: languageCode, treebank: treebank, vx: vX)
 
         await onProgress(3, "Load tagger model")
-        taggerModel = try await CamemBERTlikePipelineLoader.loadMlpackage(named: "\(languageCode)_camembert_tagger_parser_\(treebank)\(vX)", myConfig: myConfig)
+        taggerModel = try await CamemBERTlikePipelineLoader.loadMlpackage(named: "\(languageCode)_camembert_tagger_parser_\(treebank)", myConfig: myConfig)
         
         await onProgress(4, "Verifying settings")
 
