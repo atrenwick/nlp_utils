@@ -140,7 +140,7 @@ struct ExportConfigViewSection: View {
             NavigationLink {
                 ExportSettingsDetailView(myConfig: $myConfig)
             } label: {
-                Text( xmlSettingDisplayText)
+                Text(xmlSettingDisplayText)
             }
         }
         // Folder Selection System Sheet
@@ -151,21 +151,19 @@ struct ExportConfigViewSection: View {
         ) { result in
             switch result {
             case .success(let urls):
-                // get user chosen
                 if let url = urls.first {
                     // Gain security access to folder
                     if url.startAccessingSecurityScopedResource() {
                         myConfig.exportConfig.targetFolderURL = url
                     }
                 }
-                
             case .failure(let error):
                 print("Folder selection error: \(error.localizedDescription)")
             }
         }
     }
     private func setOutputDirTo(_ dir: ResetDirOption) {
-        // Re-assign the default bookmark URL back to the config instance
+        // Re-assign  default bookmark URL back to the config instance
         switch dir {
         case .defaultvalue:
             myConfig.exportConfig.targetFolderURL = PipelineServices.ExporterService.resolveDefaultBookmark()
@@ -174,10 +172,10 @@ struct ExportConfigViewSection: View {
         }
     }
 }
-#Preview {
-    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
-    ExportConfigViewSection(myConfig: $myConfig)
-}
+//#Preview {
+//    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
+//    ExportConfigViewSection(myConfig: $myConfig)
+//}
 
 // set name of file to export
 struct FileNameInputViewSection: View {
@@ -429,6 +427,9 @@ struct TaggingProgressButtonExtractedView: View{
     let taggingInProgress: Bool
     let isPipelineReady: Bool
     let pipelineSummary: String
+    @Binding var currentPipelineDesc: PipelineDesc
+    @Binding var currentPipelineLoaded: Bool
+
     var previous: Int = 0
 
     var body: some View {
@@ -440,6 +441,17 @@ struct TaggingProgressButtonExtractedView: View{
                     Text(taggingInProgress ? "Running" : "Run")
                         .fontWeight(.semibold)
                 }
+                if currentPipelineLoaded {
+                    HStack{
+                        Text(currentPipelineDesc.lang.uppercased())
+                        Spacer()
+                        Text(currentPipelineDesc.tb)
+                        Spacer()
+                        Text(currentPipelineDesc.llm)
+                        Spacer()
+                        Text(currentPipelineDesc.tok)
+                    }
+                }
             }
             .font(.headline)
             .frame(maxWidth: .infinity)
@@ -447,6 +459,21 @@ struct TaggingProgressButtonExtractedView: View{
         }
     }
 }
+//#Preview{
+//    @Previewable let isPipelineReady: Bool = true
+//    @Previewable let taggingInProgress: Bool = false
+//    @Previewable @State var currentPipelineLoaded: Bool = true
+//    @Previewable @State var currentPipelineDesc: PipelineDesc = PipelineDesc(tb: "GSD", lang: "FR", tok: "WPiece", llm: "CamemBERT")
+//
+//    TaggingProgressButtonExtractedView(
+//        taggingInProgress: taggingInProgress,
+//        isPipelineReady: isPipelineReady,
+//        pipelineSummary: "foobar",
+//        currentPipelineDesc: $currentPipelineDesc,
+//        currentPipelineLoaded: $currentPipelineLoaded,
+//        previous: 2)
+//}
+
 
 struct ToolbarLinkToOutputExtractedView: View {
     @Binding var myConfig: TaggerConfig

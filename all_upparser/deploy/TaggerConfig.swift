@@ -40,6 +40,7 @@ struct TaggerConfig{
     
     struct ParsingConfig{
         var selectedArchitecture: ModelArchitecture
+        var bertlikeBase: BERTlikeBase
         var selectedLanguage: Language
         var selectedTreebank: Language.Treebank
         var maxPipelineStep: PipelineStep
@@ -63,6 +64,7 @@ struct TaggerConfig{
         // need to add = nil in init of it's to truly allow no parameters to be specified
         init(
             selectedArchitecture: ModelArchitecture? = nil,
+            bertlikeBase: BERTlikeBase? = nil,
             selectedLanguage: Language? = nil,
             selectedTreebank: Language.Treebank? = nil,
             maxPipelineStep: PipelineStep? = nil,
@@ -84,6 +86,19 @@ struct TaggerConfig{
             maxWords: Int? = nil
         ){
             self.selectedArchitecture = TaggerConfig.resolveRawRep(passed: selectedArchitecture, key: "modelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
+            
+            switch selectedArchitecture {
+                case .roberta:
+                    self.bertlikeBase = BERTlikeBase.roberta
+                case .camembert:
+                    self.bertlikeBase = BERTlikeBase.camembert
+                case .distilbert:
+                    self.bertlikeBase = BERTlikeBase.distilbert
+                case .cnnBiLSTM, .none:
+                    self.bertlikeBase = BERTlikeBase.notRelevant
+            }
+            
+            
             self.selectedLanguage = TaggerConfig.resolveRawRep(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
             self.selectedTreebank = TaggerConfig.resolveRawRep(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
             self.runResentenciser = TaggerConfig.resolveBool(passed: runResentenciser, key: "runResentenciserDefault", default: false)

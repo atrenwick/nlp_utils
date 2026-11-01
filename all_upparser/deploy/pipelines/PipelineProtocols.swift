@@ -178,6 +178,8 @@ extension PipelineLoader{
                 name = "\(languageCode)_camembert_\(label)_vocab_\(treebank)"
             case .roberta:
                 name = "\(languageCode)_roberta_\(label)_vocab_\(treebank)"
+            case .notRelevant:
+                    throw PipelineError.ConfigurationError.architectureConflict
             }
             guard let url = bundle.url(forResource: name, withExtension: "json") else {
                 throw PipelineError.GenericError.missingResource("\(name).json")

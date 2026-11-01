@@ -17,7 +17,7 @@ struct PipelineSettingsView: View {
     @State var tempTokens: [TempToken] = []
     // reporting
     @State internal var isLoading = false
-    @State internal var loadedCount = 0
+    @State internal var loadedCount = 1
     @State internal var loadStatus = ""
     @State internal var topLevelOutputList: [RunOutput] = []
     @State internal var exportStatusMessage: String?
@@ -30,7 +30,9 @@ struct PipelineSettingsView: View {
     @State var builtSents: [BuiltSentHolder] = []
     @State var sentsToRetokenise: [String] = []
     @State var exportContent: String = ""
-    
+    @State var currentPipelineLoaded: Bool = false
+    @State var currentPipelineDesc: PipelineDesc = PipelineDesc(tb: "", lang: "", tok: "", llm: "")
+
     var unreadCount: Int {
         topLevelOutputList.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
@@ -107,8 +109,12 @@ struct PipelineSettingsView: View {
                         missingReqsMessage: missingReqsMessage
                     )
                     if isLoading {
+                        
                         VStack {
-                            ProgressView(value: Double(loadedCount), total: Double(loadTotal))
+                            ProgressView(
+                                value: isLoading ? Double(loadedCount) : 0.0,
+                                total: Double(loadTotal)
+                            )
                             Text(loadStatus)
                         }
                     }
@@ -126,7 +132,7 @@ struct PipelineSettingsView: View {
                         }
                     )
                     {
-                        TaggingProgressButtonExtractedView(taggingInProgress: taggingInProgress, isPipelineReady: isPipelineReady, pipelineSummary: pipelineSummary)
+                        TaggingProgressButtonExtractedView(taggingInProgress: taggingInProgress, isPipelineReady: isPipelineReady, pipelineSummary: pipelineSummary, currentPipelineDesc: $currentPipelineDesc, currentPipelineLoaded: $currentPipelineLoaded)
                     }
                     .buttonStyle(.borderedProminent)
                     .clipShape(Capsule())
@@ -315,6 +321,11 @@ extension PipelineSettingsView {
                 do {
                     currentStatus = "Loading pipeline"
                     pipeline = try await callPipelineLoader(myConfig: myConfig)
+                    currentPipelineLoaded = true
+//                    currentPipelineDesc = pipeline.description
+                    currentPipelineDesc = describePipeline(pipepline: pipeline, myConfig: myConfig)
+                    
+                    
                     myConfig.parsingConfig.maxWords = pipeline.maxWords
                     myConfig.outputData.safeHeaderAttribs.maxWords = String(pipeline.maxWords)
                     //MARK: set pipeline maxwords, seqlen
