@@ -74,7 +74,7 @@ class DistilBERTlikePipelineLoader: ObservableObject, PipelineLoader {
         await onProgress(2, "Load wordpiece tokenizer")
         wordPieceTokenizer = try await WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank)
         
-        await onProgress(3, "Load tagger model")
+        await onProgress(3, "Load DIS tagger model")
         taggerModel = try await DistilBERTlikePipeline.loadMlpackage(named: "\(languageCode)_distilbert_tagger_parser_\(treebank)", myConfig: myConfig)
         
         await onProgress(4, "Verifying settings")

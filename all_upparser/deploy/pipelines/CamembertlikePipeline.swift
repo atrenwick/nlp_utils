@@ -85,7 +85,7 @@ class CamemBERTlikePipelineLoader: ObservableObject, PipelineLoader{
         }
         sentencePieceTokenizer = try await SentencePieceTokenizer(tokenizerJSON: url) // .fromBundle(languageCode: languageCode, treebank: treebank, vx: vX)
 
-        await onProgress(3, "Load tagger model")
+        await onProgress(3, "Load CAM tagger model")
         taggerModel = try await CamemBERTlikePipelineLoader.loadMlpackage(named: "\(languageCode)_camembert_tagger_parser_\(treebank)", myConfig: myConfig)
         
         await onProgress(4, "Verifying settings")

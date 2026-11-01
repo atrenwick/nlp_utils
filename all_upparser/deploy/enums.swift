@@ -12,6 +12,7 @@ enum BERTlikeBase{
     case distilbert
     case roberta
     case camembert
+    case notRelevant
 }
 
 enum ConllLineContent {
