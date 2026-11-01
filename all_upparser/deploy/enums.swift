@@ -209,11 +209,38 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
     case distilbert
     case cnnBiLSTM
     case camembert
+    case roberta
     var displayName: String{
         switch self{
         case .distilbert: return "DistilBERT"
         case .cnnBiLSTM: return "CNN-BiLSTM"
         case .camembert: return "CamemBERT"
+        case .roberta: return "XLM-roBERTa"
+        }
+    }
+    var mlpackagePath: String {
+        switch self {
+            case .camembert:
+                return "TaggingAssets/camembert/mlpackages"
+            case .distilbert:
+                return  "TaggingAssets/distilbert/mlpackages"
+            case .roberta:
+                return  "TaggingAssets/roberta/mlpackages"
+            case .cnnBiLSTM:
+                return "TaggingAssets/sansLLM/sans_mlpackages"
+        }
+        
+    }
+    var assetPath: String{
+        switch self {
+            case .camembert:
+                return "TaggingAssets/camembert/"
+            case .distilbert:
+                return  "TaggingAssets/distilbert/"
+            case .roberta:
+                return  "TaggingAssets/roberta/"
+            case .cnnBiLSTM:
+                return "TaggingAssets/sansLLM/"
         }
     }
 }

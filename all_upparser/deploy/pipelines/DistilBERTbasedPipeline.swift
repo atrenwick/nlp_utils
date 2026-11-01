@@ -56,7 +56,6 @@ class DistilBERTlikePipelineLoader: ObservableObject, PipelineLoader {
         onProgress: @MainActor @Sendable (Int, String) -> Void
     ) async throws -> DistilBERTlikePipeline {
         let myConfig: TaggerConfig = myConfig
-        let vX = "v2"
         let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
         let treebank = await myConfig.parsingConfig.selectedTreebank.short
         let runExplicitValue: Bool = myConfig.parsingConfig.runExplicit
@@ -70,13 +69,13 @@ class DistilBERTlikePipelineLoader: ObservableObject, PipelineLoader {
         // tokenizer model
         
         await onProgress(1, "Load vocabs")
-        labels = try await DistilBERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, vx: vX, base: BERTlikeBase.distilbert)
+        labels = try await DistilBERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank,  base: BERTlikeBase.distilbert)
         
         await onProgress(2, "Load wordpiece tokenizer")
-        wordPieceTokenizer = try await WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank, vx: vX)
+        wordPieceTokenizer = try await WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank)
         
         await onProgress(3, "Load tagger model")
-        taggerModel = try await DistilBERTlikePipeline.loadMlpackage(named: "\(languageCode)_distilbert_tagger_parser_\(treebank)\(vX)", myConfig: myConfig)
+        taggerModel = try await DistilBERTlikePipeline.loadMlpackage(named: "\(languageCode)_distilbert_tagger_parser_\(treebank)", myConfig: myConfig)
         
         await onProgress(4, "Verifying settings")
         

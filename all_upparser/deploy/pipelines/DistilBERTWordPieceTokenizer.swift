@@ -356,12 +356,12 @@ extension WordPieceTokenizer {
         return failures
     }
 
-    static func fromBundle(_ bundle: Bundle = .main, languageCode: String, treebank: String, vx: String) throws -> WordPieceTokenizer {
-        guard let vocab = bundle.url(forResource: "\(languageCode)_distilbert_tok_vocab_\(treebank)\(vx)", withExtension: "txt") else {
-            throw PipelineError.TokPieceError.vocabUnreadable(URL(fileURLWithPath: "\(languageCode)_distilbert_tok_vocab_\(treebank)\(vx).txt"))
+    static func fromBundle(_ bundle: Bundle = .main, languageCode: String, treebank: String) throws -> WordPieceTokenizer {
+        guard let vocab = bundle.url(forResource: "\(languageCode)_distilbert_tok_vocab_\(treebank)", withExtension: "txt") else {
+            throw PipelineError.TokPieceError.vocabUnreadable(URL(fileURLWithPath: "\(languageCode)_distilbert_tok_vocab_\(treebank).txt"))
         }
         print("got vocab txt")
-        let settings = bundle.url(forResource: "\(languageCode)_distilbert_wordpiece_settings_\(treebank)\(vx)", withExtension: "json")
+        let settings = bundle.url(forResource: "\(languageCode)_distilbert_wordpiece_settings_\(treebank)", withExtension: "json")
         return try WordPieceTokenizer(vocabURL: vocab, configURL: settings)
     }
 }
