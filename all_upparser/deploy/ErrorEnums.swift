@@ -90,11 +90,10 @@ enum PipelineError: LocalizedError{
                 return "Not ready to send to from loader class to runner class"
             case .resourceMissing(let name):
                 return "Missing resource: \(name)"
-                
             }
         }
     }
-    // errors when loader tries to load
+    // errors when loader tries to load a pipeline
     enum LoadingError: LocalizedError{
         case configFileLoadError(name: String)
         case fileLoadError

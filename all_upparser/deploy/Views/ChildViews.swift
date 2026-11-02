@@ -427,7 +427,7 @@ struct TaggingProgressButtonExtractedView: View{
     let taggingInProgress: Bool
     let isPipelineReady: Bool
     let pipelineSummary: String
-    @Binding var currentPipelineDesc: PipelineDesc
+    @Binding var currentPipelineDesc: PipelineDesc?
     @Binding var currentPipelineLoaded: Bool
 
     var previous: Int = 0
@@ -441,15 +441,15 @@ struct TaggingProgressButtonExtractedView: View{
                     Text(taggingInProgress ? "Running" : "Run")
                         .fontWeight(.semibold)
                 }
-                if currentPipelineLoaded {
+                if currentPipelineLoaded, let loadedDesc = currentPipelineDesc {
                     HStack{
-                        Text(currentPipelineDesc.lang.uppercased())
+                        Text(loadedDesc.lang.uppercased())
                         Spacer()
-                        Text(currentPipelineDesc.tb)
+                        Text(loadedDesc.tb)
                         Spacer()
-                        Text(currentPipelineDesc.llm)
+                        Text(loadedDesc.llm)
                         Spacer()
-                        Text(currentPipelineDesc.tok)
+                        Text(loadedDesc.tok)
                     }
                 }
             }
@@ -457,7 +457,9 @@ struct TaggingProgressButtonExtractedView: View{
             .frame(maxWidth: .infinity)
             .padding()
         }
+       
     }
+    
 }
 //#Preview{
 //    @Previewable let isPipelineReady: Bool = true
@@ -477,7 +479,7 @@ struct TaggingProgressButtonExtractedView: View{
 
 struct ToolbarLinkToOutputExtractedView: View {
     @Binding var myConfig: TaggerConfig
-    @Binding var topLevelOutputList: [RunOutput]
+    @Binding var allRunOutputs: [RunOutput]
     @Binding var builtSents: [BuiltSentHolder]
     @Binding var tempTokens: [TempToken]
     let unreadCount: Int
@@ -488,7 +490,7 @@ struct ToolbarLinkToOutputExtractedView: View {
         NavigationLink{
             RunOutputView(
                 myConfig: $myConfig,
-                runs: $topLevelOutputList,
+                runs: $allRunOutputs,
                 safeHeaderAttribs: safeHeaderAttribs,
                 builtSents: $builtSents,
                 tempTokens: $tempTokens,

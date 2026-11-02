@@ -76,7 +76,7 @@ struct RunOutputDetailView: View{
                         }
                         Spacer()
                         Button {
-                            do{
+                            do {
                                 let runOutput = try additionalExportRunner(
                                     run: run,
                                     additionalExportFormat: additionalExportFormat
@@ -111,15 +111,15 @@ struct RunOutputDetailView: View{
                     HStack{
                         Spacer()
                         Button {
-                            do{
+                            do {
                                 if let savedURL = try PipelineServices.ResultStorageManager.saveRun(run){
                                     print("Saved to \(savedURL)")}
                             } catch {
                                 switch error {
-                                case let fileSaveError as PipelineError:
-                                    alertMessage = fileSaveError.errorDescription
-                                default:
-                                    alertMessage = error.localizedDescription
+                                    case let fileSaveError as PipelineError:
+                                        alertMessage = fileSaveError.errorDescription
+                                    default:
+                                        alertMessage = error.localizedDescription
                                 }
                             }
                         } label: {

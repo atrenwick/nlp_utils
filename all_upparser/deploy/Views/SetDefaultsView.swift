@@ -17,7 +17,7 @@ struct SetDefaultsView: View {
 
     //import + parsing settings
     @AppStorage("detectLangDefault") var detectLangDefault: Bool = true
-    @AppStorage("matchFileNameTypeDefault") var matchFileNameTypeDefault: Bool = false
+    @AppStorage("matchFileNameTypeDefault") var matchFileNameTypeDefault: Bool = true
     @AppStorage("selectedLanguageDefault") var selectedLanguageDefault: Language = .FR
     @AppStorage("selectedTreebankDefault") var selectedTreebankDefault: Language.Treebank = .frTB3
     @AppStorage("selectedArchitectureDefault") var selectedArchitectureDefault: ModelArchitecture = .cnnBiLSTM

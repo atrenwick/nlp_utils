@@ -226,7 +226,7 @@ struct TaggerConfig{
     }
     
     struct OutputData{
-        var topLevelOutputList: [RunOutput] = []
+        var allRunOutputs: [RunOutput] = []
         var outputString: String = ""
         var runOutput: RunOutput?
         var exportContent: String = ""
