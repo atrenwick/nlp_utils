@@ -8,17 +8,7 @@
 import CoreML
 import Foundation
 import Combine
-
-struct SentencePieceEncodedSentence: BERTpipeEncodedSentence {
-    let inputIDs: [Int32]       // length seqLen
-    let wordIndex: [Int32]      // length maxWords
-    let wordCount: Int          // real words, without the ROOT slot
-    let length: Int             // real tokens in inputIDs, including <s> and </s>
-    let pieces: [[String]]?
-    /// Rows/columns of each model output that are meaningful (words + ROOT).
-    var validSlots: Int { wordCount + 1 }
-}
-
+// loader and pipeline based on pipeline using SentPiece tokenizer :: loader uses switch on BertBase
 class CamemBERTlikePipelineLoader: ObservableObject, PipelineLoader{
     @Published var loadingProgress: Double = min(1.0, 0.0)
     @Published var statusMessage: String = "Waiting to load..."
@@ -73,23 +63,35 @@ class CamemBERTlikePipelineLoader: ObservableObject, PipelineLoader{
         let labels: BERTpipeHelperStructs.LabelVocabs?
         var seqLen: Int?
         var maxWords: Int?
+        var bertlikeBase: BERTlikeBase
+        var tokenizerName: String
+        var packageName: String
         
         await onProgress(1, "Load vocabs")
-        labels = try await CamemBERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank,  base: BERTlikeBase.camembert)
+        switch myConfig.parsingConfig.modelArchitecture{
+            case .camembert :
+                bertlikeBase = BERTlikeBase.camembert
+                tokenizerName = "\(languageCode)_camembert_tokenizer_\(treebank)"
+                packageName = "\(languageCode)_camembert_tagger_parser_\(treebank)"
+            case .roberta:
+                bertlikeBase = BERTlikeBase.roberta
+                tokenizerName = "\(languageCode)_roberta_tokenizer_\(treebank)"
+                packageName = "\(languageCode)_roberta_tagger_parser_\(treebank)"
+            default :
+                throw PipelineError.ConfigurationError.architectureConflict
+        }
+        labels = try await CamemBERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank,  base: bertlikeBase)
         
         await onProgress(2, "Load sentpiece tokenizer")
-        let name = "\(languageCode)_camembert_tokenizer_\(treebank)"
-        guard let url = Bundle.main.url(forResource: name, withExtension: "json") else {
-            
-            throw PipelineError.GenericError.missingResource("\(name).json")
+        guard let url = Bundle.main.url(forResource: tokenizerName, withExtension: "json") else {
+            throw PipelineError.GenericError.missingResource("\(tokenizerName).json")
         }
-        sentencePieceTokenizer = try await SentencePieceTokenizer(tokenizerJSON: url) // .fromBundle(languageCode: languageCode, treebank: treebank, vx: vX)
+        sentencePieceTokenizer = try await SentencePieceTokenizer(tokenizerJSON: url)
 
-        await onProgress(3, "Load CAM tagger model")
-        taggerModel = try await CamemBERTlikePipelineLoader.loadMlpackage(named: "\(languageCode)_camembert_tagger_parser_\(treebank)", myConfig: myConfig)
+        await onProgress(3, "Load cbertlike model")
+        taggerModel = try await CamemBERTlikePipelineLoader.loadMlpackage(named: packageName, myConfig: myConfig)
         
         await onProgress(4, "Verifying settings")
-
         if let tmodel = taggerModel{
             let limits = try await Self.limits(of: tmodel)
             seqLen = limits.seqLen
@@ -115,13 +117,14 @@ final class CamemBERTlikePipeline: BERTderivedPipelineHelper, SubtokenAwarePipel
         
     internal let taggerModel: MLModel
     let labels: BERTpipeHelperStructs.LabelVocabs
-    let description: String = "BERTlikePipeline with sent piece tokenizer"
-    
+    let description: String = "BERTlikePipeline"
+
+    /// fixed lengths the model was converted with, loaded from model for safety
     let tokenizer: any BERTlikeTokenizerHelper
     let seqLen: Int
     let maxWords: Int
     let runExplicit: Bool
-    
+
     init(
         taggerModel: MLModel,
         sentPieceTokenizer: SentencePieceTokenizer,

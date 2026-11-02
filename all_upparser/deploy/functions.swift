@@ -769,7 +769,6 @@ enum TokenisationWorkflow{
                 print("calling getTokSents @ line 85")
                 print("nltokeniser")
             }
-            
             internalSentList = _getTokenisedSentences(sents: sents, myConfig: myConfig)
             
         case .trained:
@@ -964,7 +963,7 @@ enum XMLMakingWorkflow{
         )
         return outputStruct
     }
-//v2
+
     static func sentListToXML(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool) -> String {
         let safeHeaderAttribs = headers
         let sentences = sents
@@ -1214,7 +1213,6 @@ enum PrintWorkflow{
     }
     //2
     static func printFromConllSents(outsents: [Sentence]) throws -> URL{
-        
         let mySents: [Sentence] = outsents
         let fileName = "string_dump_\(Int(Date().timeIntervalSince1970 * 1_000_000_000))_special.conllu"
         let newUrl: URL = URL(fileURLWithPath: "/Volumes/Kappa/Xcode/parses/\(fileName)")

@@ -21,7 +21,7 @@ struct LemmaVocabs: Codable {
 }
 
 
-//MARK: lemmatizer runner :
+//MARK: neural lemmatizer runner :
 
 final class LemmatizerRunner {
 

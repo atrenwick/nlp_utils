@@ -8,7 +8,6 @@
 import Foundation
 import libxml2
 
-//
 extension Bundle {
     
     func loadText(_ file: String, format: String) throws -> String {
