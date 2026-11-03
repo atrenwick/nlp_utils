@@ -40,7 +40,6 @@ struct TaggerConfig{
     
     struct ParsingConfig{
         var selectedArchitecture: ModelArchitecture
-        var bertlikeBase: BERTlikeBase
         var selectedLanguage: Language
         var selectedTreebank: Language.Treebank
         var maxPipelineStep: PipelineStep
@@ -64,7 +63,6 @@ struct TaggerConfig{
         // need to add = nil in init of it's to truly allow no parameters to be specified
         init(
             selectedArchitecture: ModelArchitecture? = nil,
-            bertlikeBase: BERTlikeBase? = nil,
             selectedLanguage: Language? = nil,
             selectedTreebank: Language.Treebank? = nil,
             maxPipelineStep: PipelineStep? = nil,
@@ -86,17 +84,6 @@ struct TaggerConfig{
             maxWords: Int? = nil
         ){
             self.selectedArchitecture = TaggerConfig.resolveRawRep(passed: selectedArchitecture, key: "modelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
-            
-            switch selectedArchitecture {
-                case .roberta:
-                    self.bertlikeBase = BERTlikeBase.roberta
-                case .camembert:
-                    self.bertlikeBase = BERTlikeBase.camembert
-                case .distilbert:
-                    self.bertlikeBase = BERTlikeBase.distilbert
-                case .cnnBiLSTM, .none:
-                    self.bertlikeBase = BERTlikeBase.notRelevant
-            }
             
             
             self.selectedLanguage = TaggerConfig.resolveRawRep(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
@@ -163,6 +150,8 @@ struct TaggerConfig{
         var loadTotalCount: Int
         var loadedCount: Int
         var loadingComplete: Bool
+        var interruptRequested: Bool
+        var exitCondition: String?
         init(
             appleProgress: Progress? = nil,
             progressBarStyle: ProgressBarStyle? = nil,
@@ -174,7 +163,9 @@ struct TaggerConfig{
             hasStarted: Bool? = nil,
             loadTotalCount: Int? = nil,
             loadedCount: Int? = nil,
-            loadingComplete: Bool? = nil
+            loadingComplete: Bool? = nil,
+            interruptRequested: Bool? = nil,
+            exitCondition: String? = nil
         ){
             self.appleProgress = Progress(totalUnitCount: 1)
             self.progressBarStyle = TaggerConfig.resolveRawRep(passed: progressBarStyle, key: "progressBarStyleDefault", fallback: .apple)
@@ -187,6 +178,8 @@ struct TaggerConfig{
             self.loadTotalCount = 0
             self.loadedCount = 0
             self.loadingComplete = false
+            self.exitCondition = nil
+            self.interruptRequested = false
         }
         
         mutating func reset(){
@@ -200,6 +193,9 @@ struct TaggerConfig{
             self.loadTotalCount = 0
             self.loadedCount = 0
             self.loadingComplete = false
+            self.exitCondition = nil
+            self.interruptRequested = false
+
         }
     }
     //    // sentences ::

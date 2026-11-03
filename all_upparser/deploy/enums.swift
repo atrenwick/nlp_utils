@@ -8,13 +8,29 @@
 import Foundation
 internal import UniformTypeIdentifiers
 
-enum BERTlikeBase{
-    case distilbert
-    case roberta
-    case camembert
-    case notRelevant
+
+struct MLCPackagePath {
+    let tokenizerName: String
+    let packageName: String
 }
 
+
+
+enum ModelArchitecture: String, CaseIterable, Identifiable{
+    var id: Self { self }
+    case distilbert
+    case cnnBiLSTM
+    case camembert
+    case roberta
+    var displayName: String{
+        switch self{
+        case .distilbert: return "DistilBERT"
+        case .cnnBiLSTM: return "CNN-BiLSTM"
+        case .camembert: return "CamemBERT"
+        case .roberta: return "XLM-roBERTa"
+        }
+    }
+}
 enum ConllLineContent {
     case row(Token)
     case blank
@@ -57,7 +73,6 @@ enum InputFileType: String, Identifiable, CaseIterable, Codable {
         switch self {
         case .txt: return false
         case .conll, .xml, .xmlConll, .manual: return true
-        
         }
     }
     var fileExtension: String{
@@ -172,8 +187,9 @@ enum Language: String, CaseIterable, Identifiable {
     }
     var availableArchs: [ModelArchitecture]{
         switch self {
-        case .FR: return [.cnnBiLSTM, .distilbert]
-        default: return [.cnnBiLSTM]
+        case .FR: return [.cnnBiLSTM, .distilbert, .camembert, .roberta]
+        case .DE, .EN: return [.cnnBiLSTM, .distilbert]
+        default: return [.cnnBiLSTM, .distilbert]
         }
     }
     
@@ -205,46 +221,7 @@ enum LemmaSource: String, CaseIterable, Identifiable{
     }
 }
 
-enum ModelArchitecture: String, CaseIterable, Identifiable{
-    var id: Self { self }
-    case distilbert
-    case cnnBiLSTM
-    case camembert
-    case roberta
-    var displayName: String{
-        switch self{
-        case .distilbert: return "DistilBERT"
-        case .cnnBiLSTM: return "CNN-BiLSTM"
-        case .camembert: return "CamemBERT"
-        case .roberta: return "XLM-roBERTa"
-        }
-    }
-    var mlpackagePath: String {
-        switch self {
-            case .camembert:
-                return "TaggingAssets/camembert/mlpackages"
-            case .distilbert:
-                return  "TaggingAssets/distilbert/mlpackages"
-            case .roberta:
-                return  "TaggingAssets/roberta/mlpackages"
-            case .cnnBiLSTM:
-                return "TaggingAssets/sansLLM/sans_mlpackages"
-        }
-        
-    }
-    var assetPath: String{
-        switch self {
-            case .camembert:
-                return "TaggingAssets/camembert/"
-            case .distilbert:
-                return  "TaggingAssets/distilbert/"
-            case .roberta:
-                return  "TaggingAssets/roberta/"
-            case .cnnBiLSTM:
-                return "TaggingAssets/sansLLM/"
-        }
-    }
-}
+
 
 enum OnSentResultType: String, RawRepresentable, CaseIterable{
     var id : Self {self}

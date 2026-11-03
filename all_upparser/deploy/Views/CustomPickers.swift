@@ -7,6 +7,21 @@
 
 import SwiftUI
 
+struct ArchitecturePickerView: View{
+    @Binding var myConfig: TaggerConfig
+    
+    var body: some View {
+        Picker("Architecture", selection: $myConfig.parsingConfig.modelArchitecture){
+            ForEach(ModelArchitecture.allCases.sorted {$0.rawValue < $1.rawValue }){modarch in
+                Text(modarch.displayName)
+            }
+        }.onChange(of: myConfig.parsingConfig.modelArchitecture){
+            if myConfig.parsingConfig.modelArchitecture == .distilbert && myConfig.inputConfig.inputFileType == .txt {myConfig.parsingConfig.tokenizingMethod = .nltokeniser}
+        }
+    }
+}
+
+
 struct ConstrainedPickerForLang: View{
     @Binding var myConfig: TaggerConfig
 
@@ -158,5 +173,28 @@ struct DefaultPickerView<T: Hashable & CaseIterable & RawRepresentable>: View wh
     }
 }
 
-
+struct MatchDetectToggleView: View{
+    @Binding var myConfig: TaggerConfig
+    @Binding var  fileContainerModel: SourceFileContainerModel
+    var body: some View {
+        Toggle(isOn: $myConfig.inputConfig.detectLanguage) {
+            Text("Autodetect Language")
+        }.onChange(of: myConfig.inputConfig.detectLanguage){_, newValue in
+            if newValue == true, let detectedLang =  FileIngestionWorkflow.detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
+                myConfig.parsingConfig.selectedLanguage = detectedLang
+            } else {print("case 3")}
+        }
+        .accessibilityIdentifier("DetectLanguageToggle")
+        
+        Toggle(isOn: $myConfig.inputConfig.matchFileNameType) {
+            Text("Automatch filename-type")
+        }.onChange(of: myConfig.inputConfig.matchFileNameType){_, newValue in
+            if newValue == true, let detectedValue = fileContainerModel.localSandboxFileURL?.pathExtension {
+                if let convertedExt = InputFileType(rawValue: detectedValue.replacingOccurrences(of: ".", with: "")){
+                    myConfig.inputConfig.inputFileType = convertedExt
+                }
+            }
+        }
+    }
+}
 

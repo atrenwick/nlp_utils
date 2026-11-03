@@ -116,7 +116,6 @@ enum BERTpipeHelperStructs{
             }
         }
     }
-    
 }
 
 protocol BERTpipeEncodedSentence {
@@ -147,6 +146,28 @@ protocol PipelineLoader {
 extension PipelineLoader{
     // loading
     /// seqLen and maxWords are the second dimension of the two [1, N] inputs.
+    func makeMlcNames(languageCode: String, base: ModelArchitecture, treebank: String) -> MLCPackagePath {
+        var tokName: String
+        var tagParsName: String
+        switch base{
+            case .camembert:
+                tokName = "_camembert_tokenizer_"
+                tagParsName = "_camembert_tagger_parser_"
+            case .distilbert:
+                tokName = "_this will be ignored_"
+                tagParsName = "_distilbert_tagger_parser_"
+            case .cnnBiLSTM:
+                tokName = "_this will be ignored_"
+                tagParsName = "_this will be ignored_"
+            case .roberta:
+                tokName = "_roberta_tokenizer_"
+                tagParsName = "_roberta_tagger_parser_"
+        }
+        tokName = "\(languageCode)\(tokName)\(treebank)"
+        tagParsName = "\(languageCode)\(tagParsName)\(treebank)"
+        return MLCPackagePath(tokenizerName: tokName, packageName: tagParsName)
+    }
+    
     static func limits(of model: MLModel) throws -> (seqLen: Int, maxWords: Int) {
         func length(of input: String) throws -> Int {
             guard let shape = model.modelDescription.inputDescriptionsByName[input]?
@@ -167,19 +188,19 @@ extension PipelineLoader{
     static func loadLabelVocabularies(languageCode: String,
                                       treebank: String,
                                       bundle: Bundle = .main,
-                                      base: BERTlikeBase
+                                      modelArchitecture: ModelArchitecture
     ) throws -> BERTpipeHelperStructs.LabelVocabs {
         
         func vocab(_ label: String) throws -> Vocab {
             let name: String
-            switch base {
+            switch modelArchitecture {
             case .distilbert:
                 name = "\(languageCode)_distilbert_\(label)_vocab_\(treebank)"
             case .camembert:
                 name = "\(languageCode)_camembert_\(label)_vocab_\(treebank)"
             case .roberta:
                 name = "\(languageCode)_roberta_\(label)_vocab_\(treebank)"
-            case .notRelevant:
+            case .cnnBiLSTM:
                     throw PipelineError.ConfigurationError.architectureConflict
             }
             guard let url = bundle.url(forResource: name, withExtension: "json") else {
@@ -629,9 +650,6 @@ extension BERTderivedPipelineHelper  {
         }
         return tokens
     }
-        
-    
-    
 }
 
 // combination of extension: Language and a protocol
@@ -649,7 +667,6 @@ extension Language: TreebankProvidable {
 
 //MARK: 2 : services for pipelines : static functs on Structs used with results
 enum PipelineServices {
-
 
     struct ResultStorageManager {
         @discardableResult
@@ -906,20 +923,13 @@ extension PipelineSettingsView {
         isLoading = true
         do {
             switch myConfig.parsingConfig.modelArchitecture {
-            case .camembert, .roberta:
-                let loader = CamemBERTlikePipelineLoader()
-                pipeline = try await loader.loadCamemBERTlikePipeline(myConfig: myConfig) {step, message in
+            case .camembert, .roberta, .distilbert:
+                let loader = BERTlikePipelineLoader()
+                pipeline = try await loader.loadBERTlikePipeline(myConfig: myConfig) {step, message in
                     loadedCount = step
                     loadStatus = message
                 }
-                if myConfig.parsingConfig.runExplicit { print("camembert pipeline called") }
-            case .distilbert:
-                let loader = DistilBERTlikePipelineLoader()
-                pipeline = try await loader.loadDistilBERTlikePipe(myConfig: myConfig) {step, message in
-                    loadedCount = step
-                    loadStatus = message
-                }
-                if myConfig.parsingConfig.runExplicit { print("bert pipeline called") }
+                if myConfig.parsingConfig.runExplicit { print("bert-derived pipeline called") }
             case .cnnBiLSTM:
                 let loader = CNNBiLSTMPipelineLoader()
                 pipeline = try await loader.loadCNNBiLSTMpipe(myConfig: myConfig) {step, message in
@@ -965,7 +975,8 @@ extension PipelineSettingsView {
                             llm: llm
         )
     }
-
+    
+    
     func runTagging(
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
@@ -1066,25 +1077,28 @@ extension PipelineSettingsView {
                     allSentences = allSentences.count > 5 ? Array(allSentences.prefix(5)) : allSentences}
 #endif
                 for sentence in allSentences {
-                    if myConfig.parsingConfig.runExplicit { print("processing line 232") }
-                    currentStatus = "Ready to tag"
-                    var sentResult: OnSentResult?
-                    if let bertDerivedPipe = pipeline as? BERTderivedPipelineHelper{
-                        sentResult = try bertDerivedPipe.runOnSentence(sentence, myConfig: myConfig)
-                    } else {
-                        if let cnnPipeline = pipeline as? CNNBiLSTMPipeline {
-                            sentResult =  cnnPipeline.runOnSentence(sentence, myConfig: myConfig)
+                    if !interruptSignalled{
+                        if myConfig.parsingConfig.runExplicit { print("processing line 232") }
+                        currentStatus = "Ready to tag"
+                        var sentResult: OnSentResult?
+                        if let bertDerivedPipe = pipeline as? BERTderivedPipelineHelper{
+                            sentResult = try bertDerivedPipe.runOnSentence(sentence, myConfig: myConfig)
+                        } else {
+                            if let cnnPipeline = pipeline as? CNNBiLSTMPipeline {
+                                sentResult =  cnnPipeline.runOnSentence(sentence, myConfig: myConfig)
+                            }
+                        }
+                        if let success =  sentResult {
+                            processSentsFromPipeline(sentResult: success, myConfig: $myConfig )
+                        }
+                        
+                        await MainActor.run {
+                            myConfig.progressConfig.processedCount += 1
+                            myConfig.progressConfig.appleProgress.completedUnitCount = Int64(myConfig.progressConfig.processedCount)
                         }
                     }
-                    if let success =  sentResult {
-                        processSentsFromPipeline(sentResult: success, myConfig: $myConfig )
-                    }
-                    
-                    await MainActor.run {
-                        myConfig.progressConfig.processedCount += 1
-                        myConfig.progressConfig.appleProgress.completedUnitCount = Int64(myConfig.progressConfig.processedCount)
-                    }
                 }
+                myConfig.progressConfig.exitCondition = interruptSignalled ? "Interrup requested" : "ProcessingComplete"
 //MARK: print
                 try PrintWorkflow.dumpDetailsForRunExplicit(myConfig: myConfig, taggingInProgress: $taggingInProgress)
                 runOutput = PostPipelineWorkflow.makeTidyRunOutput(myConfig: myConfig)
@@ -1113,5 +1127,4 @@ extension PipelineSettingsView {
             }
         }
     }
-
 }
