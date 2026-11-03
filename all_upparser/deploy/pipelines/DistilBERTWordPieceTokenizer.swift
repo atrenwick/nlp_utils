@@ -88,10 +88,13 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
         // vocab.txt: one token per line, id = line number. Split on the 0x0A byte (not on
         // Characters, which would treat "\r\n" as one line break).
         let data: Data
+        
         do { data = try Data(contentsOf: vocabURL) } catch { throw PipelineError.TokPieceError.vocabUnreadable(vocabURL) }
         var lines = data.split(separator: 0x0A, omittingEmptySubsequences: false)
+
         if lines.last?.isEmpty == true { lines.removeLast() }
         let tokenBytes = lines.map { Array($0) }
+
         var table = [[UInt8]: Int32](minimumCapacity: tokenBytes.count)
         for (index, bytes) in tokenBytes.enumerated() {
             table[bytes] = Int32(index)             // a later duplicate wins, as in Hugging Face
@@ -366,42 +369,3 @@ extension WordPieceTokenizer {
     }
 }
 
-struct PipelineDesc{
-    let tb: String
-    let lang: String
-    let tok: String
-    let llm: String
-    
-    func describe() -> String {
-        
-        return " \(self.tb) - \(self.lang) - \(self.tok) - \(self.llm)"
-    }
-    
-}
-func describePipeline(pipepline: PipelineHelper, myConfig: TaggerConfig) -> PipelineDesc{
-    
-    var llm: String
-    var tok: String
-    switch myConfig.parsingConfig.modelArchitecture{
-        case .camembert:
-            tok = "SPiece"
-            llm = "CamemBERT"
-        case .roberta:
-            tok = "SPiece"
-            llm = "XLM-roBERTa"
-        case .cnnBiLSTM:
-            tok = "Manual"
-            llm = "---"
-        case .distilbert:
-            tok = "WPiece"
-            llm = "DistilBERT"
-    }
-        
-    return PipelineDesc(tb: myConfig.parsingConfig.selectedTreebank.shortTidy,
-                        lang: myConfig.parsingConfig.selectedLanguage.displayName,
-                        tok: tok,
-                        llm: llm
-    )
-            
-    
-}

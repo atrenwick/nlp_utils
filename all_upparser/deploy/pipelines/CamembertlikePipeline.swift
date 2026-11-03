@@ -18,17 +18,17 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
     var tokenizer: BERTlikeTokenizerHelper?
     var taggerModel: MLModel?
     var labels: BERTpipeHelperStructs.LabelVocabs?
-    var bertlikeBase: BERTlikeBase?
+    var modelArchitecture: ModelArchitecture?
 
     var description: String {
-        switch bertlikeBase {
+        switch modelArchitecture {
             case .distilbert:
                 "DistilBERT based pipeline with WordPiece tokenizer"
             case .roberta:
                 "XLM-roBERTa based pipeline with SentPiece tokenizer"
             case .camembert:
                 "CamemBERT based pipeline with SentPiece tokenizer"
-            case .notRelevant:
+            case .cnnBiLSTM:
                  "architectureConflict"
             default:
                 "Undetermined as yet, as coming from optional"
@@ -74,39 +74,25 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         let runExplicit: Bool = myConfig.parsingConfig.runExplicit
         print("loading on main thread::", Thread.isMainThread)
         
-        let sentencePieceTokenizer: SentencePieceTokenizer?
+        let tokenizer: BERTlikeTokenizerHelper?
         let taggerModel: MLModel?
         let labels: BERTpipeHelperStructs.LabelVocabs?
         var seqLen: Int?
         var maxWords: Int?
-        var bertlikeBase: BERTlikeBase
-        var tokenizerName: String
-        var packageName: String
-        
+        let modelArchitecture: ModelArchitecture = myConfig.parsingConfig.modelArchitecture
+
+        var mlcPackagePaths: MLCPackagePath
+        mlcPackagePaths = await makeMlcNames(languageCode: languageCode, base: myConfig.parsingConfig.modelArchitecture, treebank: treebank)
         await onProgress(1, "Load vocabs")
-        switch myConfig.parsingConfig.modelArchitecture{
-            case .camembert :
-                bertlikeBase = BERTlikeBase.camembert
-                tokenizerName = "\(languageCode)_camembert_tokenizer_\(treebank)"
-                packageName = "\(languageCode)_camembert_tagger_parser_\(treebank)"
-            case .distilbert:
-                bertlikeBase = BERTlikeBase.distilbert
-                tokenizerName = "this will be ignored"
-                packageName  = "\(languageCode)_distilbert_tagger_parser_\(treebank)"
-            case .roberta:
-                bertlikeBase = BERTlikeBase.roberta
-                tokenizerName = "\(languageCode)_roberta_tokenizer_\(treebank)"
-                packageName = "\(languageCode)_roberta_tagger_parser_\(treebank)"
-            default :
-                throw PipelineError.ConfigurationError.architectureConflict
-        }
-        labels = try await BERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank,  base: bertlikeBase)
+        
+        
+        labels = try await BERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, modelArchitecture: modelArchitecture)
         
         await onProgress(2, "Load tokenizer")
-        switch bertlikeBase {
+        switch modelArchitecture {
             case .camembert, .roberta:
-                guard let url = Bundle.main.url(forResource: tokenizerName, withExtension: "json") else {
-                    throw PipelineError.GenericError.missingResource("\(tokenizerName).json")
+                guard let url = Bundle.main.url(forResource: mlcPackagePaths.tokenizerName, withExtension: "json") else {
+                    throw PipelineError.GenericError.missingResource("\(mlcPackagePaths.tokenizerName).json")
                 }
                 tokenizer = try await SentencePieceTokenizer(tokenizerJSON: url)
                 // sent piece
@@ -117,10 +103,8 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
                 throw PipelineError.ConfigurationError.architectureConflict
         }
 
-        await onProgress(3, "Load cbertlike model")
-        taggerModel = try await BERTlikePipeline.loadMlpackage(named: packageName, myConfig: myConfig)
-        
-
+        await onProgress(3, "Load bertlike model")
+        taggerModel = try await BERTlikePipeline.loadMlpackage(named: mlcPackagePaths.packageName, myConfig: myConfig)
         
         await onProgress(4, "Verifying settings")
         if let tmodel = taggerModel{
@@ -129,7 +113,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
             maxWords = limits.maxWords
         }
         guard
-            let tokenizer = await tokenizer, let taggerModel = taggerModel, let labels = labels, let seqLen = seqLen, let maxWords = maxWords else { throw PipelineError.ConfigurationError.notReadyToSendToRunner }
+            let tokenizer = tokenizer, let taggerModel = taggerModel, let labels = labels, let seqLen = seqLen, let maxWords = maxWords else { throw PipelineError.ConfigurationError.notReadyToSendToRunner }
         return try await convertToRealPipeline(
             tokenizer: tokenizer,
             taggerModel: taggerModel,
@@ -142,7 +126,6 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         )
     }
     /// convert id -> label as string.
-    private static func label(_ vocab: Vocab, _ id: Int) -> String { vocab.decode(id) }
 
 }
     
