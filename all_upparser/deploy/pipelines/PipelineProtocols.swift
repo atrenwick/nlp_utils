@@ -890,7 +890,7 @@ extension PipelineSettingsView {
     var isPipelineReady: Bool {
         return missingReqs.isEmpty
     }
-    
+
     var missingReqsMessage: String {
         guard !missingReqs.isEmpty else { return "" }
         
@@ -975,13 +975,18 @@ extension PipelineSettingsView {
                             llm: llm
         )
     }
+    func makePipeKey(myConfig: TaggerConfig) -> String{
+        return [myConfig.parsingConfig.modelArchitecture.keyChunk, myConfig.parsingConfig.selectedLanguage.keyChunk, myConfig.parsingConfig.selectedTreebank.keyChunk].joined(separator: "-")
+        
+    }
     
     
     func runTagging(
         inputFileType: InputFileType,
         maxPipelineStep: PipelineStep,
         taggingInProgress: Binding<Bool>,
-        isFirstRun: Binding<Bool>
+        isFirstRun: Binding<Bool>,
+        pipelineCache: PipelineCache
     ) {
         if !isFirstRun.wrappedValue {
             myConfig.runResetters()
@@ -995,7 +1000,8 @@ extension PipelineSettingsView {
         let theseHeaderAttribs = XMLMakingWorkflow.makeSafeHeaderAttribs(myConfig: myConfig, fileContainerModel: fileContainerModel)
         if myConfig.parsingConfig.runExplicit { print("Build header attribs: \(theseHeaderAttribs)") }
         myConfig.outputData.safeHeaderAttribs = theseHeaderAttribs
-        
+        var currentKey: String = makePipeKey(myConfig: myConfig)
+        myConfig.parsingConfig.key = currentKey
         // MARK: tagging :
         Task {
             do {
@@ -1003,6 +1009,12 @@ extension PipelineSettingsView {
                 var pipeline: PipelineHelper
                 do {
                     currentStatus = "Loading pipeline"
+
+                    pipeline = try pipelineCache.get(currentKey) {
+                        try buildPipeline(for: settings)   // your existing switch-based loader
+                    }
+                    
+                    ///existing loading - send to func
                     pipeline = try await callPipelineLoader(myConfig: myConfig)
                     currentPipelineLoaded = true
                     currentPipelineDesc = describePipeline(pipepline: pipeline, myConfig: myConfig)
@@ -1016,6 +1028,8 @@ extension PipelineSettingsView {
                         myConfig.parsingConfig.maxSeqLen = pipeline.seqLen
                         if myConfig.parsingConfig.runExplicit { print("maxSeqLen = \(pipeline.seqLen) @ 232")}
                     }
+                    // end of new func
+
                 } catch {
                     if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)") }
                     currentStatus = "Error loading pipeline."
@@ -1108,6 +1122,7 @@ extension PipelineSettingsView {
                     currentStatus = "Done"
                     guard let runOutput else { throw PipelineError.ProcessingError.noRunOutput }
                     allRunOutputs.append(runOutput)
+                    loadedPipelines.append(pipeline)
                     if myConfig.parsingConfig.runExplicit{
                         print("allRunOutputs length == \(allRunOutputs.count)")
                     }

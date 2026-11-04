@@ -18,11 +18,8 @@ enum ArrayMakingMethods{
         switch self{
                 case .cnnbilstm : return ["makeIntArray" ,"makeCharIdArray", "parserArgmax"]
         case .sentencepieceencodedsentence, .wordpieceencodedsentence: return ["multiArrays", "makeArray"]
-            
         }
     }
-
-    
 }
 
 enum FileIngestionWorkflow {
@@ -939,6 +936,8 @@ enum XMLMakingWorkflow{
         
         let xmlsafeSourceFile = fileContainerModel.localSandboxFileURL?.path().xmlEscaped ?? "unk"
         let runID = UUID().uuidString
+        let xmlsafeExitCondition = myConfig.progressConfig.exitCondition?.xmlEscaped
+        let xmlSafeInterruptRequested = String(myConfig.progressConfig.interruptRequested).xmlEscaped
         let xmlSafeMaxPipelineStep = myConfig.parsingConfig.maxPipelineStep.title.xmlEscaped
         let xmlSafeRunRetokeniser = String(myConfig.parsingConfig.runRetokeniser).xmlEscaped
         let xmlSafeTokenizingMethod = myConfig.parsingConfig.tokenizingMethod.rawValue.xmlEscaped
@@ -959,7 +958,9 @@ enum XMLMakingWorkflow{
             tokenizingMethod: xmlSafeTokenizingMethod,
             sentencizingMethod: xmlSafeSentencizingMethod,
             maxWords: String(myConfig.parsingConfig.maxWords),
-            maxSeqLen: String(myConfig.parsingConfig.maxSeqLen)
+            maxSeqLen: String(myConfig.parsingConfig.maxSeqLen),
+            exitCondition: xmlSafeInterruptRequested,
+            interruptRequested: xmlsafeExitCondition
         )
         return outputStruct
     }
@@ -997,9 +998,11 @@ enum XMLMakingWorkflow{
                     tokenizingMethod="\(safeHeaderAttribs.tokenizingMethod)"
                     sentencizingMethod="\(safeHeaderAttribs.sentencizingMethod)"
                     maxWords="\(safeHeaderAttribs.maxWords)"
-                    maxSeqLen="\(safeHeaderAttribs.maxSeqLen)">
+                    maxSeqLen="\(safeHeaderAttribs.maxSeqLen)"
                     sentCount="\(sentCount)"
-                    tokenCount="\(tokCount)">
+                    tokenCount="\(tokCount)"
+                    exitCondition="\(safeHeaderAttribs.exitCondition)"
+                    interruptRequested="\(safeHeaderAttribs.interruptRequested)">
                 </sourceDesc>
             </fileDesc>
             <profileDesc>
@@ -1154,29 +1157,29 @@ enum WritingWorkflow{
         )
     }
     
-    static func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
-        try writeStringDump(lines)
-        try writeStringDump(rawLines)
-        
-        let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let outputPath = docsDir.appendingPathComponent("output.conllu").path
-        try writeToFile(rawLines.joined(separator: "\n"), outputPath)
-    }
+//    static func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
+//        try writeStringDump(lines)
+//        try writeStringDump(rawLines)
+//        
+//        let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+//        let outputPath = docsDir.appendingPathComponent("output.conllu").path
+//        try writeToFile(rawLines.joined(separator: "\n"), outputPath)
+//    }
     
-    static func writeStringDump(_ lines: [String]) throws -> URL {
-        // write 2 versions of output string, with FileManager and to specified dev folder
-        let content = lines.joined(separator: "\n")
-        let fileName = "string_dump_\(Int(Date().timeIntervalSince1970 * 1_000_000_000)).conllu"
-        
-        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let fileURL = documentsURL.appendingPathComponent(fileName)
-        let newUrl: URL = URL(fileURLWithPath: "/Volumes/Kappa/Xcode/parses/\(fileName)")
-        try content.write(to: newUrl, atomically: true, encoding: .utf8)
-        try content.write(to: fileURL, atomically: true, encoding: .utf8)
-        print("Saved CoNLL dump to: \(fileURL.path)")
-        
-        return fileURL
-    }
+//    static func writeStringDump(_ lines: [String]) throws -> URL {
+//        // write 2 versions of output string, with FileManager and to specified dev folder
+//        let content = lines.joined(separator: "\n")
+//        let fileName = "string_dump_\(Int(Date().timeIntervalSince1970 * 1_000_000_000)).conllu"
+//        
+//        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+//        let fileURL = documentsURL.appendingPathComponent(fileName)
+//        let newUrl: URL = URL(fileURLWithPath: "/Volumes/Kappa/Xcode/parses/\(fileName)")
+//        try content.write(to: newUrl, atomically: true, encoding: .utf8)
+//        try content.write(to: fileURL, atomically: true, encoding: .utf8)
+//        print("Saved CoNLL dump to: \(fileURL.path)")
+//        
+//        return fileURL
+//    }
     
     static func writeToFile(_ content: String, _ path: String) throws {
         let url = URL(fileURLWithPath: path)
