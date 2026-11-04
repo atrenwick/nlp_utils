@@ -6,6 +6,26 @@
 //  Classes used in decoding, reading, parsing, saving data
 
 import Foundation
+import Combine
+
+@MainActor
+final class PipelineCache: ObservableObject {
+    let objectWillChange = ObservableObjectPublisher()
+    private var key: PipelineKey?
+    private var pipeline: (any PipelineHelper)?
+
+ 
+    func get(_ newKey: String) async throws -> (any PipelineHelper)? {
+        if let pipeline, key == newKey { return pipeline }   // reuse
+        pipeline = nil; key = nil                            // else release the old one FIRST
+            return nil
+    }
+
+    func evict() { pipeline = nil; key = nil }
+    init(){}
+    
+}
+
 
 //MARK: 1 class for interacting with sandbox
 @Observable

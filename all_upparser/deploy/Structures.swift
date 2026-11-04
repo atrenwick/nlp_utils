@@ -120,6 +120,17 @@ struct OutputFileListHelper: Identifiable{
     let url: URL
 }
 
+struct PipelineDesc{
+    let tb: String
+    let lang: String
+    let tok: String
+    let llm: String
+    
+    func describe() -> String {
+        return " \(self.tb) - \(self.lang) - \(self.tok) - \(self.llm)"
+    }
+}
+
 struct RegexLangPatternToLangMap: Identifiable{
     var id = UUID()
     let string: String
@@ -444,6 +455,8 @@ struct XmlHeaderAttribs : Codable{
     var sentencizingMethod: String
     var maxWords: String
     var maxSeqLen: String
+    var exitCondition: String
+    var interruptRequested: String
     init(
         xmlTitle: String? = nil,
         xmlAuthorName: String? = nil,
@@ -458,7 +471,9 @@ struct XmlHeaderAttribs : Codable{
         tokenizingMethod: String? = nil,
         sentencizingMethod: String? = nil,
         maxWords: String? = nil,
-        maxSeqLen: String? = nil
+        maxSeqLen: String? = nil,
+        exitCondition: String? = nil,
+        interruptRequested: String? = nil
     ) {
         self.xmlTitle = xmlTitle ?? "xmlTitle"
         self.xmlAuthorName = xmlAuthorName ?? "xmlAuthorName"
@@ -474,5 +489,7 @@ struct XmlHeaderAttribs : Codable{
         self.sentencizingMethod = sentencizingMethod ?? "sentencizingMethod"
         self.maxWords = maxWords ?? "0"
         self.maxSeqLen = modelArchitecture?.rawValue == "distilbert" ? maxSeqLen ?? "ERR" : "NA"
+        self.exitCondition = "exitCondition"
+        self.interruptRequested = "false"
     }
 }

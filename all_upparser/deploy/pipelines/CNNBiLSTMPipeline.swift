@@ -134,7 +134,7 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
 }
 
 
-final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableObject {
+final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, ObservableObject {
     var seqLen: Int = 256
     
     
@@ -371,7 +371,6 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
             labelScore: { c, t, head in raw.labelLogits[[0, c, t, head] as [NSNumber]].doubleValue }
         )
     }
-
 
     // MARK: Per-sentence processing: for progress-reporting callers
     /// same field-decoding logic as `run(text:level:mode:)`,with 1x tokenised sent a time ->Token

@@ -7,8 +7,13 @@
 
 import SwiftUI
 internal import UniformTypeIdentifiers
+import Combine
+
+typealias PipelineKey = String
+
 
 struct PipelineSettingsView: View {
+    @EnvironmentObject var pipelineCache: PipelineCache
     // input file
     @State var fileContainerModel = SourceFileContainerModel()
     @State var myConfig: TaggerConfig = TaggerConfig()
@@ -31,6 +36,8 @@ struct PipelineSettingsView: View {
     @State var currentPipelineDesc: PipelineDesc?
     @State var showInterruptButton: Bool = false
     @State var interruptSignalled: Bool = false
+    @State var loadedPipelines: [PipelineHelper] = [ ]
+    
     var unreadCount: Int {
         allRunOutputs.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
@@ -102,8 +109,11 @@ struct PipelineSettingsView: View {
                     .padding()
                     
                 }
+//                .swipeActions(edge: .leading){
+//                    loadedPipelines.append(pipeline)
+//                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if taggingInProgress {
+                            if taggingInProgress { // need to change this to || hasFinished=true
                                 Button("Stop") {
                                     showInterruptButton = true
                                 }
