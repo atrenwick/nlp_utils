@@ -39,6 +39,7 @@ struct TaggerConfig{
     }
     
     struct ParsingConfig{
+        var key: String
         var selectedArchitecture: ModelArchitecture
         var selectedLanguage: Language
         var selectedTreebank: Language.Treebank
@@ -62,6 +63,7 @@ struct TaggerConfig{
         
         // need to add = nil in init of it's to truly allow no parameters to be specified
         init(
+            key: String? = nil,
             selectedArchitecture: ModelArchitecture? = nil,
             selectedLanguage: Language? = nil,
             selectedTreebank: Language.Treebank? = nil,
@@ -83,9 +85,9 @@ struct TaggerConfig{
             maxSeqLen: Int? = nil,
             maxWords: Int? = nil
         ){
+            
+            self.key = "XXX-XXX-XXX"
             self.selectedArchitecture = TaggerConfig.resolveRawRep(passed: selectedArchitecture, key: "modelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
-            
-            
             self.selectedLanguage = TaggerConfig.resolveRawRep(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
             self.selectedTreebank = TaggerConfig.resolveRawRep(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )
             self.runResentenciser = TaggerConfig.resolveBool(passed: runResentenciser, key: "runResentenciserDefault", default: false)

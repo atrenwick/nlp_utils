@@ -834,12 +834,10 @@ enum PipelineServices {
     }
 }
 
-
 protocol BERTlikeTokenizerHelper{
     var showPieces: Bool  { get set }
     func encode(words: [String], seqLen: Int, maxWords: Int) throws -> BERTpipeEncodedSentence?
 }
-
 
 /// Implemented by the existing WordPiece tokenizer (via a small adapter) and by
 /// SentencePieceTokenizer, so the export/prediction code doesn't care which one it has.
@@ -847,8 +845,16 @@ protocol SubwordEncoder {
     func encode(words: [String], seqLen: Int, maxWords: Int) throws -> BERTpipeEncodedSentence?
 }
 
-
 extension PipelineSettingsView {
+    
+    func loadButtonColours(){
+        if let saved = try? JSONDecoder().decode(StoredColor.self, from: buttonColor1DefaultData){
+            buttonColor1 = saved.color
+        }
+        if let saved = try? JSONDecoder().decode(StoredColor.self, from: buttonColor2DefaultData){
+            buttonColor2 = saved.color
+        }
+    }
     //MARK:  calculated properties
     var loadTotal: Int {
         if myConfig.parsingConfig.modelArchitecture == .distilbert {
@@ -1000,35 +1006,36 @@ extension PipelineSettingsView {
         let theseHeaderAttribs = XMLMakingWorkflow.makeSafeHeaderAttribs(myConfig: myConfig, fileContainerModel: fileContainerModel)
         if myConfig.parsingConfig.runExplicit { print("Build header attribs: \(theseHeaderAttribs)") }
         myConfig.outputData.safeHeaderAttribs = theseHeaderAttribs
-        var currentKey: String = makePipeKey(myConfig: myConfig)
+        let currentKey: String = makePipeKey(myConfig: myConfig)
         myConfig.parsingConfig.key = currentKey
+        print("currentKey = \(currentKey)")
         // MARK: tagging :
         Task {
             do {
                 var allSentences: [HashableSentence] = []
-                var pipeline: PipelineHelper
+                var pipeline: any PipelineHelper
                 do {
-                    currentStatus = "Loading pipeline"
+                    if let cachedPipeline = pipelineCache.lookup(currentKey) {
+                        pipeline = cachedPipeline
+                    } else {
+                        let loadedPipeline = try await callPipelineLoader(myConfig: myConfig)
 
-                    pipeline = try pipelineCache.get(currentKey) {
-                        try buildPipeline(for: settings)   // your existing switch-based loader
+                        if let subAwarePipeline = loadedPipeline as? SubtokenAwarePipelineHelper {
+                            myConfig.outputData.safeHeaderAttribs.maxSeqLen = String(subAwarePipeline.seqLen)
+                            myConfig.parsingConfig.maxSeqLen = subAwarePipeline.seqLen
+                            if myConfig.parsingConfig.runExplicit { print("maxSeqLen = \(subAwarePipeline.seqLen) @ 232")}
+                        }
+                        myConfig.parsingConfig.maxWords = loadedPipeline.maxWords
+                        myConfig.outputData.safeHeaderAttribs.maxWords = String(loadedPipeline.maxWords)
+
+                        currentPipelineLoaded = true
+                        currentPipelineDesc = describePipeline(pipepline: loadedPipeline, myConfig: myConfig)
+                        
+                        //MARK: set pipeline maxwords, seqlen
+                        pipeline = loadedPipeline
+                        pipelineCache.store(pipeline, key: currentKey)
+                        if myConfig.parsingConfig.runExplicit { print("Pipelinemax_words = \(loadedPipeline.maxWords) @ 228") }
                     }
-                    
-                    ///existing loading - send to func
-                    pipeline = try await callPipelineLoader(myConfig: myConfig)
-                    currentPipelineLoaded = true
-                    currentPipelineDesc = describePipeline(pipepline: pipeline, myConfig: myConfig)
-                    
-                    myConfig.parsingConfig.maxWords = pipeline.maxWords
-                    myConfig.outputData.safeHeaderAttribs.maxWords = String(pipeline.maxWords)
-                    //MARK: set pipeline maxwords, seqlen
-                    if myConfig.parsingConfig.runExplicit { print("Pipelinemax_words = \(pipeline.maxWords) @ 228") }
-                    if let pipeline = pipeline as? SubtokenAwarePipelineHelper {
-                        myConfig.outputData.safeHeaderAttribs.maxSeqLen = String(pipeline.seqLen)
-                        myConfig.parsingConfig.maxSeqLen = pipeline.seqLen
-                        if myConfig.parsingConfig.runExplicit { print("maxSeqLen = \(pipeline.seqLen) @ 232")}
-                    }
-                    // end of new func
 
                 } catch {
                     if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)") }

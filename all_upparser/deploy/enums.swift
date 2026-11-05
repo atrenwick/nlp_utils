@@ -14,8 +14,6 @@ struct MLCPackagePath {
     let packageName: String
 }
 
-
-
 enum ModelArchitecture: String, CaseIterable, Identifiable{
     var id: Self { self }
     case distilbert
@@ -30,6 +28,16 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .roberta: return "XLM-roBERTa"
         }
     }
+    
+    var keyChunk: String{
+        switch self{
+        case .distilbert: return "DIS"
+        case .cnnBiLSTM: return "CNN"
+        case .camembert: return "CAM"
+        case .roberta: return "ROB"
+        }
+    }
+    
 }
 enum ConllLineContent {
     case row(Token)
@@ -138,7 +146,18 @@ enum Language: String, CaseIterable, Identifiable {
         case .FRM: return .frmTB1
         }
     }
-    
+
+    var keyChunk: String {
+        switch self {
+        case .EN: return "ENG"
+        case .ANG: return "ANG"
+        case .FR: return "FRA"
+        case .DE: return "DEU"
+        case .FRO: return "FRO"
+        case .FRM: return "FRO"
+        }
+    }
+
     // Nested enum for all available models
     enum Treebank: String, CaseIterable, Identifiable {
         case enTB1 = "en_ewt"
@@ -167,6 +186,20 @@ enum Language: String, CaseIterable, Identifiable {
             case .deTB2: return "HDT"
             case .angTB1: return "OEDT"
             case .frmTB1, .froTB1: return "Profiterole"
+            }
+        }
+        var keyChunk: String {
+            // RHS of model files and Picker strings
+            switch self {
+            case .enTB1: return "EWT"
+            case .enTB2: return "GUM"
+            case .enTB3: return "LIN"
+            case .deTB1, .frTB1: return "GSD"
+            case .frTB2: return "SEQ"
+            case .frTB3: return "RHA"
+            case .deTB2: return "HDT"
+            case .angTB1: return "OED"
+            case .froTB1, .frmTB1: return "PRO"
             }
         }
         

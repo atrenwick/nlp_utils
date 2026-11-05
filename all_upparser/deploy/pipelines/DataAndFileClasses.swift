@@ -7,20 +7,28 @@
 
 import Foundation
 import Combine
-
+// cache object to hold the currently loaded pipeline, allow verification of change
 @MainActor
 final class PipelineCache: ObservableObject {
     let objectWillChange = ObservableObjectPublisher()
-    private var key: PipelineKey?
+    @Published var isLive: Bool = false
+    var key: PipelineKey?
     private var pipeline: (any PipelineHelper)?
 
- 
-    func get(_ newKey: String) async throws -> (any PipelineHelper)? {
+    func lookup(_ newKey: String) -> (any PipelineHelper)? {
         if let pipeline, key == newKey { return pipeline }   // reuse
-        pipeline = nil; key = nil                            // else release the old one FIRST
+        pipeline = nil
+        key = nil                            // else release the old one FIRST
+        isLive = false
             return nil
     }
-
+    func store(_ newPipeline: any PipelineHelper, key newKey: String) {
+        print("running store function")
+            pipeline = newPipeline
+            key = newKey
+            isLive = true
+        print("live status inside func == \(isLive)")
+        }
     func evict() { pipeline = nil; key = nil }
     init(){}
     

@@ -424,12 +424,13 @@ struct RunExplicitButtonExtractedView: View{
 }
 
 struct TaggingProgressButtonExtractedView: View{
+    @EnvironmentObject var pipelineCache: PipelineCache
     let taggingInProgress: Bool
     let isPipelineReady: Bool
     let pipelineSummary: String
     @Binding var currentPipelineDesc: PipelineDesc?
     @Binding var currentPipelineLoaded: Bool
-
+    
     var previous: Int = 0
 
     var body: some View {
