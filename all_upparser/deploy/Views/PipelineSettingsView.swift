@@ -12,8 +12,15 @@ import Combine
 typealias PipelineKey = String
 
 
+
 struct PipelineSettingsView: View {
     @EnvironmentObject var pipelineCache: PipelineCache
+    
+    @AppStorage("buttonColor1Default") var buttonColor1DefaultData = Data()
+    @AppStorage("buttonColor2Default") var buttonColor2DefaultData = Data()
+
+    @State var buttonColor1: Color = .yellow
+    @State var buttonColor2: Color = .orange
     // input file
     @State var fileContainerModel = SourceFileContainerModel()
     @State var myConfig: TaggerConfig = TaggerConfig()
@@ -38,9 +45,25 @@ struct PipelineSettingsView: View {
     @State var interruptSignalled: Bool = false
     @State var loadedPipelines: [PipelineHelper] = [ ]
     
+    
+    var strings: [String] {
+        let string1 = pipelineCache.isLive ? "Live" : "not live"
+        let string2 = pipelineCache.isLive ? String(pipelineCache.key ?? "nil->no key") : "no key"
+        return [string1, string2]
+    }
+    
     var unreadCount: Int {
         allRunOutputs.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
+    
+    var bigButtonColor: Color {
+        if pipelineCache.isLive{
+            return buttonColor1
+        } else {
+            return buttonColor2
+        }
+    }
+
 #if DEBUG
     let runfive = false //
 #endif
@@ -74,7 +97,6 @@ struct PipelineSettingsView: View {
                 //                RunExplicitButtonExtractedView(myConfig: $myConfig)
                 //#endif
                 // MARK: the Go button
-                Section {
 
                     GoSectionUpperHalf(
                         myConfig: $myConfig,
@@ -91,7 +113,8 @@ struct PipelineSettingsView: View {
                                 inputFileType: myConfig.inputConfig.inputFileType,
                                 maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
                                 taggingInProgress: $taggingInProgress,
-                                isFirstRun: $isFirstRun
+                                isFirstRun: $isFirstRun,
+                                pipelineCache: pipelineCache
                             )
                     } label: {
                         TaggingProgressButtonExtractedView(
@@ -101,19 +124,18 @@ struct PipelineSettingsView: View {
                             currentPipelineDesc: $currentPipelineDesc,
                             currentPipelineLoaded: $currentPipelineLoaded
                         )
+                        
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(bigButtonColor)
                     .clipShape(Capsule())
                     .controlSize(.large)
                     .disabled(taggingInProgress || !isPipelineReady)
                     .padding()
                     
                 }
-//                .swipeActions(edge: .leading){
-//                    loadedPipelines.append(pipeline)
-//                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if taggingInProgress { // need to change this to || hasFinished=true
+                            if taggingInProgress {
                                 Button("Stop") {
                                     showInterruptButton = true
                                 }
@@ -138,6 +160,7 @@ struct PipelineSettingsView: View {
                 } message: { Text(myConfig.progressConfig.alertMessage ?? "") }
             }
             .accessibilityIdentifier("RunParsingButton")
+            .onAppear(perform: loadButtonColours)
             
             // MARK: toolbar :
             .toolbar{
@@ -153,11 +176,9 @@ struct PipelineSettingsView: View {
                 }
             }
         }
-    }
 }
 
 #Preview {
-    PipelineSettingsView()
+    let previewEnvObject = PipelineCache()
+    PipelineSettingsView().environmentObject(previewEnvObject)
 }
-
-

@@ -46,6 +46,7 @@ struct SetDefaultsView: View {
     @AppStorage("includeConllSentTextDefault") var includeConllSentTextDefault: Bool = true
     @AppStorage("outputDirBookmark") private var outputBookmarkData: Data?
         
+    
     private var currentExportDirectory: URL { PipelineServices.ExporterService.resolveDefaultBookmark()}
     @State var sentences: [String] = []
     @State var isSelectingFolder: Bool = false
@@ -133,6 +134,7 @@ struct SetDefaultsView: View {
                 }
                 Section("View"){
                     DefaultPickerView(title: "Progress bar style", selection: $progressBarStyleDefault)
+                    DefaultColorPickerView()
                 }
                 Section("Output file"){
                     TextField("Filename", text: $fileNameDefault)

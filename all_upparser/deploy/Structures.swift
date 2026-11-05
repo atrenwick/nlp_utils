@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreML
+import SwiftUI
 
 struct AdditionalExportParams{
     let exportFormat: ExportFormat
@@ -367,6 +368,21 @@ struct Sentence : Identifiable, Codable {
         return result
     }
 }
+
+// struct to help store, parse colors
+struct StoredColor: Codable {
+    let name: String
+    var r: Double, g: Double, b: Double, a: Double
+    
+    init(_ color: Color, name: String) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        self.r = r; self.g = g; self.b = b; self.a = a
+        self.name = name
+    }
+    var color: Color { Color(.sRGB, red: r, green: g, blue: b, opacity: a) }
+}
+
 
 struct TaggerRawOutput {
     // for CNN-BiLSTM model
