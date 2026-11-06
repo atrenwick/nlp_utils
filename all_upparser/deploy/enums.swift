@@ -328,6 +328,33 @@ enum RegexStash{
     }
 }
 
+enum ProcessingStatus: String, CaseIterable, Codable {
+    case notstarted
+    case inprogress
+    case interrupted
+    case success
+    case failed
+    
+    var exitStatus: String {
+        switch self {
+        case .notstarted: return "Not Started"
+        case .inprogress:  return "In Progress"
+        case .interrupted: return "Interrupted"
+        case .success: return "Success"
+        case .failed: return "Failed"
+        }
+    }
+
+    var interruptRequested: String {
+        switch self {
+            case .interrupted:
+                return "True"
+            default:
+                return "False"
+        }
+    }
+}
+
 enum ResetDirOption{
     case defaultvalue
     case sandbox

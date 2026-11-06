@@ -79,7 +79,8 @@ struct RunOutputDetailView: View{
                             do {
                                 let runOutput = try additionalExportRunner(
                                     run: run,
-                                    additionalExportFormat: additionalExportFormat
+                                    additionalExportFormat: additionalExportFormat,
+                                    processingStatus: myConfig.progressConfig.processingStatus
                                 )
                                 if let hasURL = runOutput.runMetas.savedURL{
                                     
@@ -165,14 +166,16 @@ struct RunOutputDetailView: View{
 
     func additionalExportRunner(
         run: RunOutput,
-        additionalExportFormat: ExportFormat
+        additionalExportFormat: ExportFormat,
+        processingStatus: ProcessingStatus
     ) throws -> RunOutput {
         
         let exportContent = GeneralOutputMakingWorkflow.makeExportContent(
             headers: run.runMetas.safeHeaderAttribs,
             sents: run.runData.sents,
             exportFormat: additionalExportFormat,
-            includeConllSentText: run.runMetas.includeConllSentText
+            includeConllSentText: run.runMetas.includeConllSentText,
+            processingStatus: processingStatus
             )
         print("exportformat found= \(additionalExportFormat.rawValue)")
         guard !exportContent.isEmpty else {
@@ -185,7 +188,7 @@ struct RunOutputDetailView: View{
             exportContent: exportContent
         )
         let additionalExportParams = AdditionalExportParams(exportFormat: additionalExportFormat, includeConllSentText: run.runMetas.includeConllSentText)
-        let runMetas = WritingWorkflow.saveFileToChosenLocation(myConfig: myConfig, exportContent: exportContent, runID: run.runID, additional: additionalExportParams)
+        let runMetas = WritingWorkflow.saveFileToChosenLocation(myConfig: myConfig, exportContent: exportContent, runID: run.runID, processingStatus: myConfig.progressConfig.processingStatus, additional: additionalExportParams)
         let runOutput = RunOutput(runID: run.runID, runData: runData, runMetas: runMetas)
         return runOutput
     }

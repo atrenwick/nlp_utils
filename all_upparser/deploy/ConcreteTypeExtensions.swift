@@ -35,7 +35,11 @@ extension String {
     var isLower: Bool {
         self == self.lowercased() && self != self.uppercased()
     }
-
+    var sanitizedNumberString: String {
+        let cleaned = self.filter { $0.isNumber }
+        return cleaned.isEmpty ? "0" : cleaned
+    }
+    
     var sanitizedFileName: String {
         let invalidCharacters = CharacterSet(charactersIn: "/\\?%*|\":<>")
             .union(.newlines)

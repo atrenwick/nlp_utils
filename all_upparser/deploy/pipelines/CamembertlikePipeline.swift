@@ -83,12 +83,12 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
 
         var mlcPackagePaths: MLCPackagePath
         mlcPackagePaths = await makeMlcNames(languageCode: languageCode, base: myConfig.parsingConfig.modelArchitecture, treebank: treebank)
-        await onProgress(1, "Load vocabs")
+        await onProgress(1, "Loading vocabs")
         
         
         labels = try await BERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, modelArchitecture: modelArchitecture)
         
-        await onProgress(2, "Load tokenizer")
+        await onProgress(2, "Loading tokenizer")
         switch modelArchitecture {
             case .camembert, .roberta:
                 guard let url = Bundle.main.url(forResource: mlcPackagePaths.tokenizerName, withExtension: "json") else {
@@ -97,15 +97,15 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
                 tokenizer = try await SentencePieceTokenizer(tokenizerJSON: url)
                 // sent piece
             case .distilbert:
-                await onProgress(2, "Load wordpiece tokenizer")
+                await onProgress(2, "Loading wordpiece tokenizer")
                 tokenizer = try await WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank)
             default:
                 throw PipelineError.ConfigurationError.architectureConflict
         }
 
-        await onProgress(3, "Load bertlike model")
+        await onProgress(3, "Loading bertlike model")
         taggerModel = try await BERTlikePipeline.loadMlpackage(named: mlcPackagePaths.packageName, myConfig: myConfig)
-        
+        //        taggerModel = try await BERTlikePipeline.loadMlpackage(named: T##String, myConfig: myConfig)
         await onProgress(4, "Verifying settings")
         if let tmodel = taggerModel{
             let limits = try await Self.limits(of: tmodel)
@@ -125,10 +125,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
             runExplicitValue: runExplicit
         )
     }
-    /// convert id -> label as string.
-
 }
-    
 
 final class BERTlikePipeline: BERTderivedPipelineHelper, SubtokenAwarePipelineHelper, PipelineLoader {
         

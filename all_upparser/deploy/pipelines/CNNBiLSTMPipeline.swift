@@ -137,7 +137,6 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
 final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, ObservableObject {
     var seqLen: Int = 256
     
-    
     // the actual pipeline for processing, with no optionals
     let tokenizerModel: MLModel
     let taggerModel: MLModel
