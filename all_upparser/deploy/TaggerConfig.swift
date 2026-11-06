@@ -153,7 +153,8 @@ struct TaggerConfig{
         var loadedCount: Int
         var loadingComplete: Bool
         var interruptRequested: Bool
-        var exitCondition: String?
+        var exitCondition: String
+        var processingStatus: ProcessingStatus
         init(
             appleProgress: Progress? = nil,
             progressBarStyle: ProgressBarStyle? = nil,
@@ -167,7 +168,8 @@ struct TaggerConfig{
             loadedCount: Int? = nil,
             loadingComplete: Bool? = nil,
             interruptRequested: Bool? = nil,
-            exitCondition: String? = nil
+            exitCondition: String? = nil,
+            processingStatus: ProcessingStatus = ProcessingStatus.notstarted
         ){
             self.appleProgress = Progress(totalUnitCount: 1)
             self.progressBarStyle = TaggerConfig.resolveRawRep(passed: progressBarStyle, key: "progressBarStyleDefault", fallback: .apple)
@@ -180,8 +182,9 @@ struct TaggerConfig{
             self.loadTotalCount = 0
             self.loadedCount = 0
             self.loadingComplete = false
-            self.exitCondition = nil
+            self.exitCondition = "X"
             self.interruptRequested = false
+            self.processingStatus = ProcessingStatus.notstarted
         }
         
         mutating func reset(){
@@ -195,8 +198,9 @@ struct TaggerConfig{
             self.loadTotalCount = 0
             self.loadedCount = 0
             self.loadingComplete = false
-            self.exitCondition = nil
+            self.exitCondition = "X"
             self.interruptRequested = false
+            self.processingStatus = ProcessingStatus.notstarted
 
         }
     }

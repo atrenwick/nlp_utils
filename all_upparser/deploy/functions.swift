@@ -818,11 +818,13 @@ enum PostPipelineWorkflow{
     //MARK: settings updaters
     static func makeTidyRunOutput(myConfig: TaggerConfig ) -> RunOutput {
         let runID = myConfig.outputData.safeHeaderAttribs.runID
+        let processingStatus = myConfig.progressConfig.processingStatus
         let exportContent = GeneralOutputMakingWorkflow.makeExportContent(
             headers: myConfig.outputData.safeHeaderAttribs,
             sents: myConfig.outputData.outSents,
             exportFormat: myConfig.exportConfig.selectedExportFormat,
-            includeConllSentText: myConfig.exportConfig.includeConllSentText
+            includeConllSentText: myConfig.exportConfig.includeConllSentText,
+            processingStatus: processingStatus
         )
         print("export content as made @ 1228 :: count == \(exportContent.count)")
         print("@lin819, maxLenWords == \(myConfig.parsingConfig.maxWords) and max SeqLen == \(myConfig.parsingConfig.maxSeqLen)")
@@ -834,7 +836,8 @@ enum PostPipelineWorkflow{
         
         let runMetas = WritingWorkflow.saveFileToChosenLocation(
             myConfig: myConfig, exportContent: exportContent,
-            runID: runID
+            runID: runID,
+            processingStatus: processingStatus
         )
         
         let runOutput = RunOutput(
@@ -895,7 +898,7 @@ enum GeneralOutputMakingWorkflow{
     //                                                 Agnostic output making functions
     //----------------------------------------------------------------------------------------------------------------------------
     //----------------------------------------------------------------------------------------------------------------------------
-    static func makeExportContent(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool)-> String{
+    static func makeExportContent(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool, processingStatus: ProcessingStatus)-> String{
             var returnString: String = ""
             switch exportFormat{
             case .conll, .conllTxt:
@@ -903,7 +906,7 @@ enum GeneralOutputMakingWorkflow{
             case .conllTidy:
                 returnString = sents.generateExportTextTidy()
             case .xml, .xmlConll:
-                returnString = XMLMakingWorkflow.sentListToXML(headers: headers, sents: sents, exportFormat: exportFormat, includeConllSentText: includeConllSentText)
+                returnString = XMLMakingWorkflow.sentListToXML(headers: headers, sents: sents, exportFormat: exportFormat, includeConllSentText: includeConllSentText, processingStatus: processingStatus)
             }
             return returnString
         }
@@ -937,7 +940,7 @@ enum XMLMakingWorkflow{
         
         let xmlsafeSourceFile = fileContainerModel.localSandboxFileURL?.path().xmlEscaped ?? "unk"
         let runID = UUID().uuidString
-        let xmlsafeExitCondition = myConfig.progressConfig.exitCondition?.xmlEscaped
+        let xmlsafeExitCondition = myConfig.progressConfig.exitCondition.xmlEscaped
         let xmlSafeInterruptRequested = String(myConfig.progressConfig.interruptRequested).xmlEscaped
         let xmlSafeMaxPipelineStep = myConfig.parsingConfig.maxPipelineStep.title.xmlEscaped
         let xmlSafeRunRetokeniser = String(myConfig.parsingConfig.runRetokeniser).xmlEscaped
@@ -966,7 +969,9 @@ enum XMLMakingWorkflow{
         return outputStruct
     }
 
-    static func sentListToXML(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool) -> String {
+    
+    
+    static func sentListToXML(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool, processingStatus: ProcessingStatus) -> String {
         let safeHeaderAttribs = headers
         let sentences = sents
         let sentCount = String(sentences.count)
@@ -1002,8 +1007,8 @@ enum XMLMakingWorkflow{
                     maxSeqLen="\(safeHeaderAttribs.maxSeqLen)"
                     sentCount="\(sentCount)"
                     tokenCount="\(tokCount)"
-                    exitCondition="\(safeHeaderAttribs.exitCondition)"
-                    interruptRequested="\(safeHeaderAttribs.interruptRequested)">
+                    exitCondition="\(processingStatus.exitStatus)"
+                    interruptRequested="\(processingStatus.interruptRequested)">
                 </sourceDesc>
             </fileDesc>
             <profileDesc>
@@ -1056,7 +1061,7 @@ enum WritingWorkflow{
     // 3. write string dump :: write string to named files on macOS AND iOS device ; No longer used
     // 4. writtoFile ; No longer used
     // write string to location
-    static func saveFileToChosenLocation(myConfig: TaggerConfig, exportContent: String, runID: String, additional: AdditionalExportParams? = nil) -> RunMetas{
+    static func saveFileToChosenLocation(myConfig: TaggerConfig, exportContent: String, runID: String, processingStatus: ProcessingStatus, additional: AdditionalExportParams? = nil) -> RunMetas{
         var savedURL: URL?
         var exportStatusMessage: String
 
@@ -1096,6 +1101,7 @@ enum WritingWorkflow{
                 tokenizingMethod: myConfig.parsingConfig.tokenizingMethod,
                 totalCount: myConfig.progressConfig.totalCount,
                 treebank: myConfig.parsingConfig.selectedTreebank.short,
+                processingStatus: processingStatus,
                 unread: true
             )
         }
@@ -1154,6 +1160,7 @@ enum WritingWorkflow{
             tokenizingMethod: myConfig.parsingConfig.tokenizingMethod,
             totalCount: myConfig.progressConfig.totalCount,
             treebank: myConfig.parsingConfig.selectedTreebank.short,
+            processingStatus: processingStatus,
             unread:  true,
         )
     }

@@ -182,6 +182,7 @@ struct RunMetas: Identifiable, Codable {
     let tokenizingMethod: TokenizingMethod
     let totalCount: Int
     let treebank : String
+    let processingStatus: ProcessingStatus
     var unread: Bool = true
     
     func save() {

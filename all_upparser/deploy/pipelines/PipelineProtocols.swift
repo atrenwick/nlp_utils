@@ -249,7 +249,6 @@ protocol PipelineHelper {
     
 }
 
-
 // protocol specific to bert-likes for subtoken awareness
 protocol SubtokenAwarePipelineHelper {
     var seqLen: Int { get }
@@ -628,14 +627,14 @@ extension BERTderivedPipelineHelper  {
             let rule = labels.lemmaRule.decode(lemmaRules.argmax(row: i))
             tokens.append(Token(
                 tokid: i,
-                form: "\(form)_zz",
+                form: "\(form)",
                 lemma: applyLemmaRule(form: form, rule: rule),
                 upos: labels.upos.decode(upos.argmax(row: i)),
                 xpos: "_",
                 feats: labels.feats.decode(feats.argmax(row: i)),
                 head: String(parse[i - 1].head),
                 deprel: parse[i - 1].deprel,
-                col8: "_zz_",
+                col8: "_",
                 col9: "_",
                 subTokens: pieces?[i - 1]
             ))
@@ -992,34 +991,47 @@ extension PipelineSettingsView {
         maxPipelineStep: PipelineStep,
         taggingInProgress: Binding<Bool>,
         isFirstRun: Binding<Bool>,
-        pipelineCache: PipelineCache
+        pipelineCache: PipelineCache,
+        requestedOffset: Int = 0
     ) {
+        // MARK: parameters, initialisations for task
         if !isFirstRun.wrappedValue {
             myConfig.runResetters()
         } else {
             isFirstRun.wrappedValue = false
         }
-        // MARK: parameters, initialisations for task
+
+        // set bools
         myConfig.parsingConfig.runExplicit = true
-        taggingInProgress.wrappedValue = true
         myConfig.progressConfig.hasStarted = true
+        taggingInProgress.wrappedValue = true
+        interruptSignalled = false
+
+        // var + constants for run
+        var requestedOffset = requestedOffset
         let theseHeaderAttribs = XMLMakingWorkflow.makeSafeHeaderAttribs(myConfig: myConfig, fileContainerModel: fileContainerModel)
-        if myConfig.parsingConfig.runExplicit { print("Build header attribs: \(theseHeaderAttribs)") }
-        myConfig.outputData.safeHeaderAttribs = theseHeaderAttribs
         let currentKey: String = makePipeKey(myConfig: myConfig)
+        myConfig.outputData.safeHeaderAttribs = theseHeaderAttribs
         myConfig.parsingConfig.key = currentKey
-        print("currentKey = \(currentKey)")
+
+        // print
+        if myConfig.parsingConfig.runExplicit { print("Build header attribs: \(theseHeaderAttribs)") }
+        print("currentKey = \(currentKey), currentInterrupt = \(interruptSignalled)")
+
         // MARK: tagging :
         Task {
             do {
+                myConfig.progressConfig.processingStatus = .inprogress
                 var allSentences: [HashableSentence] = []
                 var pipeline: any PipelineHelper
                 do {
                     if let cachedPipeline = pipelineCache.lookup(currentKey) {
+                        
                         pipeline = cachedPipeline
+                        // if interrupted, set allSents to sents not processed previous here
                     } else {
                         let loadedPipeline = try await callPipelineLoader(myConfig: myConfig)
-
+                        requestedOffset = 0 // reset offset to 0 if not using previous model to avoid partial processing
                         if let subAwarePipeline = loadedPipeline as? SubtokenAwarePipelineHelper {
                             myConfig.outputData.safeHeaderAttribs.maxSeqLen = String(subAwarePipeline.seqLen)
                             myConfig.parsingConfig.maxSeqLen = subAwarePipeline.seqLen
@@ -1040,14 +1052,18 @@ extension PipelineSettingsView {
                 } catch {
                     if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)") }
                     currentStatus = "Error loading pipeline."
+                    myConfig.progressConfig.processingStatus = .failed
                     throw PipelineError.ConfigurationError.notReadyToSendToRunner
                 }
                 if myConfig.parsingConfig.runExplicit { print(currentStatus) }
                 
-                //MARK: INGEST SENTS ::
+                //MARK: INGEST SENTS, trim to custom offset or 0 :: dropfirst 0 doesn't drop the 0th item in array
                 allSentences = try SentencizationWorkflow.ingestSentences(currentStatus: currentStatus, myConfig: myConfig, pipeline: pipeline)
+                allSentences = Array(allSentences.dropFirst(max(0, requestedOffset)))
+
                 guard !allSentences.isEmpty else {
                     taggingInProgress.wrappedValue = false
+                    myConfig.progressConfig.processingStatus = .failed
                     throw PipelineError.IngestionError.noSentencesLoaded
                 }
                 
@@ -1120,13 +1136,16 @@ extension PipelineSettingsView {
                     }
                 }
                 myConfig.progressConfig.exitCondition = interruptSignalled ? "Interrup requested" : "ProcessingComplete"
-//MARK: print
+                    // these need to be added to xmlsafe, output
+                //MARK: print
+                print("exit condition == \(myConfig.progressConfig.exitCondition)")
                 try PrintWorkflow.dumpDetailsForRunExplicit(myConfig: myConfig, taggingInProgress: $taggingInProgress)
                 runOutput = PostPipelineWorkflow.makeTidyRunOutput(myConfig: myConfig)
                 
                 try await MainActor.run {
                     taggingInProgress.wrappedValue = false
                     currentStatus = "Done"
+                    myConfig.progressConfig.processingStatus = .success
                     guard let runOutput else { throw PipelineError.ProcessingError.noRunOutput }
                     allRunOutputs.append(runOutput)
                     loadedPipelines.append(pipeline)
@@ -1135,6 +1154,7 @@ extension PipelineSettingsView {
                     }
                 }
             } catch {
+                myConfig.progressConfig.processingStatus = .failed
                 switch error {
                 case let PipelineError as PipelineError:
                     myConfig.progressConfig.alertMessage = PipelineError.errorDescription

@@ -211,6 +211,40 @@ struct FileNameInputViewSection: View {
             .appendingPathExtension("json")
     }
 }
+
+struct GoSectionUpperHalf: View{
+    @Binding var currentStatus: String
+    @Binding var isLoading: Bool
+    @Binding var loadedCount: Int
+    @Binding var loadStatus: String
+    @Binding var myConfig: TaggerConfig
+    
+    let isPipelineReady: Bool
+    let loadTotal: Int
+    let missingReqsMessage: String
+    
+    var body: some View {
+        BigGoButtonReadinessExtractedView(
+            isPipelineReady: isPipelineReady,
+            missingReqsMessage: missingReqsMessage
+        )
+        if isLoading {
+            VStack {
+                ProgressView(
+                    value: isLoading ? Double(loadedCount) : 0.0,
+                    total: Double(loadTotal)
+                )
+                HStack{
+                    Text(loadStatus)
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                }
+            }
+        }
+        PipelineProgressView(myConfig: $myConfig, currentStatus: $currentStatus)
+    }
+}
+
 // view for choosing input file type
 struct InputFileViewEncapsulator: View {
     @Binding var myConfig: TaggerConfig
@@ -423,6 +457,53 @@ struct RunExplicitButtonExtractedView: View{
     }
 }
 
+struct TaggingOffsetParamsView: View{
+    @Binding var allRunOutputs: [RunOutput]
+    @Binding var requestedOffset: Int
+    @State var usePreviousRun: Bool = false
+    
+    var previousRun: [RunOutput] {
+        if allRunOutputs.count == 0 {
+            return []
+        } else if allRunOutputs.count == 1 {
+            return allRunOutputs
+        } else {
+            let sorted = allRunOutputs.sorted {$0.runMetas.safeHeaderAttribs.taggingDate < $1.runMetas.safeHeaderAttribs.taggingDate}
+            if let mostRecent = sorted.last{
+                return [mostRecent]
+            } else {
+                return []
+            }
+        }
+    }
+    var previousResumable: Bool{
+        if previousRun.count >= 1  && previousRun[0].runMetas.processingStatus.interruptRequested == "True" {
+            return true
+        } else {
+            return false
+        }
+    }
+    
+    var body: some View{
+        Form {
+            Toggle(isOn: $usePreviousRun) {
+                Text("Restart last interrupted")
+            }.onChange(of: usePreviousRun){_, newValue in
+                if newValue == true && previousResumable {
+                    requestedOffset = previousRun[0].runMetas.processedCount
+                }
+            }
+            .disabled(previousResumable == false)
+            
+            HStack{Text("Start from sentence…")
+                TextField("Add sent number", value: $requestedOffset, format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .keyboardType(.decimalPad)
+            }
+        }
+    }
+}
+
 struct TaggingProgressButtonExtractedView: View{
     @EnvironmentObject var pipelineCache: PipelineCache
     let taggingInProgress: Bool
@@ -511,3 +592,5 @@ struct ToolbarLinkToOutputExtractedView: View {
         }
     }
 }
+
+    

@@ -44,14 +44,8 @@ struct PipelineSettingsView: View {
     @State var showInterruptButton: Bool = false
     @State var interruptSignalled: Bool = false
     @State var loadedPipelines: [PipelineHelper] = [ ]
-    
-    
-    var strings: [String] {
-        let string1 = pipelineCache.isLive ? "Live" : "not live"
-        let string2 = pipelineCache.isLive ? String(pipelineCache.key ?? "nil->no key") : "no key"
-        return [string1, string2]
-    }
-    
+    @State var requestedOffset: Int = 0
+        
     var unreadCount: Int {
         allRunOutputs.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
     }
@@ -61,6 +55,28 @@ struct PipelineSettingsView: View {
             return buttonColor1
         } else {
             return buttonColor2
+        }
+    }
+    
+    var previousRun: [RunOutput] {
+        if allRunOutputs.count == 0 {
+            return []
+        } else if allRunOutputs.count == 1 {
+            return allRunOutputs
+        } else {
+            let sorted = allRunOutputs.sorted {$0.runMetas.safeHeaderAttribs.taggingDate < $1.runMetas.safeHeaderAttribs.taggingDate}
+            if let mostRecent = sorted.last{
+                return [mostRecent]
+            } else {
+                return []
+            }
+        }
+    }
+    var previousResumable: Bool{
+        if previousRun.count >= 1  && previousRun[0].runMetas.processingStatus.interruptRequested == "True" {
+                return true
+        } else {
+            return false
         }
     }
 
@@ -90,32 +106,41 @@ struct PipelineSettingsView: View {
                     NavigationLink("Select processor steps"){
                         ProcessorStepConfigViewSection(myConfig: $myConfig)
                     }
+                    NavigationLink("Set offsets"){
+                        TaggingOffsetParamsView(
+                            allRunOutputs: $allRunOutputs,
+                            requestedOffset: $requestedOffset
+                        )
+                    }
                 }
-
+                
                 ExportConfigViewSection(myConfig: $myConfig)
                 //#if debug
                 //                RunExplicitButtonExtractedView(myConfig: $myConfig)
                 //#endif
                 // MARK: the Go button
-
+                
+                
+                Section{
                     GoSectionUpperHalf(
-                        myConfig: $myConfig,
                         currentStatus: $currentStatus,
-                        isPipelineReady: isPipelineReady,
-                        missingReqsMessage: missingReqsMessage,
                         isLoading: $isLoading,
-                        loadTotal: loadTotal,
                         loadedCount: $loadedCount,
-                        loadStatus: $loadStatus
+                        loadStatus: $loadStatus,
+                        myConfig: $myConfig,
+                        isPipelineReady: isPipelineReady,
+                        loadTotal: loadTotal,
+                        missingReqsMessage: missingReqsMessage,
                     )
                     Button {
-                            runTagging(
-                                inputFileType: myConfig.inputConfig.inputFileType,
-                                maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
-                                taggingInProgress: $taggingInProgress,
-                                isFirstRun: $isFirstRun,
-                                pipelineCache: pipelineCache
-                            )
+                        runTagging(
+                            inputFileType: myConfig.inputConfig.inputFileType,
+                            maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
+                            taggingInProgress: $taggingInProgress,
+                            isFirstRun: $isFirstRun,
+                            pipelineCache: pipelineCache,
+                            requestedOffset: requestedOffset
+                        )
                     } label: {
                         TaggingProgressButtonExtractedView(
                             taggingInProgress: taggingInProgress,
@@ -135,33 +160,33 @@ struct PipelineSettingsView: View {
                     
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if taggingInProgress {
-                                Button("Stop") {
-                                    showInterruptButton = true
-                                }
-                                .tint(.red)
-                            }
+                    if taggingInProgress || 1 == 1 {
+                        Button("Stop") {
+                            showInterruptButton = true
                         }
+                        .tint(.red)
+                    }
+                }
                 .confirmationDialog("Interrupt"
                                     , isPresented: $showInterruptButton, titleVisibility: .visible){
                     Button("Stop", role: .destructive){
-                            interruptSignalled = true
+                        interruptSignalled = true
+                        myConfig.progressConfig.processingStatus = .interrupted
                     }
                     Button("Cancel", role: .cancel){ }
                 } message: {
                     Text("Items processed so far will be kept")
-                     }
+                }
                 
                 .alert("Error !",
-                    isPresented: Binding(
+                       isPresented: Binding(
                         get: {myConfig.progressConfig.alertMessage != nil},
                         set: {if !$0 {myConfig.progressConfig.alertMessage = nil} } )
                 ) { Button("OK", role: .cancel) { }
                 } message: { Text(myConfig.progressConfig.alertMessage ?? "") }
             }
             .accessibilityIdentifier("RunParsingButton")
-            .onAppear(perform: loadButtonColours)
-            
+
             // MARK: toolbar :
             .toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
@@ -172,9 +197,14 @@ struct PipelineSettingsView: View {
                         tempTokens: $tempTokens,
                         unreadCount: unreadCount,
                         safeHeaderAttribs: myConfig.outputData.safeHeaderAttribs
-                    )
+                    ).foregroundStyle(
+                        previousResumable ? .green : .blue)
                 }
             }
+        }
+            
+        .onAppear(perform: loadButtonColours)
+
         }
 }
 
