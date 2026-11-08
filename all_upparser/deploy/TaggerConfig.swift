@@ -7,7 +7,6 @@
 
 import Foundation
 
-
 struct TaggerConfig{
     // MARK: vars to bring in substructs
     var id = UUID()
@@ -109,8 +108,8 @@ struct TaggerConfig{
             self.loadingProgress  = 0.0
             self.loadingComplete = false
         }
-        
     }
+    
     struct ExportConfig{
         var fileName: String
         var targetFolderURL: URL?
@@ -202,7 +201,6 @@ struct TaggerConfig{
             self.exitCondition = "X"
             self.interruptRequested = false
             self.processingStatus = ProcessingStatus.notstarted
-
         }
     }
     //    // sentences ::
@@ -264,8 +262,6 @@ struct TaggerConfig{
         self.outputData = outputData
         self.viewSettings = viewSettings
     }
-    
-    
     
     // MARK: - Centralized Static Solvers
     static func resolveBool(passed: Bool?, key: String, default fallback: Bool = false) -> Bool {

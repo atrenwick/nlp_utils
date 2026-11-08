@@ -770,7 +770,7 @@ enum TokenisationWorkflow{
             
         case .trained:
             switch myConfig.parsingConfig.modelArchitecture {
-            case .distilbert, .camembert, .roberta:
+                case .distilbert, .camembert, .roberta, .rnn:
                 throw PipelineError.ConfigurationError.architectureConflict
             case .cnnBiLSTM:
                 // retokenize everything with model
@@ -969,8 +969,6 @@ enum XMLMakingWorkflow{
         return outputStruct
     }
 
-    
-    
     static func sentListToXML(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool, processingStatus: ProcessingStatus) -> String {
         let safeHeaderAttribs = headers
         let sentences = sents
@@ -1365,7 +1363,3 @@ func getNLTags(text: String) -> NLParseResults{
 //    return outputString
 //}
 //5
-
-////3.
-
-

@@ -24,6 +24,8 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         switch modelArchitecture {
             case .distilbert:
                 "DistilBERT based pipeline with WordPiece tokenizer"
+            case .rnn:
+                "RNNTagger inspired pipeline for POS, LEM"
             case .roberta:
                 "XLM-roBERTa based pipeline with SentPiece tokenizer"
             case .camembert:
