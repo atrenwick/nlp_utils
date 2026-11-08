@@ -17,6 +17,7 @@ struct TaggerConfig{
     var progressConfig: ProgressConfig
     var inputData: InputData
     var outputData : OutputData
+    var viewSettings: ViewSettings
     
     struct InputConfig{
         var inputFileType: InputFileType
@@ -240,7 +241,11 @@ struct TaggerConfig{
             self = Self() // reinit
         }
     }
-    
+    struct ViewSettings{
+        var showLoadProgress: Bool = false
+        var showProcessingProgress: Bool = false
+    }
+
     // top level init
     init(
         parsingConfig: ParsingConfig = ParsingConfig(),
@@ -248,7 +253,8 @@ struct TaggerConfig{
         exportConfig: ExportConfig = ExportConfig(),
         progressConfig: ProgressConfig = ProgressConfig(),
         inputData: InputData = InputData(),
-        outputData: OutputData = OutputData()
+        outputData: OutputData = OutputData(),
+        viewSettings: ViewSettings = ViewSettings()
     ) {
         self.parsingConfig = parsingConfig
         self.inputConfig = inputConfig
@@ -256,7 +262,10 @@ struct TaggerConfig{
         self.progressConfig = progressConfig
         self.inputData = inputData
         self.outputData = outputData
+        self.viewSettings = viewSettings
     }
+    
+    
     
     // MARK: - Centralized Static Solvers
     static func resolveBool(passed: Bool?, key: String, default fallback: Bool = false) -> Bool {

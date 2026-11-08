@@ -75,7 +75,6 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         print("loading on main thread::", Thread.isMainThread)
         
         let tokenizer: BERTlikeTokenizerHelper?
-        let taggerModel: MLModel?
         let labels: BERTpipeHelperStructs.LabelVocabs?
         var seqLen: Int?
         var maxWords: Int?
@@ -85,35 +84,57 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         mlcPackagePaths = await makeMlcNames(languageCode: languageCode, base: myConfig.parsingConfig.modelArchitecture, treebank: treebank)
         await onProgress(1, "Loading vocabs")
         
-        
         labels = try await BERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, modelArchitecture: modelArchitecture)
         
         await onProgress(2, "Loading tokenizer")
+
+        //new
         switch modelArchitecture {
             case .camembert, .roberta:
+                print("camembertpipe line 94")
                 guard let url = Bundle.main.url(forResource: mlcPackagePaths.tokenizerName, withExtension: "json") else {
+                    print("camembertpipe line 96")
                     throw PipelineError.GenericError.missingResource("\(mlcPackagePaths.tokenizerName).json")
                 }
-                tokenizer = try await SentencePieceTokenizer(tokenizerJSON: url)
+                // Wrap in try? to catch file system errors and convert to your custom error
+                guard let internalTokenizer = try? await SentencePieceTokenizer(tokenizerJSON: url) else {
+                    print("camembertpipeline line 101")
+                    throw PipelineError.GenericError.missingResource("\(mlcPackagePaths.tokenizerName).json")
+                }
+                tokenizer = internalTokenizer
                 // sent piece
             case .distilbert:
                 await onProgress(2, "Loading wordpiece tokenizer")
-                tokenizer = try await WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank)
+                // Wrap in try? here too
+                guard let internalTokenizer = try? await WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank) else {
+                    print("camembertpipeline line 110")
+                    throw PipelineError.GenericError.missingResource("WordPiece tokenizer files missing.")
+                }
+                tokenizer = internalTokenizer
             default:
                 throw PipelineError.ConfigurationError.architectureConflict
         }
 
         await onProgress(3, "Loading bertlike model")
-        taggerModel = try await BERTlikePipeline.loadMlpackage(named: mlcPackagePaths.packageName, myConfig: myConfig)
+        let taggerModel = try await BERTlikePipeline.loadMlpackage(named: mlcPackagePaths.packageName, myConfig: myConfig)
+        // other cases like this need to be de-guarded to keep the original error thrown from the Method
+//        guard let taggerModel = try? await BERTlikePipeline.loadMlpackage(named: mlcPackagePaths.packageName, myConfig: myConfig) else {
+//                print("camembertpipeline line 118")
+//                throw PipelineError.GenericError.missingResource("\(mlcPackagePaths.packageName).mlc")
+//        }
         //        taggerModel = try await BERTlikePipeline.loadMlpackage(named: T##String, myConfig: myConfig)
         await onProgress(4, "Verifying settings")
-        if let tmodel = taggerModel{
-            let limits = try await Self.limits(of: tmodel)
+            let limits = try await Self.limits(of: taggerModel)
             seqLen = limits.seqLen
             maxWords = limits.maxWords
-        }
+        
         guard
-            let tokenizer = tokenizer, let taggerModel = taggerModel, let labels = labels, let seqLen = seqLen, let maxWords = maxWords else { throw PipelineError.ConfigurationError.notReadyToSendToRunner }
+            
+            let tokenizer = tokenizer, let labels = labels, let seqLen = seqLen, let maxWords = maxWords else {
+            await onProgress(0, "Error")
+            print("bert-error 117")
+            throw PipelineError.ConfigurationError.notReadyToSendToRunner
+        }
         return try await convertToRealPipeline(
             tokenizer: tokenizer,
             taggerModel: taggerModel,

@@ -70,7 +70,6 @@ enum PipelineError: LocalizedError{
         case languageMethodConflict(language: Language)
         case notReadyToSendToRunner
         case inputFileFormatChoiceError
-        case resourceMissing(String)
         
         var errorDescription: String? {
             switch self{
@@ -88,8 +87,6 @@ enum PipelineError: LocalizedError{
                 return "Language \(language.rawValue) cannot be used with naive tokenisation"
             case .notReadyToSendToRunner:
                 return "Not ready to send to from loader class to runner class"
-            case .resourceMissing(let name):
-                return "Missing resource: \(name)"
             }
         }
     }
@@ -97,22 +94,23 @@ enum PipelineError: LocalizedError{
     enum LoadingError: LocalizedError{
         case configFileLoadError(name: String)
         case fileLoadError
-        case fileNotInBundle
         case modelLoadFailed(Error)
         case packageLoadFailed(String)
-        
+        case resourceMissing(String)
+
         var errorDescription: String? {
             switch self{
             case .configFileLoadError(let filename):
                 return "Failed to load file config file \(filename)"
             case .fileLoadError:
                 return "Failed to load file"
-            case .fileNotInBundle:
-                return "File not in bundle"
+            case .resourceMissing(let name):
+                return "Missing resource: \(name)"
+
             case .modelLoadFailed(let error):
                 return "Couldn't load the model: \(error.localizedDescription)"
             case .packageLoadFailed(let name):
-                return "Failed to load model from package \(name)"
+                return "Failed to load model from package: \(name) was not found"
             }
         }
     }

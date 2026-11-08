@@ -212,6 +212,9 @@ struct FileNameInputViewSection: View {
     }
 }
 
+///BigGoButtonReadinessExtractedView is the alert section that appears based on `missingReqsMessage` which is a calculated property
+
+
 struct GoSectionUpperHalf: View{
     @Binding var currentStatus: String
     @Binding var isLoading: Bool
@@ -224,11 +227,14 @@ struct GoSectionUpperHalf: View{
     let missingReqsMessage: String
     
     var body: some View {
+        // this has calculated property auto-hiding, showing, based on config.
+        // the same value (de)activates the button, in its own view
         BigGoButtonReadinessExtractedView(
             isPipelineReady: isPipelineReady,
             missingReqsMessage: missingReqsMessage
         )
-        if isLoading {
+        if myConfig.viewSettings.showLoadProgress  {
+            Text("part2")
             VStack {
                 ProgressView(
                     value: isLoading ? Double(loadedCount) : 0.0,
@@ -241,7 +247,12 @@ struct GoSectionUpperHalf: View{
                 }
             }
         }
-        PipelineProgressView(myConfig: $myConfig, currentStatus: $currentStatus)
+        if myConfig.viewSettings.showProcessingProgress {
+            Text("part3")
+//            Text(currentStatus)
+//            Text(loadStatus)
+            PipelineProgressView(myConfig: $myConfig, currentStatus: $currentStatus)
+        }
     }
 }
 

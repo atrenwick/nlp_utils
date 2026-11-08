@@ -4,6 +4,10 @@ import Foundation
 import NaturalLanguage
 import Combine
 
+
+
+
+
 // this is the loader - not designed to persist or be used for prediction
 final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
     // 1. Published properties for UI progress meter to track
@@ -61,6 +65,7 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
             lemmaRuleVocab: lemmaRuleVocab
         )
     }
+    // start new
     @concurrent
     func loadCNNBiLSTMpipe(
         myConfig: TaggerConfig,
@@ -79,44 +84,74 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
         let deprelVocab: Vocab?
         let lemmaRuleVocab: Vocab?
         let lemmatizerRunner: LemmatizerRunner?
-        
-        // tokenizer model
-        await onProgress(1, "Loading wordpiece tokenizer")
-        tokenizerModel =  try await Self.loadMlpackage(named: "\(languageCode)_tokenizer_\(treebank)", myConfig: myConfig)
-        
-        // tagger model
+
+        // 1. Tokenizer Model
+        await onProgress(1, "Loading tokenizer model")
+        let tokName = "\(languageCode)_tokenizer_\(treebank)"
+        tokenizerModel = try await safeLoad(name: "\(tokName).mlc") {
+            try await Self.loadMlpackage(named: tokName, myConfig: myConfig)
+        }
+
+        // 2. Tagger Model
         await onProgress(2, "Loading tagger")
-        taggerModel = try await Self.loadMlpackage(named: "\(languageCode)_tagger_parser_\(treebank)", myConfig: myConfig)
+        let tagName = "\(languageCode)_tagger_parser_\(treebank)"
+        taggerModel = try await safeLoad(name: "\(tagName).mlc") {
+            try await Self.loadMlpackage(named: tagName, myConfig: myConfig)
+        }
 
-        await onProgress(3, "Loading wordpiece vocab 1")
-        tokenizerCharVocab = try await Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
+        // 3-9. Vocabularies
+        // We use safeLoad for each to ensure we know WHICH vocab failed
+        await onProgress(3, "Loading tokenizer char vocab")
+        tokenizerCharVocab = try await safeLoad(name: "\(languageCode)_tokenizer_char_vocab_\(treebank)") {
+            try await Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
+        }
 
-        await onProgress(4, "Loading wordpiece vocab 2")
-        wordVocab = try await Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
+        await onProgress(4, "Loading word vocab")
+        wordVocab = try await safeLoad(name: "\(languageCode)_word_vocab_\(treebank)") {
+            try await Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
+        }
 
-        await onProgress(5, "Loading wordpiece vocab 3")
-        taggerCharVocab = try await Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
+        await onProgress(5, "Loading tagger char vocab")
+        taggerCharVocab = try await safeLoad(name: "\(languageCode)_tagger_char_vocab_\(treebank)") {
+            try await Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
+        }
 
-        await onProgress(6, "Loading wordpiece vocab 4")
-        uposVocab = try await Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
+        await onProgress(6, "Loading upos vocab")
+        uposVocab = try await safeLoad(name: "\(languageCode)_upos_vocab_\(treebank)") {
+            try await Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
+        }
 
-        await onProgress(7, "Loading wordpiece vocab 4")
-        featsVocab = try await Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
+        await onProgress(7, "Loading feats vocab")
+        featsVocab = try await safeLoad(name: "\(languageCode)_feats_vocab_\(treebank)") {
+            try await Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
+        }
 
-        await onProgress(8, "Loading wordpiece vocab 4")
-        deprelVocab = try await Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
+        await onProgress(8, "Loading deprel vocab")
+        deprelVocab = try await safeLoad(name: "\(languageCode)_deprel_vocab_\(treebank)") {
+            try await Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
+        }
 
-        await onProgress(9, "Loading lemmarule vocab")
-        lemmaRuleVocab = try await Vocab.load(named: "\(languageCode)_lemma_rule_vocab_\(treebank)")
+        await onProgress(9, "Loading lemma rule vocab")
+        lemmaRuleVocab = try await safeLoad(name: "\(languageCode)_lemma_rule_vocab_\(treebank)") {
+            try await Vocab.load(named: "\(languageCode)_lemma_rule_vocab_\(treebank)")
+        }
 
+        // 10. Lemmatizer
         await onProgress(10, "Loading neural lemmatizer")
+        // Note: If LemmatizerRunner doesn't throw a PipelineError internally,
+        // you might want to wrap this in a safeLoad too.
         lemmatizerRunner = try await LemmatizerRunner(languageCode: languageCode, treebank: treebank)
 
-        print("seems to have succeeeded")
-        
-        // Step 3: Assign to properties and mark ready
-
-        guard let tokenizerModel = tokenizerModel, let taggerModel = taggerModel, let lemmatizerRunner = lemmatizerRunner, let tokenizerCharVocab = tokenizerCharVocab, let wordVocab = wordVocab, let taggerCharVocab = taggerCharVocab, let uposVocab = uposVocab, let featsVocab = featsVocab, let deprelVocab = deprelVocab, let lemmaRuleVocab = lemmaRuleVocab else { throw PipelineError.ConfigurationError.notReadyToSendToRunner }
+        // Step 3: Final Verification
+        guard let tokenizerModel = tokenizerModel, let taggerModel = taggerModel,
+              let lemmatizerRunner = lemmatizerRunner, let tokenizerCharVocab = tokenizerCharVocab,
+              let wordVocab = wordVocab, let taggerCharVocab = taggerCharVocab,
+              let uposVocab = uposVocab, let featsVocab = featsVocab,
+              let deprelVocab = deprelVocab, let lemmaRuleVocab = lemmaRuleVocab else {
+            await onProgress(0, "Error")
+            print("cnnbi-error 121")
+            throw PipelineError.ConfigurationError.notReadyToSendToRunner
+        }
 
         return try await convertToRealPipeline(
             tokenizerModel: tokenizerModel,
@@ -131,6 +166,24 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
             lemmaRuleVocab: lemmaRuleVocab
         )
     }
+    /// Helper to wrap loading calls. If the loader throws a system error (like File Not Found),
+    /// it catches it and throws your custom .missingResource error instead.
+    private func safeLoad<T>(
+        name: String,
+        loader: () async throws -> T
+    ) async throws -> T {
+        do {
+            return try await loader()
+        } catch let loadingError as PipelineError.LoadingError {
+            // If it's already our custom error, just re-throw it
+            throw loadingError
+        } catch {
+            // It's a system error (File Not Found, etc.), wrap it in our specific error
+            throw PipelineError.GenericError.missingResource(name)
+        }
+    }
+
+
 }
 
 

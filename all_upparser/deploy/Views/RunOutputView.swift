@@ -95,8 +95,8 @@ struct RunOutputDetailView: View{
                                 topLevelOutput.append(runOutput)
                             } catch {
                                 switch error {
-                                case let PipelineError as PipelineError:
-                                    alertMessage = PipelineError.errorDescription
+                                    case let exportError as PipelineError.ExportError:
+                                    alertMessage = exportError.errorDescription
                                 default:
                                     alertMessage = error.localizedDescription
                                 }
@@ -117,7 +117,7 @@ struct RunOutputDetailView: View{
                                     print("Saved to \(savedURL)")}
                             } catch {
                                 switch error {
-                                    case let fileSaveError as PipelineError:
+                                    case let fileSaveError as PipelineError.ExportError:
                                         alertMessage = fileSaveError.errorDescription
                                     default:
                                         alertMessage = error.localizedDescription
