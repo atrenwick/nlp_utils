@@ -13,7 +13,7 @@ extension Bundle {
     func loadText(_ file: String, format: String) throws -> String {
         let normalizedText: String
         guard let url = self.url(forResource: file, withExtension: nil) else {
-            throw PipelineError.LoadingError.fileNotInBundle
+            throw PipelineError.LoadingError.resourceMissing(file)
         }
         guard let data = try? Data(contentsOf: url) else {
             throw PipelineError.LoadingError.fileLoadError

@@ -204,7 +204,7 @@ extension PipelineLoader{
                     throw PipelineError.ConfigurationError.architectureConflict
             }
             guard let url = bundle.url(forResource: name, withExtension: "json") else {
-                throw PipelineError.GenericError.missingResource("\(name).json")
+                throw PipelineError.LoadingError.resourceMissing("\(name).json")
             }
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode(VocabData.self, from: data)
@@ -232,6 +232,7 @@ extension PipelineLoader{
                 return try MLModel(contentsOf: url)
             }
         } catch {
+            
             throw PipelineError.LoadingError.packageLoadFailed("failed to load model \(name)")
         }
     }
@@ -922,38 +923,92 @@ extension PipelineSettingsView {
         if myConfig.wrappedValue.parsingConfig.runExplicit { print("awaitng mainactor line 237") }
     }
     
-    func callPipelineLoader(myConfig: TaggerConfig) async throws -> PipelineHelper{
+    func callPipelineLoader() async throws -> PipelineHelper {
         let pipeline: PipelineHelper
-        var currentStatus: String = ""
         isLoading = true
+        defer { isLoading = false }          // runs on every exit, including throws
+
         do {
             switch myConfig.parsingConfig.modelArchitecture {
             case .camembert, .roberta, .distilbert:
                 let loader = BERTlikePipelineLoader()
-                pipeline = try await loader.loadBERTlikePipeline(myConfig: myConfig) {step, message in
+                pipeline = try await loader.loadBERTlikePipeline(myConfig: myConfig) { step, message in
                     loadedCount = step
                     loadStatus = message
                 }
-                if myConfig.parsingConfig.runExplicit { print("bert-derived pipeline called") }
             case .cnnBiLSTM:
                 let loader = CNNBiLSTMPipelineLoader()
-                pipeline = try await loader.loadCNNBiLSTMpipe(myConfig: myConfig) {step, message in
+                pipeline = try await loader.loadCNNBiLSTMpipe(myConfig: myConfig) { step, message in
                     loadedCount = step
                     loadStatus = message
                 }
-                currentStatus = "loaded cnnBiLSTM"
-                if myConfig.parsingConfig.runExplicit { print("loaded cnnBiLSTM") }
             }
         } catch {
-            if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)")}
-            currentStatus = "Error loading pipeline."
-            throw PipelineError.ConfigurationError.notReadyToSendToRunner
+            if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)") }
+            myConfig.viewSettings.showLoadProgress = false
+            myConfig.progressConfig.processingStatus = .failed
+            throw error                       // the original, specific error
         }
-        
-        if myConfig.parsingConfig.runExplicit { print(currentStatus) }
-        isLoading = false
         return pipeline
     }
+    
+//    func callPipelineLoader() async throws -> PipelineHelper{
+//        let pipeline: PipelineHelper
+//        var currentStatus: String = ""
+//        isLoading = true
+//
+//        do {
+//
+//            switch myConfig.parsingConfig.modelArchitecture {
+//            case .camembert, .roberta, .distilbert:
+//                let loader = BERTlikePipelineLoader()
+//                pipeline = try await loader.loadBERTlikePipeline(myConfig: myConfig) {step, message in
+//                    loadedCount = step
+//                    loadStatus = message
+//                }
+//                if myConfig.parsingConfig.runExplicit { print("bert-derived pipeline called") }
+//            case .cnnBiLSTM:
+//                let loader = CNNBiLSTMPipelineLoader()
+//                pipeline = try await loader.loadCNNBiLSTMpipe(myConfig: myConfig) {step, message in
+//                    loadedCount = step
+//                    loadStatus = message
+//                }
+//                currentStatus = "loaded cnnBiLSTM"
+//                if myConfig.parsingConfig.runExplicit { print("loaded cnnBiLSTM") }
+//            }
+//        } catch let pipelineError as PipelineError {
+//            // Pass specific pipeline errors (missingResource, etc.) straight through!
+//            if myConfig.parsingConfig.runExplicit { print("catchlet_protocol_950 - Failed to load pipeline: \(pipelineError)") }
+//            currentStatus = "Error loading pipeline."
+//            myConfig.viewSettings.showLoadProgress = false
+//            myConfig.progressConfig.processingStatus = .failed
+//            throw pipelineError
+//
+//        } catch let error as NSError {
+//            // CHECK: Is this a File System error? (e.g., File not found, Permission denied)
+//            let fileErrorDomains = ["NSCocoaErrorDomain", "NSFileCoordinatorErrorDomain"]
+//            let isFileError = fileErrorDomains.contains(error.domain) || error.code == NSFileNoSuchFileError
+//            
+//            if isFileError {
+//                // Re-throw the actual system error so the UI gets the "File not found" message
+//                if myConfig.parsingConfig.runExplicit { print("File system error: \(error.localizedDescription)") }
+//                currentStatus = "Error loading pipeline."
+//                myConfig.viewSettings.showLoadProgress = false
+//                myConfig.progressConfig.processingStatus = .failed
+//                throw error
+//            } else {
+//                // It's a non-file error (e.g., something truly unexpected), use the fallback
+//                if myConfig.parsingConfig.runExplicit { print("catch_protocol_957: Failed to load pipeline: \(error)")}
+//                isLoading = false
+//                currentStatus = "Error loading pipeline."
+//                throw PipelineError.ConfigurationError.notReadyToSendToRunner
+//            }
+//        }
+//        
+//        if myConfig.parsingConfig.runExplicit { print(currentStatus) }
+//        isLoading = false
+//        return pipeline
+//    }
 
     func describePipeline(pipepline: PipelineHelper, myConfig: TaggerConfig) -> PipelineDesc{
         
@@ -1022,6 +1077,8 @@ extension PipelineSettingsView {
         Task {
             do {
                 myConfig.progressConfig.processingStatus = .inprogress
+                myConfig.viewSettings.showLoadProgress = true
+                myConfig.viewSettings.showProcessingProgress = false
                 var allSentences: [HashableSentence] = []
                 var pipeline: any PipelineHelper
                 do {
@@ -1030,7 +1087,7 @@ extension PipelineSettingsView {
                         pipeline = cachedPipeline
                         // if interrupted, set allSents to sents not processed previous here
                     } else {
-                        let loadedPipeline = try await callPipelineLoader(myConfig: myConfig)
+                        let loadedPipeline = try await callPipelineLoader()
                         requestedOffset = 0 // reset offset to 0 if not using previous model to avoid partial processing
                         if let subAwarePipeline = loadedPipeline as? SubtokenAwarePipelineHelper {
                             myConfig.outputData.safeHeaderAttribs.maxSeqLen = String(subAwarePipeline.seqLen)
@@ -1048,21 +1105,34 @@ extension PipelineSettingsView {
                         pipelineCache.store(pipeline, key: currentKey)
                         if myConfig.parsingConfig.runExplicit { print("Pipelinemax_words = \(loadedPipeline.maxWords) @ 228") }
                     }
+                } catch let loadingError as PipelineError.LoadingError {
+                    // Pass specific pipeline errors (like missingResource or architectureConflict) straight through!
+                    if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(loadingError)") }
+                    currentStatus = "Error loading pipeline."
+                    myConfig.viewSettings.showLoadProgress = false
+                    myConfig.progressConfig.processingStatus = .failed
+                    throw loadingError
+                    
 
                 } catch {
-                    if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)") }
+                    
+                    if myConfig.parsingConfig.runExplicit { print("Failed to load pipeline funct internal 1074: \(error)") }
                     currentStatus = "Error loading pipeline."
+                    myConfig.viewSettings.showLoadProgress = false
                     myConfig.progressConfig.processingStatus = .failed
                     throw PipelineError.ConfigurationError.notReadyToSendToRunner
                 }
+                myConfig.viewSettings.showLoadProgress = false
                 if myConfig.parsingConfig.runExplicit { print(currentStatus) }
                 
                 //MARK: INGEST SENTS, trim to custom offset or 0 :: dropfirst 0 doesn't drop the 0th item in array
+                myConfig.viewSettings.showProcessingProgress = true
                 allSentences = try SentencizationWorkflow.ingestSentences(currentStatus: currentStatus, myConfig: myConfig, pipeline: pipeline)
                 allSentences = Array(allSentences.dropFirst(max(0, requestedOffset)))
 
                 guard !allSentences.isEmpty else {
                     taggingInProgress.wrappedValue = false
+                    myConfig.viewSettings.showProcessingProgress = false
                     myConfig.progressConfig.processingStatus = .failed
                     throw PipelineError.IngestionError.noSentencesLoaded
                 }
@@ -1155,9 +1225,34 @@ extension PipelineSettingsView {
                 }
             } catch {
                 myConfig.progressConfig.processingStatus = .failed
+                myConfig.viewSettings.showProcessingProgress = false
+                print(type(of: error))
                 switch error {
-                case let PipelineError as PipelineError:
-                    myConfig.progressConfig.alertMessage = PipelineError.errorDescription
+
+                // Match nested errors with .syntax
+                case let tokPieceError as PipelineError.TokPieceError:
+                    myConfig.progressConfig.alertMessage = tokPieceError.errorDescription ?? "Unknown TokPieceError "
+
+                case let sentencePieceTokenizerError as PipelineError.SentencePieceTokenizerError:
+                    myConfig.progressConfig.alertMessage = sentencePieceTokenizerError.errorDescription ?? "Unknown SentencePieceTokenizerError"
+
+                case let configurationError as PipelineError.ConfigurationError:
+                    myConfig.progressConfig.alertMessage = configurationError.errorDescription ?? "Unknown ConfigurationError"
+
+                case let loadingError as PipelineError.LoadingError:
+                        myConfig.progressConfig.alertMessage = loadingError.errorDescription ?? "Unknown LoadingError"
+
+                case let ingestionError as PipelineError.IngestionError:
+                        myConfig.progressConfig.alertMessage = ingestionError.errorDescription ?? "Unknown IngestionError"
+                case let processingError as PipelineError.ProcessingError:
+                        myConfig.progressConfig.alertMessage = processingError.errorDescription ?? "Unknown ProcessingError"
+                case let exportError as PipelineError.ExportError:
+                        myConfig.progressConfig.alertMessage = exportError.errorDescription ?? "Unknown ExportError"
+                case let genericError as PipelineError.GenericError:
+                        myConfig.progressConfig.alertMessage = genericError.errorDescription ?? "Unknown GenericError"
+
+                        
+                    
                 case let nsError as NSError where nsError.domain == XMLParser.errorDomain:
                     myConfig.progressConfig.alertMessage = "XML Parsing error : No valid XML to parse"
                 default:
