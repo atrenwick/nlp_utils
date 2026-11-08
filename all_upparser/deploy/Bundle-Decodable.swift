@@ -32,7 +32,6 @@ extension Bundle {
         return normalizedText
     }
     
-    
     func decode<T: Codable>(_ file: String) -> T {
         
         guard let url = self.url(forResource: file, withExtension: nil) else {

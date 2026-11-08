@@ -159,6 +159,9 @@ extension PipelineLoader{
             case .cnnBiLSTM:
                 tokName = "_this will be ignored_"
                 tagParsName = "_this will be ignored_"
+            case .rnn:
+                tokName = "devWithExplicit"
+                tagParsName = "devWithExplicit"
             case .roberta:
                 tokName = "_roberta_tokenizer_"
                 tagParsName = "_roberta_tagger_parser_"
@@ -200,7 +203,7 @@ extension PipelineLoader{
                 name = "\(languageCode)_camembert_\(label)_vocab_\(treebank)"
             case .roberta:
                 name = "\(languageCode)_roberta_\(label)_vocab_\(treebank)"
-            case .cnnBiLSTM:
+                case .cnnBiLSTM, .rnn:
                     throw PipelineError.ConfigurationError.architectureConflict
             }
             guard let url = bundle.url(forResource: name, withExtension: "json") else {
@@ -224,7 +227,7 @@ extension PipelineLoader{
         }
         do {
             switch myConfig.parsingConfig.modelArchitecture {
-            case .distilbert, .camembert, .roberta:
+                case .distilbert, .camembert, .roberta, .rnn:
                 let configuration = MLModelConfiguration()
                 configuration.computeUnits = .all
                 return try MLModel(contentsOf: url, configuration: configuration)
@@ -936,7 +939,14 @@ extension PipelineSettingsView {
                     loadedCount = step
                     loadStatus = message
                 }
-            case .cnnBiLSTM:
+                case .rnn:
+                    let loader = RNNPipelineLoader()
+                    pipeline = try await loader.loadRNNpipeline(myConfig: myConfig) { step, message in
+                        loadedCount = step
+                        loadStatus = message
+                    }
+                    
+                case .cnnBiLSTM:
                 let loader = CNNBiLSTMPipelineLoader()
                 pipeline = try await loader.loadCNNBiLSTMpipe(myConfig: myConfig) { step, message in
                     loadedCount = step
@@ -1015,6 +1025,9 @@ extension PipelineSettingsView {
         var llm: String
         var tok: String
         switch myConfig.parsingConfig.modelArchitecture{
+            case .rnn:
+                tok = "Manual"
+                llm = "NA"
             case .camembert:
                 tok = "SPiece"
                 llm = "CamemBERT"

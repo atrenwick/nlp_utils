@@ -156,7 +156,6 @@ enum PipelineError: LocalizedError{
                 return "Couldn't create XML parser from \(file.lastPathComponent)"
             case .readFromSandboxError:
                 return "Error reading the file from the sandbox"
-                
             }
         }
     }

@@ -19,12 +19,14 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
     case distilbert
     case cnnBiLSTM
     case camembert
+    case rnn
     case roberta
     var displayName: String{
         switch self{
         case .distilbert: return "DistilBERT"
         case .cnnBiLSTM: return "CNN-BiLSTM"
         case .camembert: return "CamemBERT"
+        case .rnn: return "RNN"
         case .roberta: return "XLM-roBERTa"
         }
     }
@@ -34,6 +36,7 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .distilbert: return "DIS"
         case .cnnBiLSTM: return "CNN"
         case .camembert: return "CAM"
+        case .rnn: return "RNN"
         case .roberta: return "ROB"
         }
     }
