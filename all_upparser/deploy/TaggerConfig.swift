@@ -32,8 +32,8 @@ struct TaggerConfig{
             selectedInputFile: URL? = nil
         ){
             self.inputFileType = TaggerConfig.resolveRawRep(passed: inputFileType, key: "inputFileTypeDefault", fallback: InputFileType.txt )
-            self.detectLanguage = TaggerConfig.resolveBool(passed: detectLanguage, key: "detectLangDefault", default: false)
-            self.matchFileNameType = TaggerConfig.resolveBool(passed: matchFileNameType, key: "matchFileNameTypeDefault", default: false)
+            self.detectLanguage = TaggerConfig.resolveBool(passed: detectLanguage, key: "detectLangDefault", default: true)
+            self.matchFileNameType = TaggerConfig.resolveBool(passed: matchFileNameType, key: "matchFileNameTypeDefault", default: true)
             self.displayName = String(UUID().uuidString.prefix(5))
         }
     }
@@ -222,6 +222,13 @@ struct TaggerConfig{
             self.resentencizerOutputStrings = []
         }
         mutating func reset(){
+            self.allSentences = []
+            self.sentsToRetokenise = []
+            self.resentencizerOutputStrings = []
+
+        }
+        
+        mutating func fullReset(){
             self = Self()
         }
     }
@@ -298,7 +305,13 @@ struct TaggerConfig{
     }
     mutating func runResetters(){
         progressConfig.reset()
-        inputData.reset()
+        // if in manual mode, don't reset the built sentences
+        switch self.inputConfig.inputFileType {
+            case .manual:
+                inputData.reset()
+            default:
+                inputData.fullReset()
+        }
         outputData.reset() // full reinit
         print("Running resetters")
         

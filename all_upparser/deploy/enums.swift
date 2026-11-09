@@ -125,6 +125,7 @@ enum Language: String, CaseIterable, Identifiable {
     case ANG
     case FRM
     case FRO
+    case ENM
     
     var id: Self { self }
     
@@ -136,6 +137,7 @@ enum Language: String, CaseIterable, Identifiable {
         case .ANG: return "ang"
         case .FRM: return "frm"
         case .FRO: return "fro"
+        case .ENM: return "enm"
         }
     }
     
@@ -147,6 +149,7 @@ enum Language: String, CaseIterable, Identifiable {
         case .DE: return .deTB1
         case .FRO: return .froTB1
         case .FRM: return .frmTB1
+        case .ENM: return .enmTB1
         }
     }
 
@@ -158,6 +161,7 @@ enum Language: String, CaseIterable, Identifiable {
         case .DE: return "DEU"
         case .FRO: return "FRO"
         case .FRM: return "FRO"
+        case .ENM: return "ENM"
         }
     }
 
@@ -174,6 +178,7 @@ enum Language: String, CaseIterable, Identifiable {
         case angTB1 = "ang_oedt"
         case frmTB1 = "frm_profiterole"
         case froTB1 = "fro_profiterole"
+        case enmTB1 = "rnn"
         
         var id: String { rawValue }
         
@@ -189,6 +194,7 @@ enum Language: String, CaseIterable, Identifiable {
             case .deTB2: return "HDT"
             case .angTB1: return "OEDT"
             case .frmTB1, .froTB1: return "Profiterole"
+            case .enmTB1: return "RNN"
             }
         }
         var keyChunk: String {
@@ -203,6 +209,8 @@ enum Language: String, CaseIterable, Identifiable {
             case .deTB2: return "HDT"
             case .angTB1: return "OED"
             case .froTB1, .frmTB1: return "PRO"
+            case .enmTB1: return "RNN"
+
             }
         }
         
@@ -218,14 +226,21 @@ enum Language: String, CaseIterable, Identifiable {
             case .deTB2: return "hdt"
             case .angTB1: return "oedt"
             case .froTB1, .frmTB1: return "profiterole"
+            case .enmTB1: return "RNN"
+
             }
         }
     }
     var availableArchs: [ModelArchitecture]{
         switch self {
-        case .FR: return [.cnnBiLSTM, .distilbert, .camembert, .roberta]
-        case .DE, .EN: return [.cnnBiLSTM, .distilbert]
-        default: return [.cnnBiLSTM, .distilbert]
+        case .FR: return [.cnnBiLSTM, .distilbert, .camembert, .roberta, .rnn]
+        case .EN: return [.cnnBiLSTM,.rnn, .roberta]
+        case .ENM: return [.rnn]
+        case .ANG: return [.distilbert, .cnnBiLSTM]
+        case .FRM: return [.distilbert, .rnn, .cnnBiLSTM]
+        case .FRO: return [.distilbert, .rnn, .cnnBiLSTM]
+        case .DE : return [.cnnBiLSTM, .distilbert]
+//        default: return [.cnnBiLSTM, .distilbert]
         }
     }
     
@@ -238,6 +253,7 @@ enum Language: String, CaseIterable, Identifiable {
         case .ANG: return [.angTB1]
         case .FRM: return [.frmTB1]
         case .FRO: return [.froTB1]
+        case .ENM: return [.enmTB1]
         }
     }
 }

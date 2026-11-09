@@ -60,9 +60,57 @@ struct TqdmProgressView: View {
 
 struct AppleProgressView: View {
     @Binding var myConfig: TaggerConfig
+
+    struct RateData{
+        let eta: String
+        let rate: String
+    }
+
+    var speedInfo: RateData {
+        var etaInternal = ""
+        var rateInternal = ""
+        if let unwrappedStartTime = myConfig.progressConfig.startTime, myConfig.progressConfig.processedCount > 0 {
+            let elapsed = Date().timeIntervalSince(unwrappedStartTime)
+            let rate = Double(myConfig.progressConfig.processedCount) / max(elapsed, 0.001)
+            let remaining = rate > 0 ? Double(myConfig.progressConfig.totalCount - myConfig.progressConfig.processedCount) / rate : 0
+            etaInternal = String(format: "ETA %ds", Int(remaining))
+            rateInternal = String(format: "%.1fit/s", rate, )
+        }
+        return RateData(eta: etaInternal, rate: rateInternal)
+    }
+
+    var safePercent: String {
+        
+        if myConfig.progressConfig.totalCount == myConfig.progressConfig.processedCount {
+            if myConfig.progressConfig.processedCount == 0 {return "0" } else { return "100"}
+        } else {
+            let tidyPercent = (Double(myConfig.progressConfig.processedCount) / Double(myConfig.progressConfig.totalCount) ) * 100
+            return String(format: "%.1f", tidyPercent)
+        }
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ProgressView(myConfig.progressConfig.appleProgress)
+        VStack(alignment: .leading, spacing: 8) {
+            // Row 1: Percentage completed (leading) + Speed (trailing)
+            HStack {
+                Text("\(safePercent )% completed")
+                Spacer()
+                Text(speedInfo.rate)
+            }
+            .font(.callout)
+            .foregroundColor(.primary)
+            
+            // Row 2: Progress Bar driven by substructure values
+            ProgressView(value: Double(myConfig.progressConfig.processedCount), total: Double(myConfig.progressConfig.totalCount))
+            
+            // Row 3: Current item count (leading) + ETA (trailing)
+            HStack {
+                Text("\(myConfig.progressConfig.processedCount) of \(myConfig.progressConfig.totalCount)")
+                Spacer()
+                Text(speedInfo.eta)
+            }
+            .font(.footnote)
+            .foregroundColor(.secondary)
         }
     }
 }
@@ -75,7 +123,7 @@ struct PipelineProgressView: View {
         if myConfig.progressConfig.hasStarted{
             switch myConfig.progressConfig.progressBarStyle {
             case .tqdm:
-                TqdmProgressView(myConfig: $myConfig)
+                    TqdmProgressView(myConfig: $myConfig)
             case .apple:
                 AppleProgressView(myConfig: $myConfig)
             }

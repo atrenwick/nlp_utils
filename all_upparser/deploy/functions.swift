@@ -398,7 +398,7 @@ enum SentencizationWorkflow{
         let nlLang: NLLanguage
         
         switch myConfig.parsingConfig.selectedLanguage {
-        case .ANG, .EN: nlLang = NLLanguage.english
+        case .ANG, .EN, .ENM: nlLang = NLLanguage.english
         case .FR,.FRM, .FRO: nlLang = NLLanguage.french
         case .DE: nlLang = NLLanguage.german
         }
@@ -602,6 +602,7 @@ enum SentencizationWorkflow{
         do {
             return try SentencizationWorkflow.ingestSentEncapsulator(myConfig: myConfig, pipeline: pipeline)
         } catch {
+            print("noSentencesLoaded in func 605")
             throw PipelineError.IngestionError.noSentencesLoaded
         }
     }
@@ -714,7 +715,7 @@ enum TokenisationWorkflow{
         let tagger = NLTagger(tagSchemes: [.tokenType]) // unit == tokenType ::>> TOKENISATION
         let nlLang: NLLanguage
         switch myConfig.parsingConfig.selectedLanguage {
-        case .ANG, .EN: nlLang = NLLanguage.english
+            case .ANG, .ENM, .EN: nlLang = NLLanguage.english
         case .FR, .FRM, .FRO: nlLang = NLLanguage.french
         case .DE: nlLang = NLLanguage.german
         }
