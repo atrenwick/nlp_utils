@@ -85,127 +85,142 @@ struct PipelineSettingsView: View {
 #endif
     
     var body: some View {
-        NavigationStack{
-            Form {
-                InputTypeExtractedView(myConfig: $myConfig, fileContainerModel: $fileContainerModel)
-                    .accessibilityIdentifier("InputTypePicker")
-                
-                // First Picker
-                Section("Parameters"){
-                    InputFileViewEncapsulator(
-                        myConfig: $myConfig,
-                        builtSents: $myConfig.inputData.builtSents,
-                        tempTokens: $tempTokens,
-                        fileContainerModel: fileContainerModel
-                    )
-                    
-                    MatchDetectToggleView(myConfig: $myConfig, fileContainerModel: $fileContainerModel)
-                    ArchitecturePickerView(myConfig: $myConfig)
-                    ConstrainedPickerForLang(myConfig: $myConfig)
-                    ConstrainedPickerForTB(myConfig: $myConfig)
-                    NavigationLink("Select processor steps"){
-                        ProcessorStepConfigViewSection(myConfig: $myConfig)
-                    }
-                    NavigationLink("Set offsets"){
-                        TaggingOffsetParamsView(
-                            allRunOutputs: $allRunOutputs,
-                            requestedOffset: $requestedOffset
-                        )
-                    }
-                }
-                
-                ExportConfigViewSection(myConfig: $myConfig)
-                //#if debug
-                //                RunExplicitButtonExtractedView(myConfig: $myConfig)
-                //#endif
-                // MARK: the Go button
-                
-                
-                Section{
-                    GoSectionUpperHalf(
-                        currentStatus: $currentStatus,
-                        isLoading: $isLoading,
-                        loadedCount: $loadedCount,
-                        loadStatus: $loadStatus,
-                        myConfig: $myConfig,
-                        isPipelineReady: isPipelineReady,
-                        loadTotal: loadTotal,
-                        missingReqsMessage: missingReqsMessage,
-                    )
-                    Button {
-                        runTagging(
-                            inputFileType: myConfig.inputConfig.inputFileType,
-                            maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
-                            taggingInProgress: $taggingInProgress,
-                            isFirstRun: $isFirstRun,
-                            pipelineCache: pipelineCache,
-                            requestedOffset: requestedOffset
-                        )
-                    } label: {
-                        TaggingProgressButtonExtractedView(
-                            taggingInProgress: taggingInProgress,
-                            isPipelineReady: isPipelineReady,
-                            pipelineSummary: pipelineSummary,
-                            currentPipelineDesc: $currentPipelineDesc,
-                            currentPipelineLoaded: $currentPipelineLoaded
-                        )
+//        ScrollView{
+//            ScrollViewReader { proxy in
+                NavigationStack{
+                    Form {
+                        InputTypeExtractedView(myConfig: $myConfig, fileContainerModel: $fileContainerModel)
+                            .accessibilityIdentifier("InputTypePicker")
                         
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(bigButtonColor)
-                    .clipShape(Capsule())
-                    .controlSize(.large)
-                    .disabled(taggingInProgress || !isPipelineReady)
-                    .padding()
-                    
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if taggingInProgress || 1 == 1 {
-                        Button("Stop") {
-                            showInterruptButton = true
+                        // First Picker
+                        Section("Parameters"){
+                            InputFileViewEncapsulator(
+                                myConfig: $myConfig,
+                                builtSents: $myConfig.inputData.builtSents,
+                                tempTokens: $tempTokens,
+                                fileContainerModel: fileContainerModel
+                            )
+                            
+                            MatchDetectToggleView(myConfig: $myConfig, fileContainerModel: $fileContainerModel)
+                            ArchitecturePickerView(myConfig: $myConfig)
+                            ConstrainedPickerForLang(myConfig: $myConfig)
+                            ConstrainedPickerForTB(myConfig: $myConfig)
+                            NavigationLink("Select processor steps"){
+                                ProcessorStepConfigViewSection(myConfig: $myConfig)
+                            }
+                            NavigationLink("Set offsets"){
+                                TaggingOffsetParamsView(
+                                    allRunOutputs: $allRunOutputs,
+                                    requestedOffset: $requestedOffset
+                                )
+                            }
                         }
-                        .tint(.red)
+                        
+                        ExportConfigViewSection(myConfig: $myConfig)
+                        //#if debug
+                        //                RunExplicitButtonExtractedView(myConfig: $myConfig)
+                        //#endif
+                        // MARK: the Go button
+                        
+                        
+                        Section{
+                            Group{
+                                GoSectionUpperHalf(
+                                    currentStatus: $currentStatus,
+                                    isLoading: $isLoading,
+                                    loadedCount: $loadedCount,
+                                    loadStatus: $loadStatus,
+                                    myConfig: $myConfig,
+                                    isPipelineReady: isPipelineReady,
+                                    loadTotal: loadTotal,
+                                    missingReqsMessage: missingReqsMessage,
+                                )
+                                Button {
+                                    runTagging(
+                                        inputFileType: myConfig.inputConfig.inputFileType,
+                                        maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
+                                        taggingInProgress: $taggingInProgress,
+                                        isFirstRun: $isFirstRun,
+                                        pipelineCache: pipelineCache,
+                                        requestedOffset: requestedOffset
+                                    )
+                                } label: {
+                                    TaggingProgressButtonExtractedView(
+                                        taggingInProgress: taggingInProgress,
+                                        isPipelineReady: isPipelineReady,
+                                        pipelineSummary: pipelineSummary,
+                                        currentPipelineDesc: $currentPipelineDesc,
+                                        currentPipelineLoaded: $currentPipelineLoaded
+                                    )
+                                    
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(bigButtonColor)
+                                .clipShape(Capsule())
+                                .controlSize(.large)
+                                .disabled(taggingInProgress || !isPipelineReady)
+                                .padding()
+                            }
+                            
+                            
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if taggingInProgress || 1 == 1 {
+                                    Button("Stop") {
+                                        showInterruptButton = true
+                                    }
+                                    .tint(.red)
+                                }
+                            }
+                            .confirmationDialog("Interrupt"
+                                                , isPresented: $showInterruptButton, titleVisibility: .visible){
+                                Button("Stop", role: .destructive){
+                                    interruptSignalled = true
+                                    myConfig.progressConfig.processingStatus = .interrupted
+                                }
+                                Button("Cancel", role: .cancel){ }
+                            } message: {
+                                Text("Items processed so far will be kept")
+                            }
+                            
+                            .alert("Error !",
+                                   isPresented: Binding(
+                                    get: {myConfig.progressConfig.alertMessage != nil},
+                                    set: {if !$0 {myConfig.progressConfig.alertMessage = nil} } )
+                            ) { Button("OK", role: .cancel) { }
+                            } message: { Text(myConfig.progressConfig.alertMessage ?? "") }
+                        }
                     }
-                }
-                .confirmationDialog("Interrupt"
-                                    , isPresented: $showInterruptButton, titleVisibility: .visible){
-                    Button("Stop", role: .destructive){
-                        interruptSignalled = true
-                        myConfig.progressConfig.processingStatus = .interrupted
+                    .accessibilityIdentifier("RunParsingButton")
+                    
+                    // MARK: toolbar :
+                    .toolbar{
+                        ToolbarItem(placement: .topBarTrailing) {
+                            ToolbarLinkToOutputExtractedView(
+                                myConfig: $myConfig,
+                                allRunOutputs: $allRunOutputs,
+                                builtSents: $builtSents,
+                                tempTokens: $tempTokens,
+                                unreadCount: unreadCount,
+                                safeHeaderAttribs: myConfig.outputData.safeHeaderAttribs
+                            ).foregroundStyle(
+                                previousResumable ? .green : .blue)
+                        }
                     }
-                    Button("Cancel", role: .cancel){ }
-                } message: {
-                    Text("Items processed so far will be kept")
                 }
                 
-                .alert("Error !",
-                       isPresented: Binding(
-                        get: {myConfig.progressConfig.alertMessage != nil},
-                        set: {if !$0 {myConfig.progressConfig.alertMessage = nil} } )
-                ) { Button("OK", role: .cancel) { }
-                } message: { Text(myConfig.progressConfig.alertMessage ?? "") }
-            }
-            .accessibilityIdentifier("RunParsingButton")
-
-            // MARK: toolbar :
-            .toolbar{
-                ToolbarItem(placement: .topBarTrailing) {
-                    ToolbarLinkToOutputExtractedView(
-                        myConfig: $myConfig,
-                        allRunOutputs: $allRunOutputs,
-                        builtSents: $builtSents,
-                        tempTokens: $tempTokens,
-                        unreadCount: unreadCount,
-                        safeHeaderAttribs: myConfig.outputData.safeHeaderAttribs
-                    ).foregroundStyle(
-                        previousResumable ? .green : .blue)
-                }
-            }
-        }
+                .onAppear(perform: loadButtonColours)
             
-        .onAppear(perform: loadButtonColours)
-
-        }
+//            .onChange(of: taggingInProgress) { oldValue, newValue in
+//                        if newValue == true {
+//                            // When processing starts, scroll smoothly to the new section
+//                            withAnimation {
+//                                proxy.scrollTo("processingProgressView", anchor: .bottom)
+//                            }
+//                        }
+//                    }
+//            }
+//        }
+    }
 }
 
 #Preview {

@@ -858,6 +858,14 @@ extension PipelineSettingsView {
             buttonColor2 = saved.color
         }
     }
+//    func loadDefaultBools(){
+////        @AppStorage("detectLangDefault") var detectLangDefault: Bool = true
+//        @AppStorage("matchFileNameTypeDefault") var matchFileNameTypeDefault: Bool = true
+//        autodetectLang = UserDefaults.standard.object(forKey: "detectLangDefault")
+//        autodetectLang = TaggerConfig.resolveBool(passed: detectLangDefault, key: "detectLangDefault")
+//        automatch filename-type = foo
+//    }
+    
     //MARK:  calculated properties
     var loadTotal: Int {
         if myConfig.parsingConfig.modelArchitecture == .distilbert {
@@ -1147,6 +1155,7 @@ extension PipelineSettingsView {
                     taggingInProgress.wrappedValue = false
                     myConfig.viewSettings.showProcessingProgress = false
                     myConfig.progressConfig.processingStatus = .failed
+                    print("noSentencesLoaded case 1158")
                     throw PipelineError.IngestionError.noSentencesLoaded
                 }
                 
@@ -1203,9 +1212,11 @@ extension PipelineSettingsView {
                         var sentResult: OnSentResult?
                         if let bertDerivedPipe = pipeline as? BERTderivedPipelineHelper{
                             sentResult = try bertDerivedPipe.runOnSentence(sentence, myConfig: myConfig)
-                        } else {
-                            if let cnnPipeline = pipeline as? CNNBiLSTMPipeline {
+                        } else if let cnnPipeline = pipeline as? CNNBiLSTMPipeline {
                                 sentResult =  cnnPipeline.runOnSentence(sentence, myConfig: myConfig)
+                        } else {
+                            if let rnnPipeline = pipeline as? RNNPipeline {
+                                sentResult = rnnPipeline.runOnSentence(sentence, myConfig: myConfig)
                             }
                         }
                         if let success =  sentResult {

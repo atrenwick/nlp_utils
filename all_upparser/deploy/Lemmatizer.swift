@@ -204,4 +204,3 @@ final class LemmatizerRunner {
         return bestIdx
     }
 }
-

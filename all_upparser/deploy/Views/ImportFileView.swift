@@ -69,6 +69,12 @@ struct ImportFileViewSection: View {
                     print("File picker error: \(error.localizedDescription)")
                 }
             }
+        }.onChange(of: myConfig.inputConfig.selectedInputFile){
+            if myConfig.inputConfig.detectLanguage {
+                if let detectedLang = FileIngestionWorkflow.detectLangInFilename(inputURL:myConfig.inputConfig.selectedInputFile){
+                    myConfig.parsingConfig.selectedLanguage = detectedLang
+                }
+            }
         }
     }
 }

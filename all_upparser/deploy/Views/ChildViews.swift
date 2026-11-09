@@ -248,10 +248,7 @@ struct GoSectionUpperHalf: View{
             }
         }
         if myConfig.viewSettings.showProcessingProgress {
-            Text("part3")
-//            Text(currentStatus)
-//            Text(loadStatus)
-            PipelineProgressView(myConfig: $myConfig, currentStatus: $currentStatus)
+            PipelineProgressView(myConfig: $myConfig, currentStatus: $currentStatus).id("processingProgressView")
         }
     }
 }

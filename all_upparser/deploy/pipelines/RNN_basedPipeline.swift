@@ -8,8 +8,6 @@
 //    * <lemma>_decoder_step.mlmodelc NMT lemmatiser, one decoder step (convert_nmt.py)
 //  plus the JSON files those scripts wrote (and <tagger>.crf_weights.bin for CRF taggers).
 //
-//  Uses the project's existing, unmodified `LogitReader`.
-//  NOT COMPILED: written without access to Xcode or to the PipelineHelper protocol.
 //
 import Foundation
 import Combine
@@ -18,7 +16,7 @@ import NaturalLanguage
 
 // MARK: - Metadata written by the conversion scripts
 
-struct RNNTaggerMeta: Decodable {
+struct RNNTaggerMeta: Codable {
     let wordTruncLen: Int
     let char2ID: [String: Int]
     let id2tag: [String]
@@ -40,7 +38,7 @@ struct RNNTaggerMeta: Decodable {
     }
 }
 
-struct RNNLemmatizerMeta: Decodable {
+struct RNNLemmatizerMeta: Codable {
     let id2src: [String]
     let id2tgt: [String]
     let maxTgtLenFactor: Double
@@ -95,14 +93,12 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
     init( ){  }
     
     func convertToRealRNNPipe(
-        //        tokenizer: BERTlikeTokenizerHelper,
         taggerModel: MLModel,
         taggerMeta: RNNTaggerMeta,
         encoderModel: MLModel,
         stepModel: MLModel,
         lemmaMeta: RNNLemmatizerMeta,
         seqLen: Int,
-        //        crfWeights: [Float],            // numTags * numTags, row-major; empty without CRF
         maxWords: Int,
         languageCode: String,
         treebank: String,
@@ -125,20 +121,11 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
             languageCode: languageCode,
             treebank: treebank,
             runExplicitValue: runExplicit,
-            
         )
-        
-        
-        
     }
     
     
     // MARK: Loading from a folder of compiled models
-    
-    /// Loads everything from one folder. Expected files:
-    ///   <taggerName>.mlmodelc, <taggerName>.json, [<taggerName>.crf_weights.bin]
-    ///   <lemmatizerName>_encoder.mlmodelc, <lemmatizerName>_decoder_step.mlmodelc, <lemmatizerName>.json
-    /// Give the two conversions different --name values, or both write <name>.json and overwrite each other.
     @concurrent
     func loadRNNpipeline(
         myConfig: TaggerConfig,
@@ -150,38 +137,36 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
         let runExplicit: Bool = myConfig.parsingConfig.runExplicit
         
         
-        //        var seqLen: Int?
-        //        var maxWords: Int?
-        let modelArchitecture: ModelArchitecture = myConfig.parsingConfig.modelArchitecture
-        
-        //        folder: URL,
-        //        taggerName: String,
-        //        lemmatizerName: String,
-        //        computeUnits: MLComputeUnits = .all,
-        let tagRole: RNNTagRole = .upos
+        let tagRole: RNNTagRole = .xpos
         let normalizeToNFC: Bool = true
         let lowercaseLemmaInput: Bool = false
-        let tokenizer: ((String) throws -> [HashableSentence])? = nil
         
         let config = MLModelConfiguration()
         config.computeUnits = .all
         
-        let taggerModel = try await RNNPipelineLoader.loadMlpackage(named: "FR_rnn_model_rnn", myConfig: myConfig)
-        let encoderModel = try await RNNPipelineLoader.loadMlpackage(named: "FR_rnn_encoder_nmt", myConfig: myConfig)
-        let decoderStepModel = try await RNNPipelineLoader.loadMlpackage(named: "FR_rnn_decoder_step_nmt", myConfig: myConfig)
+//        guard let taggerFileName = Bundle.main.url(forResource: "\(languageCode)_rnn_vocab_rnn", withExtension: ".json" ) else {
+//            throw PipelineError.LoadingError.resourceMissing("\(languageCode)_rnn_vocab_rnn.json")
+//        }
+        await onProgress(1, "Loading tagger data")
+//        let tagMeta = try await JSONDecoder().decode(RNNTaggerMeta.self, from: Data(contentsOf: taggerFileName))
+        let tagMeta: RNNTaggerMeta = try await Bundle.main.safelyDecodeJson("\(languageCode)_rnn_vocab_rnn")
         
-        func json<T: Decodable>(_ name: String, as type: T.Type) throws -> T {
-            guard let url = Bundle.main.url(forResource: name, withExtension: ".json" ) else {
-                throw PipelineError.LoadingError.resourceMissing("\(name).json")
-            }
-            return try JSONDecoder().decode(T.self, from: Data(contentsOf: url))
-        }
         
-        let taggerName = "FR_rnn_vocab_rnn"
-        let lemmatizerName = "FR_"
-        let tagMeta = try json(taggerName, as: RNNTaggerMeta.self)
-        let lemMeta = try json(lemmatizerName, as: RNNLemmatizerMeta.self)
+        await onProgress(2, "Loading lemmatizer data")
+//        guard let lemmatizerFileName = Bundle.main.url(forResource: "\(languageCode)_rnn_encoder_vocab_nmt", withExtension: ".json") else {
+//            throw PipelineError.LoadingError.resourceMissing("\(languageCode)_rnn_encoder_vocab_nmt.json")
+//        }
+//        let lemMeta = try await JSONDecoder().decode(RNNLemmatizerMeta.self, from: Data(contentsOf: lemmatizerFileName))
+        let lemMeta: RNNLemmatizerMeta = try await Bundle.main.safelyDecodeJson("\(languageCode)_rnn_encoder_vocab_nmt")
         
+        await onProgress(3, "Loading tagger model")
+        let taggerModel = try await RNNPipelineLoader.loadMlpackage(named: "\(languageCode)_rnn_model_rnn", myConfig: myConfig)
+        
+        await onProgress(4, "Loading lemmatizer encoder")
+        let encoderModel = try await RNNPipelineLoader.loadMlpackage(named: "\(languageCode)_rnn_encoder_nmt", myConfig: myConfig)
+
+        await onProgress(5, "Loading lemmatizer decoder")
+        let decoderStepModel = try await RNNPipelineLoader.loadMlpackage(named: "\(languageCode)_rnn_decoder_step_nmt", myConfig: myConfig)
         
         return try await convertToRealRNNPipe(
             taggerModel: taggerModel,
@@ -199,33 +184,24 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
             lowercaseLemmaInput: lowercaseLemmaInput,
         )
     }
-    
-    
-    
-    
-    
-    
-    
-    
-    // MARK: - Pipeline
-    final class RNNPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableObject {
+}
+
+
+// MARK: - Pipeline
+final class RNNPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableObject {
         
         // members mirrored from CNNBiLSTMPipeline, in case PipelineHelper requires them
         var seqLen: Int = 999
         let description = "I'm an RNNTagger + NMT-lemmatiser pipeline"
         let maxWords: Int
         var runExplicit: Bool
-        //    internal var runExplicit: Bool {
-        //        UserDefaults.standard.bool(forKey: "runExplicit")
-        //    }
-        
-        // models and metadata
+
+    // models and metadata
         let taggerModel: MLModel
         private let encoderModel: MLModel
         private let stepModel: MLModel
         private let taggerMeta: RNNTaggerMeta
         private let lemmaMeta: RNNLemmatizerMeta
-        //    private let crfWeights: [Float]            // numTags * numTags, row-major; empty without CRF
         
         // behaviour switches
         private let tagRole: RNNTagRole
@@ -285,7 +261,6 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
             self.stepModel = stepModel
             self.taggerMeta = taggerMeta
             self.lemmaMeta = lemmaMeta
-            //        self.crfWeights = crfWeights
             self.runExplicit = runExplicitValue
             self.tagRole = tagRole
             self.normalizeToNFC = normalizeToNFC
@@ -328,7 +303,7 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
 //            }
 //            return sentences
 //        }
-        
+        // change this to perl implementation
         private static let tokenRegex = try! NSRegularExpression(
             pattern: #"[\p{L}\p{M}\p{N}]+(?:['’\-][\p{L}\p{M}\p{N}]+)*|[^\s\p{L}\p{M}\p{N}]"#)
         
@@ -459,7 +434,7 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
             cacheLock.unlock()
             return result
         }
-        
+        /// note :: RNN lemmatizer so stays here
         /// Source sequence: the letters of the word, "##", the letters of the tag (one symbol per Unicode scalar).
         /// Then run the encoder once and the decoder step greedily, as NMT.translate does.
         private func generateLemma(form: String, tag: String) throws -> String? {
@@ -575,5 +550,5 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
                     return constraint.shape[dimension].intValue
             }
         }
-    }
+    
 }

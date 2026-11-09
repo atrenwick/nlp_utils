@@ -32,6 +32,30 @@ extension Bundle {
         return normalizedText
     }
     
+    func safelyDecodeJson<T: Codable>(_ file: String) throws -> T {
+        
+        guard let url = self.url(forResource: file, withExtension: ".json") else {
+            throw PipelineError.LoadingError.resourceMissing("\(file).json")
+        }
+        guard let data = try? Data(contentsOf: url) else {
+            throw PipelineError.LoadingError.fileLoadError
+        }
+
+        let decoder = JSONDecoder()
+    
+        do {
+            let localData = Data(data)
+            return try decoder.decode(T.self, from: localData)
+            
+        } catch let error {
+            PrintWorkflow.printJSONError(error)
+
+            throw PipelineError.LoadingError.fileLoadError
+            }
+//            fatalError("Failed to decode \(file) from bundle due to missing key : \(key.stringValue)) - \(context.debugDescription)")
+    
+    }
+    
     func decode<T: Codable>(_ file: String) -> T {
         
         guard let url = self.url(forResource: file, withExtension: nil) else {

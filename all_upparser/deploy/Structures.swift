@@ -35,12 +35,17 @@ struct ConfigurationRules {
     // Define which languages are available per architecture
     static func availableLanguages(for architecture: ModelArchitecture) -> [Language] {
         switch architecture {
-            case .camembert, .roberta, .rnn:
-            return [.FR]
-        case .cnnBiLSTM:
-            return [.EN, .FR, .ANG, .DE, .FRM, .FRO].sorted {$0.rawValue < $1.rawValue}
-        case .distilbert:
-            return [.EN, .FR, .ANG, .DE, .FRM, .FRO].sorted {$0.rawValue < $1.rawValue}
+            case .camembert:
+                return [.FR]
+            case .rnn:
+                return [.EN, .FR, .ENM, .FRM, .FRO]
+            case .roberta:
+                return [.EN, .FR]
+            case .cnnBiLSTM:
+                return [.EN, .FR, .ANG, .DE, .FRM, .FRO].sorted {$0.rawValue < $1.rawValue}
+            case .distilbert:
+                return [.EN, .FR, .ANG, .DE, .FRM, .FRO].sorted {$0.rawValue < $1.rawValue}
+                
         }
     }
     
@@ -55,13 +60,28 @@ struct ConfigurationRules {
                 case .ANG: return [.angTB1]
                 case .FRM: return [.frmTB1]
                 case .FRO: return [.froTB1]
+                case .ENM: return [.enmTB1]
             }
-            case .camembert, .roberta, .rnn:
+            case .camembert:
             switch language {
             case .FR: return [.frTB1]
-            default : return [.frTB1]
+            default : return []
             }
             
+            case .roberta:
+                switch language{
+                    case .FR: return [.frTB1]
+                    case .EN: return [.enTB1]
+                    default: return []
+                }
+                
+            case .rnn:
+                switch language{
+                    case .FR: return [.frTB1]
+                    case .EN: return [.enTB1]
+                    default: return [.frTB1]
+                }
+                
         case .distilbert:
             switch language {
             case .FR: return [.frTB1, .frTB2, .frTB3]
@@ -70,6 +90,7 @@ struct ConfigurationRules {
             case .EN: return [.enTB1, .enTB2]
             case .FRM: return [.frmTB1]
             case .FRO: return [.froTB1]
+            case .ENM: return [.enmTB1]
             }
         }
     }
