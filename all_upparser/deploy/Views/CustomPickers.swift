@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+/// Customised Architecture picker for model architectures, with onChange modifiers
 struct ArchitecturePickerView: View{
     @Binding var myConfig: TaggerConfig
     
@@ -21,7 +22,7 @@ struct ArchitecturePickerView: View{
     }
 }
 
-
+/// Customised picker for languages with constraints on language and onChange modifiers
 struct ConstrainedPickerForLang: View{
     @Binding var myConfig: TaggerConfig
 
@@ -59,7 +60,7 @@ struct ConstrainedPickerForLang: View{
         }
     }
 }
-
+/// Customised picker for treebanks based on selected language, with fallbacks, default
 struct ConstrainedPickerForTB: View{
     @Binding var myConfig: TaggerConfig
     
@@ -86,7 +87,6 @@ struct ConstrainedPickerForTB: View{
     }
 }
 
-
 /////Similar pickers :: diff names, Binding, onChange logic
 // this gets used in SetDefaults, where myConfig doesn't exist
 struct ConstrainedLanguagePickerView<T: Hashable & CaseIterable & RawRepresentable & TreebankProvidable>: View
@@ -97,7 +97,7 @@ where T.RawValue == String, T.TreebankType == Language.Treebank {
     @Binding var selectedArchitecture: ModelArchitecture
 
     var availableLanguages: [Language] {
-        ConfigurationRules.availableLanguages(for: selectedArchitecture)//)myConfig.parsingConfig.modelArchitecture)
+        ConfigurationRules.availableLanguages(for: selectedArchitecture)
         }
 
     var body: some View{
@@ -113,6 +113,7 @@ where T.RawValue == String, T.TreebankType == Language.Treebank {
         }
     }
 }
+
 struct ConstrainedTreebankPickerView<T: Hashable & CaseIterable & RawRepresentable & TreebankProvidable>: View
 where T.RawValue == String, T.TreebankType == Language.Treebank {
     let title: String
@@ -173,6 +174,7 @@ struct DefaultPickerView<T: Hashable & CaseIterable & RawRepresentable>: View wh
     }
 }
 
+/// Toggle for Automatically match, detect filename-type
 struct MatchDetectToggleView: View{
     @Binding var myConfig: TaggerConfig
     @Binding var  fileContainerModel: SourceFileContainerModel

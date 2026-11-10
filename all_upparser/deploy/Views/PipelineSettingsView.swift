@@ -11,8 +11,6 @@ import Combine
 
 typealias PipelineKey = String
 
-
-
 struct PipelineSettingsView: View {
     @EnvironmentObject var pipelineCache: PipelineCache
     
@@ -36,7 +34,18 @@ struct PipelineSettingsView: View {
     @State var pipelineSummary: String = ""
     @State var currentStatus: String = ""
     // sentences ::
-    @State var builtSents: [BuiltSentHolder] = []
+    @State var builtSents: [BuiltSentHolder] = [
+        BuiltSentHolder(
+            tempToks: [
+                TempToken( form: "hello"),
+                TempToken(form:"there")
+            ]
+        ),
+        BuiltSentHolder(tempToks: [
+            TempToken(form:"there"),
+            TempToken( form: "hello")
+        ])
+    ]
     @State var sentsToRetokenise: [String] = []
     @State var exportContent: String = ""
     @State var currentPipelineLoaded: Bool = false
@@ -122,7 +131,6 @@ struct PipelineSettingsView: View {
                         //#endif
                         // MARK: the Go button
                         
-                        
                         Section{
                             Group{
                                 GoSectionUpperHalf(
@@ -152,7 +160,6 @@ struct PipelineSettingsView: View {
                                         currentPipelineDesc: $currentPipelineDesc,
                                         currentPipelineLoaded: $currentPipelineLoaded
                                     )
-                                    
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(bigButtonColor)
@@ -161,7 +168,6 @@ struct PipelineSettingsView: View {
                                 .disabled(taggingInProgress || !isPipelineReady)
                                 .padding()
                             }
-                            
                             
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 if taggingInProgress || 1 == 1 {
@@ -194,6 +200,11 @@ struct PipelineSettingsView: View {
                     
                     // MARK: toolbar :
                     .toolbar{
+                        if myConfig.inputData.builtSents.count > 0 {
+                            ToolbarItem(placement: .topBarTrailing){
+                                ManualTokenisationToolbarItem(myConfig: $myConfig, builtSents: $myConfig.inputData.builtSents)
+                            }
+                        }
                         ToolbarItem(placement: .topBarTrailing) {
                             ToolbarLinkToOutputExtractedView(
                                 myConfig: $myConfig,
@@ -207,8 +218,8 @@ struct PipelineSettingsView: View {
                         }
                     }
                 }
-                
                 .onAppear(perform: loadButtonColours)
+                
             
 //            .onChange(of: taggingInProgress) { oldValue, newValue in
 //                        if newValue == true {

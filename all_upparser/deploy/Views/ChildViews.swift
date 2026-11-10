@@ -5,13 +5,14 @@
 //  Created by Adam on 10/09/2026.
 // :: child views which get rendered in parent view :: all have ViewSection as part of name
 
-
 import SwiftUI
 internal import UniformTypeIdentifiers
-//look at built sentences
+
+///look at built sentences
 struct BuiltSentsViewer: View {
     @Binding var myConfig: TaggerConfig
     @Binding var builtSents:[BuiltSentHolder]
+    @State var showClearAllButton: Bool = false
     var body: some View{
         Form{
             ForEach($builtSents, id:\.self.id) { $sent in
@@ -28,11 +29,31 @@ struct BuiltSentsViewer: View {
                 }
             }
         }
+        .toolbar{
+            if builtSents.count > 0 {
+                ToolbarItem(placement: .topBarTrailing){
+                    Button{
+                        showClearAllButton = true
+                    } label: {
+                        // look like this
+                        Text("Clear all")
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Clear all" , isPresented: $showClearAllButton, titleVisibility: .visible){
+            Button("Clear all", role: .destructive){
+                builtSents = []
+            }
+            Button("Cancel", role: .cancel){ }
+        } message: {
+            Text("Clear all built sents")
+        }
     }
 }
-//choose which file to omport
+
+/// Choose the source file to get, parse
 struct ChooseInputFileViewSection: View {
-    // for choosing the source file to get, parse
     @State private var isSelectingFile: Bool = false
     @Binding var myConfig: TaggerConfig
     
@@ -73,7 +94,7 @@ struct ChooseInputFileViewSection: View {
         }
     }
 }
-//choose where to export file
+///choose where to export files
 struct ExportConfigViewSection: View {
     @State private var isSelectingFolder: Bool = false
     @State private var isProcessing: Bool = false
@@ -163,7 +184,7 @@ struct ExportConfigViewSection: View {
         }
     }
     private func setOutputDirTo(_ dir: ResetDirOption) {
-        // Re-assign  default bookmark URL back to the config instance
+        // Re-assign default bookmark URL back to the config instance
         switch dir {
         case .defaultvalue:
             myConfig.exportConfig.targetFolderURL = PipelineServices.ExporterService.resolveDefaultBookmark()
@@ -177,7 +198,7 @@ struct ExportConfigViewSection: View {
 //    ExportConfigViewSection(myConfig: $myConfig)
 //}
 
-// set name of file to export
+/// set name of file to export
 struct FileNameInputViewSection: View {
     // contains TextField for entering name of file to export
     @Binding var myConfig: TaggerConfig
@@ -213,8 +234,6 @@ struct FileNameInputViewSection: View {
 }
 
 ///BigGoButtonReadinessExtractedView is the alert section that appears based on `missingReqsMessage` which is a calculated property
-
-
 struct GoSectionUpperHalf: View{
     @Binding var currentStatus: String
     @Binding var isLoading: Bool
@@ -227,8 +246,7 @@ struct GoSectionUpperHalf: View{
     let missingReqsMessage: String
     
     var body: some View {
-        // this has calculated property auto-hiding, showing, based on config.
-        // the same value (de)activates the button, in its own view
+        /// this has calculated property auto-hiding, showing, based on config ; same value (de)activates the button, in its own view
         BigGoButtonReadinessExtractedView(
             isPipelineReady: isPipelineReady,
             missingReqsMessage: missingReqsMessage
@@ -253,16 +271,20 @@ struct GoSectionUpperHalf: View{
     }
 }
 
-// view for choosing input file type
+/// view for choosing input file type
 struct InputFileViewEncapsulator: View {
     @Binding var myConfig: TaggerConfig
     @Binding var builtSents: [BuiltSentHolder]
     @Binding var tempTokens: [TempToken]
     let fileContainerModel: SourceFileContainerModel
+
+    var linkDisplayString: String {
+        builtSents.count > 0 ? "Manual entry:             \(builtSents.count) sents" : "Manual entry…"
+    }
     var body: some View{
         if myConfig.inputConfig.inputFileType == .manual {
             Section {
-                NavigationLink("Manual entry…"){
+                NavigationLink(linkDisplayString){
                     ManualTokenisationView(
                         myConfig: $myConfig,
                         builtSents: $builtSents,
@@ -277,7 +299,8 @@ struct InputFileViewEncapsulator: View {
         }
     }
 }
-//list of output files
+
+///list of output files
 struct OutputFileListView: View{
     let runOutputFileList: [OutputFileListHelper]
     var body: some View{
@@ -290,10 +313,10 @@ struct OutputFileListView: View{
         }
     }
 }
-// list of output lines
+
+/// list of output lines
 struct OutputLinesExtractedView: View {
     let outputLines: [String]
-    
     private var visibleSents: [String] {
         Array(outputLines.prefix(50))
     }
@@ -313,7 +336,8 @@ struct OutputLinesExtractedView: View {
         .cornerRadius(8)
     }
 }
-// look at pretok sents
+
+/// View for looking at pretokenized sentences
 struct PretokenisedSentExtractedView : View {
     @Binding var pretokSentsOut: [HashableSentence]
     var body: some View{
@@ -336,11 +360,12 @@ struct PretokenisedSentExtractedView : View {
         pretokSentsOut.remove(atOffsets: offsets)
     }
 }
-// edit tok
+
+/// View to edit tokenisation with form
 struct TokenisationEditView: View {
     @Binding var toks: [TempToken]
-    @FocusState var isFocused
     @Binding var myConfig: TaggerConfig
+    @FocusState var isFocused
     var insertImage: String { (myConfig.parsingConfig.insertNewTokPosition == .before) ? "arrow.turn.left.up" : "arrow.turn.left.down"}
     
     var body: some View {
@@ -388,6 +413,7 @@ struct TokenisationEditView: View {
 /////////////////////////////////////////         VIEW ELEMENTS AND SUBPARTS       ///////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+///Show the not-ready warning messages
 struct BigGoButtonReadinessExtractedView: View{
     let isPipelineReady: Bool
     let missingReqsMessage: String
@@ -409,6 +435,7 @@ struct BigGoButtonReadinessExtractedView: View{
     }
 }
 
+/// Picker for input types and its onChange modifiers
 struct InputTypeExtractedView: View{
     @Binding var myConfig: TaggerConfig
     @Binding var fileContainerModel: SourceFileContainerModel
@@ -435,6 +462,7 @@ struct InputTypeExtractedView: View{
     }
 }
 
+///View for set of buttons to run test load functions
 struct RunExplicitButtonExtractedView: View{
     @Binding var myConfig: TaggerConfig
     @State var outputString: String = "not yet run"
@@ -465,11 +493,12 @@ struct RunExplicitButtonExtractedView: View{
     }
 }
 
+/// View to specify where to start processing sents : @ sent0, 1, 2…
 struct TaggingOffsetParamsView: View{
     @Binding var allRunOutputs: [RunOutput]
     @Binding var requestedOffset: Int
     @State var usePreviousRun: Bool = false
-    
+    /// is there a previous run which might be able to be resumed
     var previousRun: [RunOutput] {
         if allRunOutputs.count == 0 {
             return []
@@ -484,6 +513,7 @@ struct TaggingOffsetParamsView: View{
             }
         }
     }
+    /// determine if a previous run that does exist is actually resumable
     var previousResumable: Bool{
         if previousRun.count >= 1  && previousRun[0].runMetas.processingStatus.interruptRequested == "True" {
             return true
@@ -512,6 +542,7 @@ struct TaggingOffsetParamsView: View{
     }
 }
 
+/// visual of the button to push to run the pipeline
 struct TaggingProgressButtonExtractedView: View{
     @EnvironmentObject var pipelineCache: PipelineCache
     let taggingInProgress: Bool
@@ -547,10 +578,9 @@ struct TaggingProgressButtonExtractedView: View{
             .frame(maxWidth: .infinity)
             .padding()
         }
-       
     }
-    
 }
+
 //#Preview{
 //    @Previewable let isPipelineReady: Bool = true
 //    @Previewable let taggingInProgress: Bool = false
@@ -566,7 +596,7 @@ struct TaggingProgressButtonExtractedView: View{
 //        previous: 2)
 //}
 
-
+/// Navigation link + image to RunOutput view
 struct ToolbarLinkToOutputExtractedView: View {
     @Binding var myConfig: TaggerConfig
     @Binding var allRunOutputs: [RunOutput]
@@ -600,5 +630,3 @@ struct ToolbarLinkToOutputExtractedView: View {
         }
     }
 }
-
-    

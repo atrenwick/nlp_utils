@@ -7,8 +7,6 @@
 import Foundation
 import CoreML
 
-
-
 enum LemmatizerError: Error {
     case modelLoadFailed(String)
     case resourceMissing(String)
@@ -20,25 +18,18 @@ struct LemmaVocabs: Codable {
     let upos: [String]
 }
 
-
 //MARK: lemmatizer runner :
-
 final class LemmatizerRunner {
-
     private let encoder: MLModel
     private let decoderStep: MLModel
-
     private let charStoi: [String: Int]
     private let charItos: [String]
     private let uposStoi: [String: Int]
-
     private let padId: Int
     private let unkId: Int
     private let bosId: Int
     private let eosId: Int
-
     private let lemmaDict: [String: String]
-
     private let maxLemmaLen = 40    // Must match MAX_SRC_LEN in convert_lemmatizer.py :: 32 for FR, 40 for EN
     private let maxSrcLen = 40 // :: 32 for FR, 40 for EN
 
@@ -105,9 +96,8 @@ final class LemmatizerRunner {
     }
 
     // ------------------------------------------------------------------------
-    // Neural fallback: run the encoder once, then loop the decoder step.
+    //MARK: Neural fallback: run the encoder once, then loop the decoder step.
     // ------------------------------------------------------------------------
-
     private func neuralLemmatize(form: String, upos: String) throws -> String {
         let rawIds = try form.lowercased().map { char -> Int in
             let s = String(char)
@@ -122,8 +112,7 @@ final class LemmatizerRunner {
         while srcIds.count < maxSrcLen { srcIds.append(padId) }
 
         let uposId = uposStoi[upos] ?? 0
-
-        // --- Encoder pass ----------------------------------------------------
+        //MARK: --- Encoder pass ----------------------------------------------------
         let srcArray = try MLMultiArray(shape: [1, NSNumber(value: maxSrcLen)], dataType: .int32)
         for (i, id) in srcIds.enumerated() { srcArray[[0, i] as [NSNumber]] = NSNumber(value: id) }
 
@@ -148,7 +137,7 @@ final class LemmatizerRunner {
             throw LemmatizerError.modelLoadFailed("encoder output missing expected fields:: see func neuralLemmatize")
         }
 
-        // --- Decoder loop ------------------------------------------------------
+        //MARK: --- Decoder loop ------------------------------------------------------
         var curCharId = bosId
         var outputChars: [String] = []
 
@@ -176,8 +165,7 @@ final class LemmatizerRunner {
             if nextId != padId && nextId != bosId && nextId != unkId {
                 outputChars.append(charItos.indices.contains(nextId) ? charItos[nextId] : "")
             } else if nextId == unkId {
-                // Model was unsure of this character; skip rather than
-                // inserting a literal "<unk>" into the lemma.
+                // Model was unsure of this character; skip rather than inserting literal "<unk>" into the lemma.
             }
 
             curCharId = nextId

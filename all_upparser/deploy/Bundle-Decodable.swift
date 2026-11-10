@@ -8,8 +8,10 @@
 import Foundation
 import libxml2
 
+/// methods to define helper functions to load and/or decode text, json and XML
 extension Bundle {
-    
+
+    /// safely open and return the text of a text file
     func loadText(_ file: String, format: String) throws -> String {
         let normalizedText: String
         guard let url = self.url(forResource: file, withExtension: nil) else {
@@ -28,48 +30,40 @@ extension Bundle {
         } else {
             normalizedText = text
         }
-
         return normalizedText
     }
     
+    /// safely open and return decoded contents of a JSON file
     func safelyDecodeJson<T: Codable>(_ file: String) throws -> T {
-        
         guard let url = self.url(forResource: file, withExtension: ".json") else {
             throw PipelineError.LoadingError.resourceMissing("\(file).json")
         }
         guard let data = try? Data(contentsOf: url) else {
             throw PipelineError.LoadingError.fileLoadError
         }
-
         let decoder = JSONDecoder()
-    
         do {
             let localData = Data(data)
             return try decoder.decode(T.self, from: localData)
-            
         } catch let error {
             PrintWorkflow.printJSONError(error)
-
             throw PipelineError.LoadingError.fileLoadError
             }
-//            fatalError("Failed to decode \(file) from bundle due to missing key : \(key.stringValue)) - \(context.debugDescription)")
-    
     }
-    
+    /// decode JSON file with decoding-error catching
     func decode<T: Codable>(_ file: String) -> T {
-        
         guard let url = self.url(forResource: file, withExtension: nil) else {
             fatalError("Failed to locate \(file) in the bundle")
         }
         guard let data = try? Data(contentsOf: url) else {
             fatalError("Failed to load \(file)")
         }
-
+        
         let decoder = JSONDecoder()
         let formatter = DateFormatter()
         formatter.dateFormat = "y-MM-dd"
         decoder.dateDecodingStrategy = .formatted(formatter)
-    
+        
         do {
             let localData = Data(data)
             return try decoder.decode(T.self, from: localData)
@@ -78,11 +72,10 @@ extension Bundle {
             fatalError("Failed to decode \(file) from bundle due to missing key : \(key.stringValue)) - \(context.debugDescription)")
             do {
                 let _ = try JSONSerialization.jsonObject(with: data)
-            }
-            catch {
+            } catch {
                 PrintWorkflow.printJSONError(error)
             }
-
+            
         } catch DecodingError.typeMismatch(_, let context){
             print("📍 Coding path:", context.codingPath)
             print("📄 Debug:", context.debugDescription)
@@ -106,8 +99,7 @@ extension Bundle {
             fatalError("Failed to decode file \(file) : the file is not valid JSON:: \(context)")
             do {
                 let _ = try JSONSerialization.jsonObject(with: data)
-            }
-            catch {
+            } catch {
                 PrintWorkflow.printJSONError(error)
             }
         } catch {
@@ -115,6 +107,7 @@ extension Bundle {
         }
     }
     
+    /// safely return the contents of an XML document as n xmlDoc pointer
     func decodeXML(_ file: String) -> xmlDocPtr {
         guard let url = self.url(forResource: file, withExtension: nil) else {
             fatalError("Failed to locate \(file) in bundle.")
@@ -124,6 +117,4 @@ extension Bundle {
         }
         return doc
     }
-
 }
-

@@ -7,7 +7,8 @@
 
 import Foundation
 import Combine
-// cache object to hold the currently loaded pipeline, allow verification of change
+
+/// cache object to hold the currently loaded pipeline and allow verification of change
 @MainActor
 final class PipelineCache: ObservableObject {
     let objectWillChange = ObservableObjectPublisher()
@@ -20,34 +21,29 @@ final class PipelineCache: ObservableObject {
         pipeline = nil
         key = nil                            // else release the old one FIRST
         isLive = false
-            return nil
+        return nil
     }
     func store(_ newPipeline: any PipelineHelper, key newKey: String) {
         print("running store function")
-            pipeline = newPipeline
-            key = newKey
-            isLive = true
+        pipeline = newPipeline
+        key = newKey
+        isLive = true
         print("live status inside func == \(isLive)")
-        }
+    }
     func evict() { pipeline = nil; key = nil }
     init(){}
-    
 }
 
-
-//MARK: 1 class for interacting with sandbox
+/// class for interacting with the sandbox
 @Observable
 class SourceFileContainerModel {
     // to make a shared, mutable state container across multiple views -->> use Class
     var localSandboxFileURL: URL?
-    
-    var selectedFileName: String {
-        localSandboxFileURL?.lastPathComponent ?? "No file selected"
-    }
+    var selectedFileName: String { localSandboxFileURL?.lastPathComponent ?? "No file selected" }
 }
 
 //MARK: 2 : Classes: for loading, decoding, parsing
-//define the vocab class
+///define the vocab class used for input vocabs from ML models used in BERT-like pipes, CNN-BiLSTM
 final class Vocab {
     let itos: [String]
     let stoi: [String: Int]
@@ -65,14 +61,8 @@ final class Vocab {
     }
 
     var unkId: Int { stoi[unk] ?? 1 }
-
-    func encode(_ token: String) -> Int {
-        stoi[token] ?? unkId
-    }
-
-    func decode(_ id: Int) -> String {
-        (id >= 0 && id < itos.count) ? itos[id] : unk
-    }
+    func encode(_ token: String) -> Int {  stoi[token] ?? unkId  }
+    func decode(_ id: Int) -> String { (id >= 0 && id < itos.count) ? itos[id] : unk }
 
     //func to get path to file, load, decode and return decoded data based on name of json file
     static func load(named name: String, bundle: Bundle = .main) throws -> Vocab {
@@ -85,17 +75,23 @@ final class Vocab {
     }
 }
 
-//NOTE for parser, delegate, class :::  `parser` functions below aren't strictly overloaded : functs can have same basename IF full function signatures are different :: each function  corresponds to a distinct lifecycle event that XMLParser needs to report to its delegate — names are required too - parser is the name of one of the 'behind the scenes' functions in the XMLParser I want the delegate to call
-
-//XML parsing looking for s elements ->> used for XML-CONLL parsing:: get s block, text == s.text
+///XML parsing looking for s elements ->> used for XML-CONLL parsing:: get s block, text == s.text
+/// The class has three parser functions differing by signature and operations based on start sent, in sentence or end of sent
+/// These functions are slightly different from those in the SWParser class, as they differ by guard conditions, s + w presence, and are kept separate for simplicity.
+///NOTE for parser, delegate, class :::  `parser` functions below are overloaded : functs can have same basename IF full function signatures are different :: each function  corresponds to a distinct lifecycle event that XMLParser needs to report to its delegate — names are required too - parser is the name of one of the 'behind the scenes' functions in the XMLParser I want the delegate to call
 class SParser: NSObject, XMLParserDelegate {
     var results: [XMLConllElement] = []
     private var currentID: String?
     private var currentText: String = ""
     private var insideS = false
 
-    func parser(_ parser: XMLParser, didStartElement elementName: String,
-                namespaceURI: String?, qualifiedName: String?, attributes: [String: String]) {
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName: String?,
+        attributes: [String: String]
+    ) {
         if elementName == "s" {
             insideS = true
             currentID = attributes["id"]
@@ -117,55 +113,66 @@ class SParser: NSObject, XMLParserDelegate {
     }
 }
 
+///XML parsing looking for s AND w elements ->> used for full XML parsing:: get s block, & w block ; text == s.text, w = word
+/// The class has three parser functions differing by signature and operations based on start sent, in sentence or end of sent
+/// These functions are slightly different from those in the SWParser class, >> guard conditions, s + w presence, and are kept separate for simplicity.
+///NOTE for parser, delegate, class ::: `parser` functions below are overloaded : functs can have same basename IF full function signatures are different :: each function corresponds to a distinct lifecycle event that XMLParser needs to report to its delegate — names are required too - parser is the name of one of the 'behind the scenes' functions in the XMLParser I want the delegate to call
 
 class SWParser: NSObject, XMLParserDelegate {
     var results: [HashableSentence] = []
-
     private var currentSID: String?
     private var currentTokens: [String] = []
     private var insideS = false
     private var insideW = false
     private var currentTokText: String = ""
 
-    func parser(_ parser: XMLParser, didStartElement elementName: String,
-                namespaceURI: String?, qualifiedName: String?, attributes: [String: String]) {
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName: String?,
+        attributes: [String: String]
+    ) {
         switch elementName {
         case "s":
             insideS = true
             currentSID = attributes["id"]
             currentTokens = []
-
         case "w":
             guard insideS else { return }
             insideW = true
             currentTokText = ""   // w's own id (attributes["id"]) is available here if needed later
-
         default:
             break
         }
     }
 
-    func parser(_ parser: XMLParser, foundCharacters string: String) {
+    func parser(
+        _ parser: XMLParser,
+        foundCharacters string: String
+    ) {
         guard insideW else { return }
         currentTokText += string
     }
 
-    func parser(_ parser: XMLParser, didEndElement elementName: String,
-                namespaceURI: String?, qualifiedName: String?) {
+    func parser(
+        _ parser: XMLParser,
+        didEndElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName: String?
+    ) {
         switch elementName {
-        case "w":
-            guard insideS, insideW else { return }
-            currentTokens.append(currentTokText)
-            insideW = false
-
-        case "s":
-            guard let id = currentSID else { return }
-            print("have sent :: tokens == \(currentTokens.count)")
-            results.append(HashableSentence(id: id, tokens: currentTokens, conllMetas: []))
-            insideS = false
-
-        default:
-            break
+            case "w":
+                guard insideS, insideW else { return }
+                currentTokens.append(currentTokText)
+                insideW = false
+            case "s":
+                guard let id = currentSID else { return }
+                print("have sent :: tokens == \(currentTokens.count)")
+                results.append(HashableSentence(id: id, tokens: currentTokens, conllMetas: []))
+                insideS = false
+            default:
+                break
         }
     }
 }

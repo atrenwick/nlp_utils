@@ -9,6 +9,16 @@ import SwiftUI
 internal import UniformTypeIdentifiers
 import CoreML
 
+struct SentencePieceEncodedSentence: BERTpipeEncodedSentence {
+    let inputIDs: [Int32]       // length seqLen
+    let wordIndex: [Int32]      // length maxWords
+    let wordCount: Int          // real words, without the ROOT slot
+    let length: Int             // real tokens in inputIDs, including <s> and </s>
+    let pieces: [[String]]?
+    /// Rows/columns of each model output that are meaningful (words + ROOT).
+    var validSlots: Int { wordCount + 1 }
+}
+
 // MARK: - tokenizer.json (Hugging Face fast tokenizer) decoding
 private struct SentencePieceTokenizerFile: Decodable {
     struct Model: Decodable {
@@ -122,14 +132,23 @@ final class SentencePieceTokenizer: SubwordEncoder, BERTlikeTokenizerHelper {
         ids.append(endID)
 
         guard ids.count <= seqLen, wordIndex.count <= maxWords else {
-            throw PipelineError.SentencePieceTokenizerError.tooLong(subwords: ids.count, seqLen: seqLen,
-                                         slots: wordIndex.count, maxWords: maxWords)
+            throw PipelineError.SentencePieceTokenizerError.tooLong(
+                subwords: ids.count,
+                seqLen: seqLen,
+                slots: wordIndex.count,
+                maxWords: maxWords
+            )
         }
         let length = ids.count
         ids += [Int32](repeating: padID, count: seqLen - ids.count)
         wordIndex += [Int32](repeating: -1, count: maxWords - wordIndex.count)
-        return SentencePieceEncodedSentence(inputIDs: ids, wordIndex: wordIndex,
-                                            wordCount: words.count, length: length, pieces: showPieces ? pieceStrings : nil)
+        return SentencePieceEncodedSentence(
+            inputIDs: ids,
+            wordIndex: wordIndex,
+            wordCount: words.count,
+            length: length,
+            pieces: showPieces ? pieceStrings : nil
+        )
     }
 
     /// Approximates SentencePiece's nmt_nfkc normalizer: NFKC, then whitespace
@@ -200,4 +219,3 @@ final class SentencePieceTokenizer: SubwordEncoder, BERTlikeTokenizerHelper {
         return result
     }
 }
-

@@ -125,4 +125,3 @@ struct ProcessorStepConfigViewSection: View {
     @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
     ProcessorStepConfigViewSection(myConfig: $myConfig)
 }
-

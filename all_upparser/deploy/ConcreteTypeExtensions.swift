@@ -9,8 +9,7 @@ import Foundation
 import SwiftUI
 internal import UniformTypeIdentifiers
 
-
-// use collection as need to get .Count
+/// use collection as need to get .Count
 extension Collection where Element == TempToken {
     
     func makeHashableSentFromTestToks()-> HashableSentence?{

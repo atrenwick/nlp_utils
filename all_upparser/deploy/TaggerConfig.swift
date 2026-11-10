@@ -131,7 +131,6 @@ struct TaggerConfig{
         ) {
             self.fileName = TaggerConfig.resolveString(passed: fileName, key: "fileName") == "" ? GeneralOutputMakingWorkflow.makeFilename() : TaggerConfig.resolveString(passed: fileName, key: "fileName")
             self.targetFolderURL = PipelineServices.ExporterService.resolveDefaultBookmark()
-            
             self.selectedExportFormat = TaggerConfig.resolveRawRep(passed: selectedExportFormat, key: "selectedExportFormatDefault", fallback: .xml )
             self.xmlAuthorName = TaggerConfig.resolveString(passed: xmlAuthorName, key: "xmlAuthorDefault" )
             self.xmlTitle = TaggerConfig.resolveString(passed: xmlTitle, key: "xmlTitleDefault")
@@ -186,7 +185,6 @@ struct TaggerConfig{
             self.interruptRequested = false
             self.processingStatus = ProcessingStatus.notstarted
         }
-        
         mutating func reset(){
             self.appleProgress = Progress(totalUnitCount: 1)
             self.startTime = nil
@@ -214,8 +212,7 @@ struct TaggerConfig{
             builtSents: [BuiltSentHolder]? = nil,
             sentsToRetokenise: [String]? = nil,
             resentencizerOutputStrings: [String]? = nil,
-        )
-        {
+        ) {
             self.allSentences = []
             self.builtSents = []
             self.sentsToRetokenise = []
@@ -225,9 +222,7 @@ struct TaggerConfig{
             self.allSentences = []
             self.sentsToRetokenise = []
             self.resentencizerOutputStrings = []
-
         }
-        
         mutating func fullReset(){
             self = Self()
         }
@@ -276,7 +271,7 @@ struct TaggerConfig{
         // Check if key exists, otherwise return the fallback default
         return UserDefaults.standard.object(forKey: key) != nil ? UserDefaults.standard.bool(forKey: key) : fallback
     }
-    // for strings,
+    /// for strings,
     static func resolveString(passed: String?, key: String, default fallback: String = "") -> String {
         if let value = passed { return value }
         return UserDefaults.standard.string(forKey: key) ?? fallback
@@ -295,8 +290,7 @@ struct TaggerConfig{
         static func resolveRawRep<T: RawRepresentable>(passed: T?, key: String, fallback: T) -> T where T.RawValue == Int {
         if let value = passed { return value }
         
-        // Note: Using object(forKey:) as? Int avoids UserDefaults' default '0' bug
-        // if the key hasn't been saved yet.
+        // Note: Using object(forKey:) as? Int avoids UserDefaults' default '0' bug  if the key hasn't been saved yet.
         if let savedInt = UserDefaults.standard.object(forKey: key) as? Int,
            let enumValue = T(rawValue: savedInt) {
             return enumValue
@@ -314,6 +308,5 @@ struct TaggerConfig{
         }
         outputData.reset() // full reinit
         print("Running resetters")
-        
     }
 }

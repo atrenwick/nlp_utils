@@ -8,7 +8,6 @@
 import Foundation
 
 enum PipelineError: LocalizedError{
-    
     // MARK: - Errors
     enum TokPieceError: Error, LocalizedError {
         case vocabUnreadable(URL)
@@ -97,8 +96,8 @@ enum PipelineError: LocalizedError{
         case modelLoadFailed(Error)
         case packageLoadFailed(String)
         case resourceMissing(String)
-        case decodeError(String, String)
-
+        case decodeError(String, String, String)
+        
         var errorDescription: String? {
             switch self{
             case .configFileLoadError(let filename):
@@ -107,10 +106,8 @@ enum PipelineError: LocalizedError{
                 return "Failed to load file"
             case .resourceMissing(let name):
                 return "Missing resource: \(name)"
-                case .decodeError(let key, let value):
-                    return "Key "
-                    //            fatalError("Failed to decode \(file) from bundle due to missing key : \(key.stringValue)) - \(context.debugDescription)")
-
+            case .decodeError(let key, let context, let filename):
+                return ("Failed to decode \(filename) from bundle due to missing key : \(key)) - \(context.debugDescription)")
             case .modelLoadFailed(let error):
                 return "Couldn't load the model: \(error.localizedDescription)"
             case .packageLoadFailed(let name):

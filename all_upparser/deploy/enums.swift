@@ -40,8 +40,8 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .roberta: return "ROB"
         }
     }
-    
 }
+
 enum ConllLineContent {
     case row(Token)
     case blank
@@ -73,7 +73,6 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
 
 enum InputFileType: String, Identifiable, CaseIterable, Codable {
     var id: Self { self }
-    
     case conll
     case txt
     case xml
@@ -86,6 +85,7 @@ enum InputFileType: String, Identifiable, CaseIterable, Codable {
         case .conll, .xml, .xmlConll, .manual: return true
         }
     }
+
     var fileExtension: String{
         //extensionto use when writing
         switch self{
@@ -95,6 +95,7 @@ enum InputFileType: String, Identifiable, CaseIterable, Codable {
         case .manual : "_"
         }
     }
+
     var allowedReadExt: [String]{
         switch self{
         case .txt: return ["txt","TXT"]
@@ -128,7 +129,6 @@ enum Language: String, CaseIterable, Identifiable {
     case ENM
     
     var id: Self { self }
-    
     var displayName: String {
         switch self {
         case .EN: return "en"
@@ -210,10 +210,8 @@ enum Language: String, CaseIterable, Identifiable {
             case .angTB1: return "OED"
             case .froTB1, .frmTB1: return "PRO"
             case .enmTB1: return "RNN"
-
             }
         }
-        
         var short: String {
             // RHS of model files and Picker strings
             switch self {
@@ -227,7 +225,6 @@ enum Language: String, CaseIterable, Identifiable {
             case .angTB1: return "oedt"
             case .froTB1, .frmTB1: return "profiterole"
             case .enmTB1: return "RNN"
-
             }
         }
     }
@@ -240,7 +237,6 @@ enum Language: String, CaseIterable, Identifiable {
         case .FRM: return [.distilbert, .rnn, .cnnBiLSTM]
         case .FRO: return [.distilbert, .rnn, .cnnBiLSTM]
         case .DE : return [.cnnBiLSTM, .distilbert]
-//        default: return [.cnnBiLSTM, .distilbert]
         }
     }
     
@@ -273,8 +269,6 @@ enum LemmaSource: String, CaseIterable, Identifiable{
     }
 }
 
-
-
 enum OnSentResultType: String, RawRepresentable, CaseIterable{
     var id : Self {self}
     case empty
@@ -285,18 +279,18 @@ enum OnSentResultType: String, RawRepresentable, CaseIterable{
 }
 
 enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
-    // RawValue type (Int) links each case to an integer (1, 2, 3, 4).
-    // Comparable conformance allows using <, >, <=, >= on enum cases.
-    // step1 is tokenisation, and is handled with diff pipe
+    /// RawValue type (Int) links each case to an integer (1, 2, 3, 4).
+    /// Comparable conformance allows using <, >, <=, >= on enum cases.
+    /// step1 is tokenisation, and is handled with diff pipe
     case step2 = 2
     case step3 = 3
     case step4 = 4
     case step5 = 5
     
-    // raw value = id, to conform to Identifiable
+    /// raw value = id, to conform to Identifiable
     var id: Int { rawValue }
     
-    // Computed property: evaluates 'self' on demand and returns the matching  string
+    /// Computed property: evaluates 'self' on demand and returns the matching  string
     var title: String {
         switch self {
         case .step2: return "2. POS tag"
@@ -305,7 +299,7 @@ enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
         case .step5: return "5. DepParse"
         }
     }
-    // required for Comparable : Swift expects this to build other comparison operattions
+    /// required for Comparable : Swift expects this to build other comparison operattions
     static func < (lhs: PipelineStep, rhs: PipelineStep) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
@@ -379,12 +373,13 @@ enum ResetDirOption{
     case sandbox
 }
 
+/// skip is special case for txt parsed from raw file - is already Hashable, so skip by toggling value
 enum RetokenisationType: String, Identifiable, CaseIterable, Codable{
     var id: Self {self}
     case predict = "Predict"
     case manual = "Manual"
     case rule = "Rule"
-    case skip = "skip" // special case for txt parsed from raw file - is already Hashable, so skip by toggling value
+    case skip = "skip"
     }
 
 enum SentencizingMethod: String, Identifiable, CaseIterable, Codable {
@@ -417,4 +412,3 @@ enum TokenizingMethod : String, Identifiable, CaseIterable, Codable{
     case manual = "Manual"
     case skip = "Skip"
 }
-

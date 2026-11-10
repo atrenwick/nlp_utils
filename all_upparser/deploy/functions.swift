@@ -1251,7 +1251,6 @@ enum PrintWorkflow{
         let content = myLines.joined(separator: "")
         try content.write(to: newUrl, atomically: true, encoding: .utf8)
         print("Saved CoNLL dump to: \(newUrl.path)")
-        
         return newUrl
     }
     
