@@ -16,10 +16,7 @@ struct TaggerApp: App {
     init() {
         // Ensure the runs directory exists the second the app opens
         try? PipelineServices.ResultStorageManager.getRunsDirectory()
-        
     }
-    
-
     
     var body: some Scene {
         WindowGroup {
@@ -31,12 +28,8 @@ struct TaggerApp: App {
                 Tab("Settings", systemImage: "slider.horizontal.3"){
                     SetDefaultsView()
                 }
-//                Tab("test", systemImage: "testtube.2"){
-//                    BertPipelineSettingsTestView()
-//            }
             }.environmentObject(pipelineCache)
         }
     }
 }
-
 

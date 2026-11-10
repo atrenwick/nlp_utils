@@ -6,7 +6,6 @@
 //
 import SwiftUI
 
-// detail for each run == child
 struct RunOutputDetailView: View{
     @Environment(\.openURL) var openURL
 
@@ -153,8 +152,7 @@ struct RunOutputDetailView: View{
                 get: {alertMessage != nil},
                 set: {if !$0 {alertMessage = nil}}
             )
-        )
-        {
+        ) {
             Button("OK", role: .cancel) { }
         } message: {
             Text(alertMessage ?? "")
@@ -306,7 +304,6 @@ struct RunSelectorModal: View {
 
     private func loadRunSummaries() {
         guard let runsDir = try? PipelineServices.ResultStorageManager.getRunsDirectory() else { return }
-        
         do {
             let contents = try FileManager.default.contentsOfDirectory(
                 at: runsDir,
@@ -371,6 +368,7 @@ struct RunErrorSummaryView: View{
             }
         }
     }
+    
     func makeSentStartString(num: Int, item: OutputError)-> String{
         let numStr = String(num+1)
         let tokChunk = item.sentence.tokens.prefix(5).joined(separator: " ")

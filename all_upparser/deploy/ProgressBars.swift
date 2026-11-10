@@ -11,7 +11,6 @@ import SwiftUI
 enum ProgressBarStyle: String, CaseIterable, Identifiable {
     case tqdm = "tqdm"
     case apple = "Apple"
-
     var id: String { rawValue }
 }
 
@@ -53,7 +52,6 @@ struct TqdmProgressView: View {
             let remaining = rate > 0 ? Double(myConfig.progressConfig.totalCount - myConfig.progressConfig.processedCount) / rate : 0
             rateSuffix = String(format: ", %.1fit/s, ETA %ds", rate, Int(remaining))
         }
-
         return "\(percent)%|\(bar)| \(myConfig.progressConfig.processedCount)/\(myConfig.progressConfig.totalCount)\(rateSuffix)"
     }
 }
@@ -80,7 +78,6 @@ struct AppleProgressView: View {
     }
 
     var safePercent: String {
-        
         if myConfig.progressConfig.totalCount == myConfig.progressConfig.processedCount {
             if myConfig.progressConfig.processedCount == 0 {return "0" } else { return "100"}
         } else {
@@ -91,7 +88,7 @@ struct AppleProgressView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Row 1: Percentage completed (leading) + Speed (trailing)
+            ///  Percentage completed (leading) + Speed (trailing)
             HStack {
                 Text("\(safePercent )% completed")
                 Spacer()
@@ -100,10 +97,10 @@ struct AppleProgressView: View {
             .font(.callout)
             .foregroundColor(.primary)
             
-            // Row 2: Progress Bar driven by substructure values
+            /// Progress Bar driven by substructure values
             ProgressView(value: Double(myConfig.progressConfig.processedCount), total: Double(myConfig.progressConfig.totalCount))
             
-            // Row 3: Current item count (leading) + ETA (trailing)
+            /// Current item count (leading) + ETA (trailing)
             HStack {
                 Text("\(myConfig.progressConfig.processedCount) of \(myConfig.progressConfig.totalCount)")
                 Spacer()

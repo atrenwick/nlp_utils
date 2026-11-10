@@ -4,193 +4,10 @@ import Foundation
 import NaturalLanguage
 import Combine
 
-
-
-
-
-// this is the loader - not designed to persist or be used for prediction
-final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
-    // 1. Published properties for UI progress meter to track
-    @Published var loadingProgress: Double = min(1.0, 0.0)
-    @Published var statusMessage: String = "Waiting to load..."
-    @Published var loadingComplete: Bool = false
-    
-    // 2. The heavy properties are now optional 'var's, populated during async loading
-    var tokenizerModel: MLModel?
-    var taggerModel: MLModel?
-    var lemmatizerRunner: LemmatizerRunner?
-    
-    var tokenizerCharVocab: Vocab?
-    var wordVocab: Vocab?
-    var taggerCharVocab: Vocab?
-    var uposVocab: Vocab?
-    var featsVocab: Vocab?
-    var deprelVocab: Vocab?
-    var lemmaRuleVocab: Vocab?
-    
-    // lightweight properties
-    static let rootToken = "<root>"
-    static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
-    let maxWords: Int = 256
-    private var runExplicit: Bool {
-        UserDefaults.standard.bool(forKey: "runExplicit")
-    }
-    
-    // 3. LIGHTWEIGHT INIT
-    init() {
-    }
-    func convertToRealPipeline(
-        tokenizerModel: MLModel,
-        taggerModel: MLModel,
-        lemmatizerRunner: LemmatizerRunner,
-        tokenizerCharVocab: Vocab,
-        wordVocab: Vocab,
-        taggerCharVocab: Vocab,
-        uposVocab: Vocab,
-        featsVocab: Vocab,
-        deprelVocab: Vocab,
-        lemmaRuleVocab: Vocab
-    ) throws -> CNNBiLSTMPipeline {
-        print("calling converter")
-        return CNNBiLSTMPipeline(
-            tokenizerModel: tokenizerModel,
-            taggerModel: taggerModel,
-            lemmatizerRunner: lemmatizerRunner,
-            tokenizerCharVocab: tokenizerCharVocab,
-            wordVocab: wordVocab,
-            taggerCharVocab: taggerCharVocab,
-            uposVocab: uposVocab,
-            featsVocab: featsVocab,
-            deprelVocab: deprelVocab,
-            lemmaRuleVocab: lemmaRuleVocab
-        )
-    }
-    // start new
-    @concurrent
-    func loadCNNBiLSTMpipe(
-        myConfig: TaggerConfig,
-        onProgress: @MainActor @Sendable (Int, String) -> Void
-    ) async throws -> CNNBiLSTMPipeline {
-        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
-        let treebank = await myConfig.parsingConfig.selectedTreebank.short
-        let myConfig: TaggerConfig = myConfig
-        let tokenizerModel: MLModel?
-        let taggerModel: MLModel?
-        let tokenizerCharVocab: Vocab?
-        let wordVocab: Vocab?
-        let taggerCharVocab: Vocab?
-        let uposVocab: Vocab?
-        let featsVocab: Vocab?
-        let deprelVocab: Vocab?
-        let lemmaRuleVocab: Vocab?
-        let lemmatizerRunner: LemmatizerRunner?
-
-        // 1. Tokenizer Model
-        await onProgress(1, "Loading tokenizer model")
-        let tokName = "\(languageCode)_tokenizer_\(treebank)"
-        tokenizerModel = try await safeLoad(name: "\(tokName).mlc") {
-            try await Self.loadMlpackage(named: tokName, myConfig: myConfig)
-        }
-
-        // 2. Tagger Model
-        await onProgress(2, "Loading tagger")
-        let tagName = "\(languageCode)_tagger_parser_\(treebank)"
-        taggerModel = try await safeLoad(name: "\(tagName).mlc") {
-            try await Self.loadMlpackage(named: tagName, myConfig: myConfig)
-        }
-
-        // 3-9. Vocabularies
-        // We use safeLoad for each to ensure we know WHICH vocab failed
-        await onProgress(3, "Loading tokenizer char vocab")
-        tokenizerCharVocab = try await safeLoad(name: "\(languageCode)_tokenizer_char_vocab_\(treebank)") {
-            try await Vocab.load(named: "\(languageCode)_tokenizer_char_vocab_\(treebank)")
-        }
-
-        await onProgress(4, "Loading word vocab")
-        wordVocab = try await safeLoad(name: "\(languageCode)_word_vocab_\(treebank)") {
-            try await Vocab.load(named: "\(languageCode)_word_vocab_\(treebank)")
-        }
-
-        await onProgress(5, "Loading tagger char vocab")
-        taggerCharVocab = try await safeLoad(name: "\(languageCode)_tagger_char_vocab_\(treebank)") {
-            try await Vocab.load(named: "\(languageCode)_tagger_char_vocab_\(treebank)")
-        }
-
-        await onProgress(6, "Loading upos vocab")
-        uposVocab = try await safeLoad(name: "\(languageCode)_upos_vocab_\(treebank)") {
-            try await Vocab.load(named: "\(languageCode)_upos_vocab_\(treebank)")
-        }
-
-        await onProgress(7, "Loading feats vocab")
-        featsVocab = try await safeLoad(name: "\(languageCode)_feats_vocab_\(treebank)") {
-            try await Vocab.load(named: "\(languageCode)_feats_vocab_\(treebank)")
-        }
-
-        await onProgress(8, "Loading deprel vocab")
-        deprelVocab = try await safeLoad(name: "\(languageCode)_deprel_vocab_\(treebank)") {
-            try await Vocab.load(named: "\(languageCode)_deprel_vocab_\(treebank)")
-        }
-
-        await onProgress(9, "Loading lemma rule vocab")
-        lemmaRuleVocab = try await safeLoad(name: "\(languageCode)_lemma_rule_vocab_\(treebank)") {
-            try await Vocab.load(named: "\(languageCode)_lemma_rule_vocab_\(treebank)")
-        }
-
-        // 10. Lemmatizer
-        await onProgress(10, "Loading neural lemmatizer")
-        // Note: If LemmatizerRunner doesn't throw a PipelineError internally,
-        // you might want to wrap this in a safeLoad too.
-        lemmatizerRunner = try await LemmatizerRunner(languageCode: languageCode, treebank: treebank)
-
-        // Step 3: Final Verification
-        guard let tokenizerModel = tokenizerModel, let taggerModel = taggerModel,
-              let lemmatizerRunner = lemmatizerRunner, let tokenizerCharVocab = tokenizerCharVocab,
-              let wordVocab = wordVocab, let taggerCharVocab = taggerCharVocab,
-              let uposVocab = uposVocab, let featsVocab = featsVocab,
-              let deprelVocab = deprelVocab, let lemmaRuleVocab = lemmaRuleVocab else {
-            await onProgress(0, "Error")
-            print("cnnbi-error 121")
-            throw PipelineError.ConfigurationError.notReadyToSendToRunner
-        }
-
-        return try await convertToRealPipeline(
-            tokenizerModel: tokenizerModel,
-            taggerModel: taggerModel,
-            lemmatizerRunner: lemmatizerRunner,
-            tokenizerCharVocab: tokenizerCharVocab,
-            wordVocab: wordVocab,
-            taggerCharVocab: taggerCharVocab,
-            uposVocab: uposVocab,
-            featsVocab: featsVocab,
-            deprelVocab: deprelVocab,
-            lemmaRuleVocab: lemmaRuleVocab
-        )
-    }
-    /// Helper to wrap loading calls. If the loader throws a system error (like File Not Found),
-    /// it catches it and throws your custom .missingResource error instead.
-    private func safeLoad<T>(
-        name: String,
-        loader: () async throws -> T
-    ) async throws -> T {
-        do {
-            return try await loader()
-        } catch let loadingError as PipelineError.LoadingError {
-            // If it's already our custom error, just re-throw it
-            throw loadingError
-        } catch {
-            // It's a system error (File Not Found, etc.), wrap it in our specific error
-            throw PipelineError.GenericError.missingResource(name)
-        }
-    }
-
-
-}
-
-
-final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, ObservableObject {
+/// the actual CNNBiLSTMPipeline for processing, with no optionals
+final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableObject {
+    // no change
     var seqLen: Int = 256
-    
-    // the actual pipeline for processing, with no optionals
     let tokenizerModel: MLModel
     let taggerModel: MLModel
     let lemmatizerRunner: LemmatizerRunner
@@ -201,16 +18,32 @@ final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, Obs
     let featsVocab: Vocab
     let deprelVocab: Vocab
     let lemmaRuleVocab: Vocab
-
-    // lightweight properties
     static let rootToken = "<root>"
-    static let maxWordLen = 20 // sams as tagger_parser/data.py's encode_sentence default
+    static let maxWordLen = 20 // same as tagger_parser/data.py's encode_sentence default
     let description = "I'm a CNN-BiLSTM pipeline"
-    let maxWords: Int = 256 // prefer parse // extrct from metas
+    let maxWords: Int = 256 // prefer parse // extract from metas
 
     internal var runExplicit: Bool {
-            UserDefaults.standard.bool(forKey: "runExplicit")
-        }
+        UserDefaults.standard.bool(forKey: "runExplicit")
+    }
+
+    // MARK: - Result of one tagger-parser prediction
+    /// Everything one tagger-parser prediction produces. UPOS tags and neural lemmas are decoded
+    /// ONCE, while the prediction is being processed (the lemmatiser needs the UPOS tags anyway),
+    /// and stored here for the later steps to read. The remaining outputs are kept as
+    /// `LogitReader`s, which have already been validated against the vocabularies.
+    /// Replaces `TaggerRawOutput` for this pipeline.
+
+    struct TaggerOutput {
+        let sentence: HashableSentence
+        let seqLen: Int                 // words + 1; row 0 is the synthetic ROOT
+        let upos: [String]              // one per real word (rows 1..<seqLen)
+        let lemmas: [String]            // lemmatiser output, one per real word
+        let feats: BERTpipeHelperStructs.LogitReader          // [1, seqLen, nFeats]
+        let ruleLemma: BERTpipeHelperStructs.LogitReader      // [1, seqLen, nRules]
+        let arcs: BERTpipeHelperStructs.LogitReader           // [1, seqLen, seqLen]  indexed [0, dependent, head]
+        let deprels: BERTpipeHelperStructs.LogitReader        // [1, nDeprels, seqLen, seqLen]  indexed [0, label, dependent, head]
+    }
 
     init(
         tokenizerModel: MLModel,
@@ -235,7 +68,7 @@ final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, Obs
         self.deprelVocab = deprelVocab
         self.lemmaRuleVocab = lemmaRuleVocab
     }
-    
+
     // MARK: Step 1 -- character-level tokenizer / sentence segmenter
     /// Run raw text through tokenizer model, returning 1x [HashableSent] per sent, numbered 1->
     func tokenize(_ text: String) throws -> [HashableSentence] {
@@ -248,16 +81,20 @@ final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, Obs
             dictionary: ["char_ids": MLFeatureValue(multiArray: inputArray)]
         )
         let output = try tokenizerModel.prediction(from: provider)
-        guard let logits = output.featureValue(for: "logits")?.multiArrayValue else {
-            throw PipelineError.IngestionError.tokenizationFail("tokenizer produced no 'logits' output")
-        }
 
+        // [1, chars, 4]: one label per character
+        let logits: BERTpipeHelperStructs.LogitReader
+        do {
+            logits = try BERTpipeHelperStructs.LogitReader(output, "logits", rank: 3, rows: chars.count, labels: 4)
+        } catch {
+            throw PipelineError.IngestionError.tokenizationFail("tokenizer output unusable: \(error)")
+        }
         var tokenLists: [[String]] = []
         var currentSentence: [String] = []
         var currentWord = ""
 
         for (i, ch) in chars.enumerated() {
-            let label = parserArgmax(logits, prefix: [0, i], dimSize: 4)
+            let label = logits.argmax(row: i)
             switch label {
             case 0: // inside token
                 currentWord.append(ch)
@@ -284,10 +121,11 @@ final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, Obs
     }
 
     // MARK: Step 2 -- run the tagger-parser
-    private func runTaggerParserModel(on sentence: HashableSentence) throws -> TaggerRawOutput {
+    /// Runs the model once, wraps every output in a validated `LogitReader`, decodes UPOS once, and runs
+    /// the lemmatiser. The default processing level is 5 (everything is used), so all of this is done eagerly.
+    private func runTaggerParserModel(on sentence: HashableSentence) throws -> TaggerOutput {
         let tokens = sentence.tokens
         let seqLen = tokens.count + 1 // +1 for the synthetic ROOT at index 0
-
         var wordIds: [Int32] = [Int32(wordVocab.encode(Self.rootToken))]
         var charIdLists: [[Int32]] = [[Int32(taggerCharVocab.encode(Self.rootToken))]]
 
@@ -307,125 +145,99 @@ final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, Obs
             "char_ids": MLFeatureValue(multiArray: charIdArray),
         ])
         let output = try taggerModel.prediction(from: provider)
-
-        // new version
-        guard let uposLogits = output.featureValue(for: "upos_logits")?.multiArrayValue,
-              let xposLogits = output.featureValue(for: "xpos_logits")?.multiArrayValue,
-              let ruleLemmaLogits = output.featureValue(for:"lemma_rule_logits")?.multiArrayValue,
-              let featsLogits = output.featureValue(for: "feats_logits")?.multiArrayValue,
-              let arcLogits = output.featureValue(for: "arc_logits")?.multiArrayValue,
-              let labelLogits = output.featureValue(for: "label_logits")?.multiArrayValue else {
-            
-            let info = output.featureNames.map { name -> String in
-                let shape = output.featureValue(for: name)?.multiArrayValue?.shape ?? []
-                return "\(name): \(shape)"
-            }
-            if runExplicit {
-                print(info)
-            }
-            throw PipelineError.ProcessingError.predictionFailedAtLogits("missing expected model output type 310 :: getting from logits")
+        // Validate and wrap every output once. The checks cover: output present, expected rank,
+        // enough rows, a supported element type, and (where given) a label dimension that matches the vocabulary.
+        // xpos_logits is not used at present, so it is not read
+        let uposReader: BERTpipeHelperStructs.LogitReader
+        let feats: BERTpipeHelperStructs.LogitReader
+        let ruleLemma: BERTpipeHelperStructs.LogitReader
+        let arcs: BERTpipeHelperStructs.LogitReader
+        let deprels: BERTpipeHelperStructs.LogitReader
+        do {
+            uposReader = try BERTpipeHelperStructs.LogitReader(output, "upos_logits", rank: 3, rows: seqLen, labels: uposVocab.itos.count)
+            feats = try BERTpipeHelperStructs.LogitReader(output, "feats_logits", rank: 3, rows: seqLen, labels: featsVocab.itos.count)
+            ruleLemma = try BERTpipeHelperStructs.LogitReader(output, "lemma_rule_logits", rank: 3, rows: seqLen, labels: lemmaRuleVocab.itos.count)
+            arcs = try BERTpipeHelperStructs.LogitReader(output, "arc_logits", rank: 3, rows: seqLen)
+            deprels = try BERTpipeHelperStructs.LogitReader(output, "label_logits", rank: 4, rows: seqLen, labels: deprelVocab.itos.count)
+        } catch {
+            if runExplicit { print(describeOutputs(output)) }
+            throw PipelineError.ProcessingError.predictionFailedAtLogits("unexpected model output type 310 :: \(error)")
         }
-        //need to get, decode UPOS so they can be passed to lemmatiser
-        let decodedUpos = decodeUPOSInternal(uposLogits)
+
+        // UPOS: decoded here,
+        let upos = (1..<seqLen).map { uposVocab.decode(uposReader.argmax(row: $0)) }
         // get the lemmas with the LemmatizerRunner() as runner
         let lemmas: [String]
-
         do {
             let runner = self.lemmatizerRunner
             lemmas = try tokens.enumerated().map { i, form in
-                try runner.lemmatize(form: form, upos: decodedUpos[i])
+                try runner.lemmatize(form: form, upos: upos[i])
             }
         } catch {
-            // new error type to add
             throw PipelineError.ProcessingError.lemmatizationFailed("lemmatizer failed: \(error)")
         }
-//        print("Report267::")
-//        print("Sentence == \(sentence)")
-//
-//        print("seqlen == \(seqLen)")
-//        for item in [uposLogits, xposLogits, featsLogits, ruleLemmaLogits,  arcLogits, labelLogits]{
-//            print("\(item) :: , \(item.count)")
-//        }
-//        print ("Neural lemmas == \(lemmas.count)")
-        return TaggerRawOutput(
+
+        return TaggerOutput(
             sentence: sentence, seqLen: seqLen,
-            uposLogits: uposLogits, xposLogits: xposLogits, featsLogits: featsLogits, ruleLemmaLogits: ruleLemmaLogits,
-            decodedLemmas: lemmas, arcLogits: arcLogits, labelLogits: labelLogits
+            upos: upos, lemmas: lemmas,
+            feats: feats, ruleLemma: ruleLemma, arcs: arcs, deprels: deprels
         )
     }
 
-    // MARK: Step 2 (decode) -- UPOS
-    private func decodeUPOSInternal(_ uposLogits: MLMultiArray) -> [String] {
-        let seqLen = uposLogits.shape[1].intValue  // shape: [1, seqLen, vocabSize]
-        return (1..<seqLen).map { t in
-            let id = parserArgmax(uposLogits, prefix: [0, t], dimSize: uposVocab.itos.count)
-            return uposVocab.decode(id)
-        }
-    }
-    /// One UPOS tag string per real word (indices 1..<seqLen), in order.
-    private func decodeUPOS(_ raw: TaggerRawOutput) -> [String] {
-        (1..<raw.seqLen).map { t in
-            let id = parserArgmax(raw.uposLogits, prefix: [0, t], dimSize: uposVocab.itos.count)
-            return uposVocab.decode(id)
+    /// "name: [shape]" for every output the model produced, for diagnosing a mismatch.
+    private func describeOutputs(_ output: MLFeatureProvider) -> [String] {
+        output.featureNames.sorted().map { name in
+            let shape = output.featureValue(for: name)?.multiArrayValue?.shape ?? []
+            return "\(name): \(shape)"
         }
     }
 
     // MARK: XPOS (not used at present, but here to make future mods easier if it's needed)
-//    private func decodeXPOS(_ raw: TaggerRawOutput) -> [String] {
-//        (1..<raw.seqLen).map { t in
-//            let id = parserArgmax(raw.xposLogits, prefix: [0, t], dimSize: xposVocab.itos.count)
-//            return xposVocab.decode(id)
-//        }
-//    }
+    // To re-enable: add an `xpos: LogitReader` to TaggerOutput, build it in runTaggerParserModel, and
+    //    private func decodeXPOS(_ raw: TaggerOutput) -> [String] {
+    //        (1..<raw.seqLen).map { xposVocab.decode(raw.xpos.argmax(row: $0)) }
+    //    }
 
     // MARK: Step 3 (decode) -- lemmatisation with edit-script rule
     /// 1x lemma string per real word, made by applying the predicted edit-script rule to word's raw form.
-    ///
-    func decodeRuleLemmas(_ raw: TaggerRawOutput) -> [String] {
+    func decodeRuleLemmas(_ raw: TaggerOutput) -> [String] {
         zip(1..<raw.seqLen, raw.sentence.tokens).map { t, form in
-            let id = parserArgmax(raw.ruleLemmaLogits, prefix: [0, t], dimSize: lemmaRuleVocab.itos.count)
-            return applyLemmaRule(form: form, rule: lemmaRuleVocab.decode(id))
+            applyLemmaRule(form: form, rule: lemmaRuleVocab.decode(raw.ruleLemma.argmax(row: t)))
         }
     }
 
     // decode rule lemmas moved to UDDecoding extension via protocol
-    private func getLemmas(_ raw: TaggerRawOutput) -> [String] {
-        // set to true for dev test
-        let dev = false
+    private func getLemmas(_ raw: TaggerOutput) -> [String] {
+        let dev = false // set to true for dev test
         var returnItem: [String]
         if dev {
             returnItem = []
-            for item in raw.decodedLemmas{
+            for item in raw.lemmas {
                 returnItem.append("dev_\(item)")
             }
-        }
-        else {
-            returnItem = raw.decodedLemmas
+        } else {
+            returnItem = raw.lemmas
         }
         return returnItem
     }
+
     // MARK: Step 4 (decode) -- morphological features
-    private func decodeFeats(_ raw: TaggerRawOutput) -> [String] {
-        (1..<raw.seqLen).map { t in
-            let id = parserArgmax(raw.featsLogits, prefix: [0, t], dimSize: featsVocab.itos.count)
-            return featsVocab.decode(id)
-        }
+    private func decodeFeats(_ raw: TaggerOutput) -> [String] {
+        (1..<raw.seqLen).map { featsVocab.decode(raw.feats.argmax(row: $0)) }
     }
 
-    // MARK: Step 5 (decode) -- dependency parsing
-    // now in extension via protocol
-    private func decodeDependencies(_ raw: TaggerRawOutput) -> [(head: Int, deprel: String)] {
+    // MARK: Step 5 (decode) -- dependency parsing via methods in protocol extension
+    private func decodeDependencies(_ raw: TaggerOutput) -> [(head: Int, deprel: String)] {
         decodeParse(
             runExplicit: true,
             wordCount: raw.seqLen - 1,
             deprelVocab: deprelVocab,
-            arcScore: { d, h in raw.arcLogits[[0, d, h] as [NSNumber]].doubleValue },
-            labelScore: { c, t, head in raw.labelLogits[[0, c, t, head] as [NSNumber]].doubleValue }
+            arcScore: { d, h in Double(raw.arcs.value(row: d, column: h)) },
+            labelScore: { c, t, head in Double(raw.deprels.value(channel: c, row: t, column: head)) }
         )
     }
 
     // MARK: Per-sentence processing: for progress-reporting callers
-    /// same field-decoding logic as `run(text:level:mode:)`,with 1x tokenised sent a time ->Token
     func runOnSentence(_ sentence: HashableSentence,  myConfig: TaggerConfig)  -> OnSentResult {
         if runExplicit { print("running on sents with CNN-BiLSTM pipeline") }
         let wordPieceCount = -5
@@ -449,9 +261,8 @@ final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, Obs
         do {
             if level >= 2 {
                 let raw = try runTaggerParserModel(on: sentence)
-                uposTags = decodeUPOS(raw)
+                uposTags = raw.upos
                 if level >= 3 {
-
                     switch myConfig.parsingConfig.priLemSource {
                     case .hybrid:
                         primaryLemmas = getLemmas(raw)
@@ -465,9 +276,7 @@ final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, Obs
                         }
                     }
                 }
-                if level >= 4 {
-                    featsTags = decodeFeats(raw)
-                }
+                if level >= 4 { featsTags = decodeFeats(raw) }
                 if level >= 5 {
                     let deps = decodeDependencies(raw)
                     heads = deps.map { String($0.head) }
@@ -494,15 +303,12 @@ final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, Obs
         } catch {
             if runExplicit { print("sentence failed: \(error.localizedDescription)") }
             return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .otherError, decoded: [])
-
         }
     }
 
     func makeIntArray(_ values: [Int32], shape: [NSNumber]) throws -> MLMultiArray {
         let arr = try MLMultiArray(shape: shape, dataType: .int32)
-        for (i, v) in values.enumerated() {
-            arr[i] = NSNumber(value: v)
-        }
+        for (i, v) in values.enumerated() { arr[i] = NSNumber(value: v)  }
         return arr
     }
 
@@ -519,21 +325,4 @@ final class CNNBiLSTMPipelineV1: PipelineHelper, LinguisticProcessingHelper, Obs
         }
         return arr
     }
-    
-    func parserArgmax(_ arr: MLMultiArray, prefix: [Int], dimSize: Int) -> Int {
-        var best = 0
-        var bestVal = -Double.infinity
-        for c in 0..<dimSize {
-            let idx = (prefix + [c]).map { NSNumber(value: $0) }
-            let v = arr[idx].doubleValue
-            if v > bestVal {
-                bestVal = v
-                best = c
-            }
-        }
-        return best
-    }
 }
-
-
-

@@ -134,7 +134,7 @@ struct OutputError: Identifiable {
     let tokCount: Int
     let subtokCount: Int
     let errorType: OnSentResultType
-    }
+}
 
 struct OutputFileListHelper: Identifiable{
     let id: UUID
@@ -225,6 +225,7 @@ struct RunSelectorHelper{
     let jsonFile: URL
 }
 
+/// import file from outside to sandbox -> sandbox, via copy, removing old instance
 struct SandboxImporter {
     static func importToSandbox(from externalURL: URL) throws -> URL {
         let fileManager = FileManager.default
@@ -247,10 +248,7 @@ struct Sentence : Identifiable, Codable {
     let sentID: String
     let conllData: [Token]
     let conllMetas: [String]
-
-    var tokCount: Int {
-        conllData.count
-    }
+    var tokCount: Int { conllData.count }
     var runSentIdRegexes: String{
         var content = sentID.trimmingCharacters(in: .newlines)
         // 2. Remove existing header if any
@@ -281,7 +279,6 @@ struct Sentence : Identifiable, Codable {
         let sentFooter = """
             </s>
             """
-        
         xmlTokenElements.append(sentHeader)
         if includeConllSentText {
             xmlTokenElements.append("# sent_id = \(runSentIdRegexes)")
@@ -405,9 +402,8 @@ struct StoredColor: Codable {
     var color: Color { Color(.sRGB, red: r, green: g, blue: b, opacity: a) }
 }
 
-
+/// Holder for the encoded output of the tagger
 struct TaggerRawOutput {
-    // for CNN-BiLSTM model
     /// Holds the raw tensors from 1 tagger_parser model call for 1 sent
     ///`seqLen` includes the synthetic ROOT index 0, so real words are indices 1,2....<seqLen.
     let sentence: HashableSentence
@@ -464,7 +460,7 @@ struct Token : Identifiable, Codable {
     }
 }
 // MARK: - Vocabulary
-//structure to decode the vocab data JSON file
+///structure to decode the vocab data JSON file -- quelle relationa vec la class data ????
 struct VocabData: Decodable {
     let itos: [String]
     let pad: String
@@ -477,7 +473,7 @@ struct XMLConllElement {
     let blob: String // content of s.text == conll lines with sent id line added in by parser
 }
 
-struct XmlHeaderAttribs : Codable{
+struct XmlHeaderAttribs : Codable {
     // get lengths for sequences, subtokens, defaulting to 1 and, for latter, -99 if CNN-BiLSTM, -1 if error, or, if supplied value, this value
     var xmlTitle: String
     var xmlAuthorName: String

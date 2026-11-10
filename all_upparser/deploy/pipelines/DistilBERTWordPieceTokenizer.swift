@@ -26,13 +26,9 @@
 //  keyed by UTF-8 bytes for the same reason: Swift String equality treats canonically
 //  equivalent strings ("é" vs "e" + U+0301) as equal, which Python's dict does not.
 //
-//  Verify against Python with checkAgainstGolden(at:) before trusting any model output.
-
 import Foundation
 import CoreML
 import SwiftUI
-
-
 
 // MARK: - Output type as struct :: data
 struct WordPieceEncodedSentence: BERTpipeEncodedSentence {
@@ -46,16 +42,12 @@ struct WordPieceEncodedSentence: BERTpipeEncodedSentence {
     /// words. nil unless the tokenizer's showWordPieces is true.
     var length: Int
     let pieces: [[String]]?
-    
     var validSlots: Int
 }
-
 
 // MARK: - Tokenizer
 struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
     var showPieces: Bool
-    
-    
     var showWordPieces: Bool = false
     let clsID: Int32
     let sepID: Int32
@@ -129,13 +121,11 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
         self.padID = pad.id
         self.unkID = unk.id
 
-        // A word that is exactly a special token ("[SEP]") maps to its id, as in Hugging Face.
-        // (A special token embedded inside a longer word is not treated specially here.)
+        // A word that is exactly a special token ("[SEP]") maps to its id, like HFtokenisers.
         var specials = [cls.name: cls.id, sep.name: sep.id, pad.name: pad.id, unk.name: unk.id]
         let maskName = (config["mask_token"] as? String) ?? "[MASK]"
         if let maskID = table[Array(maskName.utf8)] { specials[maskName] = maskID }
         self.specialTokenIDs = specials
-
         self.vocab = table
         self.idToToken = tokenBytes               // shares storage with the dictionary keys
         self.continuingPrefix = Array(continuingPrefix.utf8)
@@ -143,7 +133,6 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
     }
 
     // MARK: Public API
-
     /// Subword ids for one word. Never empty: falls back to a single [UNK].
     func pieces(for word: String) -> [Int32] {
         if let id = specialTokenIDs[word] { return [id] }
@@ -153,8 +142,7 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
         }
         return ids.isEmpty ? [unkID] : ids
     }
-    /// The subword strings for one word, e.g. ["play", "##ing"]. Always available,
-    /// independent of showWordPieces.
+    ///Subword strings for one word, eg ["play", "##ing"]. Always available, indep. of showWordPieces.
     func subtokens(for word: String) -> [String] {
         strings(for: pieces(for: word))
     }
@@ -190,11 +178,9 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
         let ids = detailed.inputIDs
         let wordIndex = detailed.wordIndex
         guard wordIndex.count <= maxWords else {
-//            return nil
             throw PipelineError.TokPieceError.tooManyWords(have: words.count, limit: maxWords - 1)
         }
         guard ids.count <= seqLen else {
-//            return nil
             throw PipelineError.TokPieceError.tooManySubwords(have: ids.count, limit: seqLen)
         }
         return WordPieceEncodedSentence(
@@ -206,8 +192,8 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
             validSlots: words.count + 1
         )
     }
-    // MARK: Normalisation and pre-tokenisation
 
+    // MARK: Normalisation and pre-tokenisation
     private func normalize(_ word: String) -> [Unicode.Scalar] {
         var scalars: [Unicode.Scalar] = []
         scalars.reserveCapacity(word.unicodeScalars.count)
@@ -250,7 +236,6 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
     }
 
     // MARK: WordPiece
-
     private func wordPiece(_ token: [Unicode.Scalar]) -> [Int32] {
         if token.count > maxInputCharsPerWord { return [unkID] }
 
@@ -289,30 +274,30 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
     private static func isControl(_ s: Unicode.Scalar) -> Bool {
         if s == "\t" || s == "\n" || s == "\r" { return false }
         switch s.properties.generalCategory {
-        case .control, .format, .surrogate, .privateUse, .unassigned: return true
-        default: return false
+            case .control, .format, .surrogate, .privateUse, .unassigned: return true
+            default: return false
         }
     }
     private static func isPunctuation(_ s: Unicode.Scalar) -> Bool {
         switch s.value {
-        case 33...47, 58...64, 91...96, 123...126: return true      // all ASCII punctuation and symbols
-        default: break
+            case 33...47, 58...64, 91...96, 123...126: return true      // all ASCII punctuation and symbols
+            default: break
         }
         switch s.properties.generalCategory {
-        case .connectorPunctuation, .dashPunctuation, .openPunctuation, .closePunctuation,
-             .initialPunctuation, .finalPunctuation, .otherPunctuation:
-            return true
-        default:
-            return false
+            case .connectorPunctuation, .dashPunctuation, .openPunctuation, .closePunctuation,
+                    .initialPunctuation, .finalPunctuation, .otherPunctuation:
+                return true
+            default:
+                return false
         }
     }
     private static func isCJK(_ s: Unicode.Scalar) -> Bool {
         switch s.value {
-        case 0x4E00...0x9FFF, 0x3400...0x4DBF, 0x20000...0x2A6DF, 0x2A700...0x2B73F,
-             0x2B740...0x2B81F, 0x2B820...0x2CEAF, 0xF900...0xFAFF, 0x2F800...0x2FA1F:
-            return true
-        default:
-            return false
+            case 0x4E00...0x9FFF, 0x3400...0x4DBF, 0x20000...0x2A6DF, 0x2A700...0x2B73F,
+                0x2B740...0x2B81F, 0x2B820...0x2CEAF, 0xF900...0xFAFF, 0x2F800...0x2FA1F:
+                return true
+            default:
+                return false
         }
     }
 }
@@ -368,4 +353,3 @@ extension WordPieceTokenizer {
         return try WordPieceTokenizer(vocabURL: vocab, configURL: settings)
     }
 }
-

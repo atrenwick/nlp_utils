@@ -4,9 +4,7 @@
 //
 //  Created by Adam on 11/09/2026.
 //
-
 import SwiftUI
-
 
 struct ExportSettingsDetailView: View{
     @Binding var myConfig: TaggerConfig
@@ -64,5 +62,3 @@ struct ExportSettingsDetailView: View{
     @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
     ExportSettingsDetailView(myConfig: $myConfig)
 }
-
-
