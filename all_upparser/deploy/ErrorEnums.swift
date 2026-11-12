@@ -94,7 +94,7 @@ enum PipelineError: LocalizedError{
         case configFileLoadError(name: String)
         case fileLoadError
         case modelLoadFailed(Error)
-        case packageLoadFailed(String)
+        case packageLoadFailed(String, String)
         case resourceMissing(String)
         case decodeError(String, String, String)
         
@@ -110,8 +110,8 @@ enum PipelineError: LocalizedError{
                 return ("Failed to decode \(filename) from bundle due to missing key : \(key)) - \(context.debugDescription)")
             case .modelLoadFailed(let error):
                 return "Couldn't load the model: \(error.localizedDescription)"
-            case .packageLoadFailed(let name):
-                return "Failed to load model from package: \(name) was not found"
+            case .packageLoadFailed(let filename, let modelname):
+                return "Failed to load model \(filename) was not found for model \(modelname)"
             }
         }
     }

@@ -44,9 +44,7 @@ struct ImportFileViewSection: View {
                     // 1. Gain temporary sandbox access to external file
                     let gotAccess = externalURL.startAccessingSecurityScopedResource()
                     defer {
-                        if gotAccess {
-                            externalURL.stopAccessingSecurityScopedResource()
-                        }
+                        if gotAccess { externalURL.stopAccessingSecurityScopedResource() }
                     }
                     
                     do {

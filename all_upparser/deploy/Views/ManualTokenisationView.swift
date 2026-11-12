@@ -8,9 +8,11 @@
 import SwiftUI
 
 struct ManualTokenisationView: View {
-    @Binding var myConfig: TaggerConfig
-    @Binding var builtSents: [BuiltSentHolder]
-    @Binding var tempTokens: [TempToken]
+    @Environment(AppModel.self) internal var model
+
+    //    @Binding var myConfig: TaggerConfig
+//    @Binding var builtSents: [BuiltSentHolder]
+//    @Binding var tempTokens: [TempToken]
     @State var getsentNum: Int = 0
     @State private var newSentence: String = ""
     @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, parce que Bonn n'était assez bonne pour tous", "Alors que Paris est une grande ville, elle est plus petite que Tokyo", "Li chevaliers combattent les dragons."]
@@ -40,8 +42,8 @@ struct ManualTokenisationView: View {
                             thisSentence = newSentence
                         }
                         do {
-                            let toksAsStrings = try TokenisationWorkflow.applyNaiveTokenisation(language: myConfig.parsingConfig.selectedLanguage, myString: thisSentence)
-                            tempTokens = toksAsStrings.map {$0.asTempToken}
+                            let toksAsStrings = try TokenisationWorkflow.applyNaiveTokenisation(language: model.myConfig.parsingConfig.selectedLanguage, myString: thisSentence)
+                            model.tempTokens = toksAsStrings.map {$0.asTempToken}
                         } catch {
                             PipelineError.IngestionError.retokenisationError
                             // what's this catch doing………
@@ -55,9 +57,9 @@ struct ManualTokenisationView: View {
                     Spacer()
                     Button {
                         do {
-                            builtSents.append( BuiltSentHolder(tempToks: tempTokens) )
+                            model.builtSents.append( BuiltSentHolder(tempToks: model.tempTokens) )
                             print("Added 1 sent to builtSents")
-                            tempTokens = []
+                            model.tempTokens = []
                             newSentence = ""
                         }
                     } label: {
@@ -66,12 +68,12 @@ struct ManualTokenisationView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
                 }
-                TokenisationEditView(toks: $tempTokens,  myConfig: $myConfig)
+                TokenisationEditView()
                 Spacer()
             }
             .toolbar{
                 ToolbarItem(placement: .topBarTrailing){
-                    ManualTokenisationToolbarItem(myConfig: $myConfig, builtSents: $builtSents)
+                    ManualTokenisationToolbarItem()
                 }
             }
             .padding()
@@ -82,17 +84,16 @@ struct ManualTokenisationView: View {
 }
 
 struct ManualTokenisationToolbarItem: View{
-    @Binding var myConfig: TaggerConfig
-    @Binding var builtSents: [BuiltSentHolder]
-    
+     @Environment(AppModel.self) private var model
+
     var body: some View{
         NavigationLink {
-            BuiltSentsViewer(myConfig: $myConfig, builtSents: $builtSents)
+            BuiltSentsViewer()
         } label: {
             Image(systemName: "textformat.characters.dottedunderline")
                 .overlay(alignment: .topTrailing) {
-                    if builtSents.count > 0 {
-                        Text(String(builtSents.count))
+                    if model.builtSents.count > 0 {
+                        Text(String(model.builtSents.count))
                             .font(.caption2)
                             .foregroundStyle(.white)
                             .padding(4)

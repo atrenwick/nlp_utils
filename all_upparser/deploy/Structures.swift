@@ -153,6 +153,17 @@ struct PipelineDesc{
     }
 }
 
+struct PipelineBuildRequest: Identifiable{
+    var id = UUID()
+    let languageCode: Language
+    let base: ModelArchitecture
+    let treebank: Language.Treebank
+    
+    var description: String {
+        "\(base.displayName) - \(languageCode.rawValue) - \(treebank.short)"
+    }
+}
+
 struct RegexLangPatternToLangMap: Identifiable{
     var id = UUID()
     let string: String

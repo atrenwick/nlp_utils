@@ -165,6 +165,17 @@ enum Language: String, CaseIterable, Identifiable {
         }
     }
 
+    var keyChunkFlag: String {
+        switch self {
+        case .EN: return "🇬🇧 ENG"
+        case .ANG: return "ANG"
+        case .FR: return "🇫🇷 FRA"
+        case .DE: return "🇩🇪 DEU"
+        case .FRO: return "FRO"
+        case .FRM: return "FRM"
+        case .ENM: return "🏴󠁧󠁢󠁥󠁮󠁧󠁿 ENM"
+        }
+    }
     // Nested enum for all available models
     enum Treebank: String, CaseIterable, Identifiable {
         case enTB1 = "en_ewt"
@@ -277,6 +288,13 @@ enum OnSentResultType: String, RawRepresentable, CaseIterable{
     case success
     case otherError
 }
+
+enum ParsingType: String, Identifiable, CaseIterable {
+    var id: Self {self}
+    case single
+    case multi
+}
+
 
 enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
     /// RawValue type (Int) links each case to an integer (1, 2, 3, 4).

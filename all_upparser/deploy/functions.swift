@@ -587,18 +587,14 @@ enum SentencizationWorkflow{
             )
         case .txt:
             // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
-            
             allSentences = try TokenisationWorkflow.textFileToHashableSents(myConfig: myConfig, pipeline: pipeline)
-            
             if myConfig.parsingConfig.runExplicit{
                 print("Mode a: \(allSentences.count) sents ")
             }
-            
         }
         return allSentences //.filter {$0.tokens.count < maxSentLenForPipe }
     }
     static func ingestSentences(currentStatus: String, myConfig: TaggerConfig, pipeline: PipelineHelper) throws -> [HashableSentence]{
-        
         do {
             return try SentencizationWorkflow.ingestSentEncapsulator(myConfig: myConfig, pipeline: pipeline)
         } catch {
@@ -648,53 +644,57 @@ enum TokenisationWorkflow{
             throw PipelineError.ConfigurationError.languageMethodConflict(language: language)
         }
         
-        let input: String = myString
-        //    var outputStrings: [String] = []
-        var step1: [Substring] = []
-        if [.FR, .FRO, .FRM].contains(language) {
-            
-            let replacements: [String: String] = [
-                "jourd'hui": "jourdhui",
-                "rud'homm": "rudhomm",
-                "'":"' "
-            ]
-            let unreplacements: [String: String] = [
-                "jourdhui": "jourd'hui",
-                "rudhomm": "rud'homm"
-            ]
-            
-            let unreplacePattern = unreplacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-            let regexUnreplace = try! Regex(unreplacePattern)
-            
-            let literalPattern = replacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-            let fullPattern = "(\(literalPattern))|([.?!]$)|([,;:])"
-            let regex = try! Regex(fullPattern)
-            
-            
-            let frResult = myString.replacing(regex) { match in
-                let matchedText = String(match.0)
-                if matchedText == "." && match.0 == myString.suffix(1) {
-                    return " ."
+        do {
+            let input: String = myString
+            //    var outputStrings: [String] = []
+            var step1: [Substring] = []
+            if [.FR, .FRO, .FRM].contains(language) {
+                
+                let replacements: [String: String] = [
+                    "jourd'hui": "jourdhui",
+                    "rud'homm": "rudhomm",
+                    "'":"' "
+                ]
+                let unreplacements: [String: String] = [
+                    "jourdhui": "jourd'hui",
+                    "rudhomm": "rud'homm"
+                ]
+                
+                let unreplacePattern = unreplacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+                let regexUnreplace = try! Regex(unreplacePattern)
+                
+                let literalPattern = replacements.keys.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+                let fullPattern = "(\(literalPattern))|([.?!]$)|([,;:])"
+                let regex = try! Regex(fullPattern)
+                
+                let frResult = myString.replacing(regex) { match in
+                    let matchedText = String(match.0)
+                    if matchedText == "." && match.0 == myString.suffix(1) {
+                        return " ."
+                    }
+                    if let replacement = replacements[matchedText] {
+                        return replacement
+                    }
+                    // must be punctuation needing a leading space
+                    return " " + matchedText
                 }
-                if let replacement = replacements[matchedText] {
-                    return replacement
+                var preSplit = frResult.replacingOccurrences(of: "  ", with: " ")
+                
+                preSplit = preSplit.replacing(regexUnreplace) { match in
+                    unreplacements[String(match.0)] ?? String(match.0)
                 }
-                // must be punctuation needing a leading space
-                return " " + matchedText
+                step1 = preSplit.split(whereSeparator: { $0 == " " })
             }
-            var preSplit = frResult.replacingOccurrences(of: "  ", with: " ")
             
-            preSplit = preSplit.replacing(regexUnreplace) { match in
-                unreplacements[String(match.0)] ?? String(match.0)
+            if language == .EN {
+                step1 = input.split(whereSeparator: { $0 == " "})
             }
-            step1 = preSplit.split(whereSeparator: { $0 == " " })
+            
+            return step1.map {String($0)}
+        } catch {
+            throw PipelineError.IngestionError.retokenisationError
+
         }
-        
-        if language == .EN {
-            step1 = input.split(whereSeparator: { $0 == " "})
-        }
-        
-        return step1.map {String($0)}
     }
     
     //2 ultra simple tokenisation : spaces = only boundary
@@ -815,9 +815,9 @@ enum PostPipelineWorkflow{
     //                                                  encapsulation of run inputs, outputs
     //----------------------------------------------------------------------------------------------------------------------------
     //----------------------------------------------------------------------------------------------------------------------------
-    
     //MARK: settings updaters
-    static func makeTidyRunOutput(myConfig: TaggerConfig ) -> RunOutput {
+    static func makeTidyRunOutput(myConfig: TaggerConfig, pipelineRequest: PipelineBuildRequest ) -> RunOutput {
+        
         let runID = myConfig.outputData.safeHeaderAttribs.runID
         let processingStatus = myConfig.progressConfig.processingStatus
         let exportContent = GeneralOutputMakingWorkflow.makeExportContent(
@@ -827,8 +827,8 @@ enum PostPipelineWorkflow{
             includeConllSentText: myConfig.exportConfig.includeConllSentText,
             processingStatus: processingStatus
         )
-        print("export content as made @ 1228 :: count == \(exportContent.count)")
-        print("@lin819, maxLenWords == \(myConfig.parsingConfig.maxWords) and max SeqLen == \(myConfig.parsingConfig.maxSeqLen)")
+//        print("export content as made @ 1228 :: count == \(exportContent.count)")
+//        print("@lin819, maxLenWords == \(myConfig.parsingConfig.maxWords) and max SeqLen == \(myConfig.parsingConfig.maxSeqLen)")
         let runData: RunData = RunData(
             runID: runID,
             sents: myConfig.outputData.outSents,
@@ -836,7 +836,9 @@ enum PostPipelineWorkflow{
         )
         
         let runMetas = WritingWorkflow.saveFileToChosenLocation(
-            myConfig: myConfig, exportContent: exportContent,
+            myConfig: myConfig,
+            exportContent: exportContent,
+            pipelineRequest: pipelineRequest ,
             runID: runID,
             processingStatus: processingStatus
         )
@@ -849,11 +851,11 @@ enum PostPipelineWorkflow{
         return runOutput
     }
     
-    static func postprocessSentence(sentence: HashableSentence, parsedTokens: [Token], myConfig: TaggerConfig)->Sentence{
+    static func postprocessSentence(sentence: HashableSentence, parsedTokens: [Token] )->Sentence{
         
-        if myConfig.parsingConfig.runExplicit {
-            print("max requested step == \(myConfig.parsingConfig.maxPipelineStep.rawValue)")
-        }
+//        if myConfig.parsingConfig.runExplicit {
+//            print("max requested step == \(myConfig.parsingConfig.maxPipelineStep.rawValue)")
+//        }
         let mySent: Sentence = Sentence(
             sentID: sentence.id,
             conllData: parsedTokens,
@@ -916,7 +918,6 @@ enum GeneralOutputMakingWorkflow{
     }
 }
 
-
 enum XMLMakingWorkflow{
     // MARK: - XML making
     //----------------------------------------------------------------------------------------------------------------------------
@@ -927,12 +928,12 @@ enum XMLMakingWorkflow{
     //1. make safe header attributes
     //2. Make XML string from list of sentences with output of 1, 2
     
-    static func makeSafeHeaderAttribs(myConfig: TaggerConfig, fileContainerModel: SourceFileContainerModel) -> XmlHeaderAttribs {
+    static func makeSafeHeaderAttribs(myConfig: TaggerConfig, pipelineRequest:PipelineBuildRequest ,fileContainerModel: SourceFileContainerModel) -> XmlHeaderAttribs {
         let xmlSafeXMLAuthor = myConfig.exportConfig.xmlAuthorName.xmlEscaped != "" ? myConfig.exportConfig.xmlAuthorName.xmlEscaped : "author_unknown"
         let xmlSafeXMLTitle = myConfig.exportConfig.xmlTitle.xmlEscaped != "" ? myConfig.exportConfig.xmlTitle.xmlEscaped : "title"
-        let xmlSafeLang = myConfig.parsingConfig.selectedLanguage.displayName.lowercased()
-        let xmlsafeTreebank = myConfig.parsingConfig.selectedTreebank.short.xmlEscaped
-
+        
+        let xmlSafeLang = pipelineRequest.languageCode.displayName.lowercased()
+        let xmlsafeTreebank = pipelineRequest.treebank.short.xmlEscaped
         let formatter = DateFormatter()
         formatter.dateFormat = "y-MM-dd HH:mm"
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -947,8 +948,7 @@ enum XMLMakingWorkflow{
         let xmlSafeRunRetokeniser = String(myConfig.parsingConfig.runRetokeniser).xmlEscaped
         let xmlSafeTokenizingMethod = myConfig.parsingConfig.tokenizingMethod.rawValue.xmlEscaped
         let xmlSafeSentencizingMethod = myConfig.parsingConfig.sentencizingMethod.rawValue.xmlEscaped
-        let xmlSafeArchitecture = myConfig.parsingConfig.modelArchitecture
-        
+        let xmlSafeArchitecture = pipelineRequest.base
         let outputStruct = XmlHeaderAttribs(
             xmlTitle: xmlSafeXMLTitle,
             xmlAuthorName: xmlSafeXMLAuthor,
@@ -974,7 +974,7 @@ enum XMLMakingWorkflow{
         let safeHeaderAttribs = headers
         let sentences = sents
         let sentCount = String(sentences.count)
-        print("sentCount inside sentlist to xml = \(sentCount)")
+//        print("sentCount inside sentlist to xml = \(sentCount)")
         let tokCount = String(sentences.generateTokCount())
         var outputStore: [String] = []
         
@@ -1042,7 +1042,7 @@ enum XMLMakingWorkflow{
         }
         outputStore.append(xmlFooter)
         let returnItem = outputStore.joined(separator: "\n")
-        print("returnItem 937 count = \(returnItem.count)")
+//        print("returnItem 937 count = \(returnItem.count)")
         return returnItem
         
     }
@@ -1060,12 +1060,17 @@ enum WritingWorkflow{
     // 3. write string dump :: write string to named files on macOS AND iOS device ; No longer used
     // 4. writtoFile ; No longer used
     // write string to location
-    static func saveFileToChosenLocation(myConfig: TaggerConfig, exportContent: String, runID: String, processingStatus: ProcessingStatus, additional: AdditionalExportParams? = nil) -> RunMetas{
+    static func saveFileToChosenLocation(
+        myConfig: TaggerConfig,
+        exportContent: String,
+        pipelineRequest: PipelineBuildRequest,
+        runID: String,
+        processingStatus: ProcessingStatus,
+        additional: AdditionalExportParams? = nil
+    ) -> RunMetas{
         var savedURL: URL?
         var exportStatusMessage: String
-
-        print("@line1046, maxLenWords == \(myConfig.parsingConfig.maxWords) and max SeqLen == \(myConfig.parsingConfig.maxSeqLen)")
-
+        //        print("@line1046, maxLenWords == \(myConfig.parsingConfig.maxWords) and max SeqLen == \(myConfig.parsingConfig.maxSeqLen)")
         var updatedExportFormat: ExportFormat = myConfig.exportConfig.selectedExportFormat
         var updatedIncludeConllSentText: Bool = myConfig.exportConfig.includeConllSentText
         // if running an additional export, use these values passed through the optional
@@ -1083,7 +1088,7 @@ enum WritingWorkflow{
                 includeConllSentIdLine: myConfig.exportConfig.includeConllSentIdLine,
                 includeConllSentText: updatedIncludeConllSentText,
                 inputFileType: myConfig.inputConfig.inputFileType,
-                lang: myConfig.parsingConfig.selectedLanguage.rawValue,
+                lang: pipelineRequest.languageCode.rawValue,
                 maxPipelineStep: myConfig.parsingConfig.maxPipelineStep,
                 message: exportStatusMessage,
                 outputFileName: myConfig.exportConfig.fileName,
@@ -1099,18 +1104,17 @@ enum WritingWorkflow{
                 targetFolderURL: myConfig.exportConfig.targetFolderURL,
                 tokenizingMethod: myConfig.parsingConfig.tokenizingMethod,
                 totalCount: myConfig.progressConfig.totalCount,
-                treebank: myConfig.parsingConfig.selectedTreebank.short,
+                treebank: pipelineRequest.treebank.short,
                 processingStatus: processingStatus,
                 unread: true
             )
         }
         if myConfig.parsingConfig.runExplicit{ print("Guard 661 pass")  }
-        
         do {
             print("export content inside Exporter service count == \(exportContent.count)")
             savedURL = try PipelineServices.ExporterService.exportDataToFile(
                 exportContent: exportContent,
-                customName: "\(myConfig.exportConfig.fileName)_\(myConfig.parsingConfig.selectedTreebank.short)_\(updatedExportFormat.rawValue)",
+                customName: "\(myConfig.exportConfig.fileName)_\(pipelineRequest.treebank.short)_\(pipelineRequest.base.keyChunk)_\(pipelineRequest.languageCode.keyChunk)_\(updatedExportFormat.rawValue)",
                 targetFolderURL: folderURL,
                 exportFormat: updatedExportFormat,
                 runExplicit: myConfig.parsingConfig.runExplicit,
@@ -1132,9 +1136,9 @@ enum WritingWorkflow{
             }
         }
         // return for do-catch
-        if myConfig.parsingConfig.runExplicit{
-            print("return 694: ")
-        }
+//        if myConfig.parsingConfig.runExplicit{
+//            print("return 694: ")
+//        }
         
         return RunMetas(
             runID: runID,
@@ -1262,16 +1266,16 @@ enum PrintWorkflow{
         }
         
         if myConfig.parsingConfig.runExplicit {
-            print("Printing conllRaw")
-            print(myConfig.outputData.outSents.generateXMLsentences())
+//            print("Printing conllRaw")
+//            print(myConfig.outputData.outSents.generateXMLsentences())
             //        print(myConfig.outputData.outSents.generateExportText())
             if let printPath = myConfig.exportConfig.targetFolderURL?.path(){
                 print(printPath)
             } else {
                 print("Problem with print path from URL 274")
             }
-            print("output name = \(myConfig.exportConfig.fileName)")
-            print("Main actor done, running function 277")
+//            print("output name = \(myConfig.exportConfig.fileName)")
+//            print("Main actor done, running function 277")
         }
     }
     

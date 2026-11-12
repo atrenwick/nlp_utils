@@ -10,8 +10,7 @@ import Combine
 
 @main
 struct TaggerApp: App {
-    @StateObject private var pipelineCache = PipelineCache()
-
+    @State var model = AppModel()
     
     init() {
         // Ensure the runs directory exists the second the app opens
@@ -22,13 +21,15 @@ struct TaggerApp: App {
         WindowGroup {
             
             TabView{
-                Tab("Config", systemImage: "book.pages.fill"){
+                Tab("Config", systemImage: "house"){
                     PipelineSettingsView()
                 }
-                Tab("Settings", systemImage: "slider.horizontal.3"){
-                    SetDefaultsView()
+                Tab("Outputs", systemImage: "book.pages.fill"){
+                    RunOutputView()
                 }
-            }.environmentObject(pipelineCache)
+            }
+            
+            .environment(model)
         }
     }
 }

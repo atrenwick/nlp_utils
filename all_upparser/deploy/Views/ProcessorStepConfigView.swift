@@ -7,34 +7,35 @@
 import SwiftUI
 
 struct ProcessorStepConfigViewSection: View {
-    @Binding var myConfig: TaggerConfig
-    
+     @Environment(AppModel.self) private var model
+
     var body: some View {
+        @Bindable var model = model
         Form{
             Section("Retokenisation"){
-                Toggle("0. Retokenisation", isOn: $myConfig.parsingConfig.runRetokeniser)
+                Toggle("0. Retokenisation", isOn: $model.myConfig.parsingConfig.runRetokeniser)
                 
                 Group{
-                    Picker("Tokenizing method", selection: $myConfig.parsingConfig.tokenizingMethod) {
+                    Picker("Tokenizing method", selection: $model.myConfig.parsingConfig.tokenizingMethod) {
                         ForEach(TokenizingMethod.allCases.dropLast().sorted {$0.rawValue < $1.rawValue} ){tokMethod in
                             Text(tokMethod.rawValue)
                         }
                     }
                 }
-                .disabled(!myConfig.parsingConfig.runRetokeniser)
-                .foregroundStyle(myConfig.parsingConfig.runRetokeniser ? .primary : .secondary)
+                .disabled(!model.myConfig.parsingConfig.runRetokeniser)
+                .foregroundStyle(model.myConfig.parsingConfig.runRetokeniser ? .primary : .secondary)
             }
             Section("Sentencisation"){
-                Toggle("1. Resentencise", isOn: $myConfig.parsingConfig.runResentenciser)
+                Toggle("1. Resentencise", isOn: $model.myConfig.parsingConfig.runResentenciser)
                 Group{
-                    Picker("Sentencising method", selection: $myConfig.parsingConfig.sentencizingMethod) {
+                    Picker("Sentencising method", selection: $model.myConfig.parsingConfig.sentencizingMethod) {
                         ForEach(SentencizingMethod.allCases.sorted {$0.rawValue < $1.rawValue} ){sentMethod in
                             Text(sentMethod.tidyName)
                         }
                     }
                 }
-                .disabled(!myConfig.parsingConfig.runResentenciser)
-                .foregroundStyle(myConfig.parsingConfig.runResentenciser ? .primary : .secondary)
+                .disabled(!model.myConfig.parsingConfig.runResentenciser)
+                .foregroundStyle(model.myConfig.parsingConfig.runResentenciser ? .primary : .secondary)
             }
             Section(header: Text("Pipeline Execution Steps")) {
                 ForEach(PipelineStep.allCases.prefix(1)) { step in
@@ -47,37 +48,37 @@ struct ProcessorStepConfigViewSection: View {
                 Toggle(isOn: toggleBinding(for: PipelineStep.step3)){
                     Text("3. Lemmatisation ")
                 }
-                .onChange(of: myConfig.parsingConfig.getSecLems){
-                    if isStepActive(PipelineStep.step3) == false && myConfig.parsingConfig.getSecLems == true {
-                        myConfig.parsingConfig.maxPipelineStep = PipelineStep.step3
+                .onChange(of: model.myConfig.parsingConfig.getSecLems){
+                    if isStepActive(PipelineStep.step3) == false && model.myConfig.parsingConfig.getSecLems == true {
+                        model.myConfig.parsingConfig.maxPipelineStep = PipelineStep.step3
                     }
                 }
-                Toggle("    Get additional lemmas", isOn: $myConfig.parsingConfig.getSecLems)
+                Toggle("    Get additional lemmas", isOn: $model.myConfig.parsingConfig.getSecLems)
                     .onChange(of: isStepActive(PipelineStep.step3)){
                         if isStepActive(PipelineStep.step3) == false {
-                            myConfig.parsingConfig.getSecLems = false}
+                            model.myConfig.parsingConfig.getSecLems = false}
                     }
-                Picker("    Primary method", selection: $myConfig.parsingConfig.priLemSource){
+                Picker("    Primary method", selection: $model.myConfig.parsingConfig.priLemSource){
                     ForEach(LemmaSource.allCases){lsource in
                         Text(lsource.displayName)
                     }
                 }
-                .onChange(of: myConfig.parsingConfig.secLemSource){_, newValue in
-                    if myConfig.parsingConfig.secLemSource == myConfig.parsingConfig.priLemSource {
-                        if let remaining = LemmaSource.allCases.filter({ format in format != myConfig.parsingConfig.secLemSource  }).first{
-                            myConfig.parsingConfig.priLemSource = remaining
+                .onChange(of: model.myConfig.parsingConfig.secLemSource){_, newValue in
+                    if model.myConfig.parsingConfig.secLemSource == model.myConfig.parsingConfig.priLemSource {
+                        if let remaining = LemmaSource.allCases.filter({ format in format != model.myConfig.parsingConfig.secLemSource  }).first{
+                            model.myConfig.parsingConfig.priLemSource = remaining
                         }
                     }
                 }
-                Picker("    Secondary method", selection: $myConfig.parsingConfig.secLemSource){
+                Picker("    Secondary method", selection: $model.myConfig.parsingConfig.secLemSource){
                     ForEach(LemmaSource.allCases){lsource in
                         Text(lsource.displayName)
                     }
                 }
-                .onChange(of: myConfig.parsingConfig.priLemSource){_, newValue in
-                    if myConfig.parsingConfig.secLemSource == myConfig.parsingConfig.priLemSource {
-                        if let remaining = LemmaSource.allCases.filter({ format in format != myConfig.parsingConfig.priLemSource  }).first{
-                            myConfig.parsingConfig.secLemSource = remaining
+                .onChange(of: model.myConfig.parsingConfig.priLemSource){_, newValue in
+                    if model.myConfig.parsingConfig.secLemSource == model.myConfig.parsingConfig.priLemSource {
+                        if let remaining = LemmaSource.allCases.filter({ format in format != model.myConfig.parsingConfig.priLemSource  }).first{
+                            model.myConfig.parsingConfig.secLemSource = remaining
                         }
                     }
                 }
@@ -93,7 +94,7 @@ struct ProcessorStepConfigViewSection: View {
         }
     }
     private func isStepActive(_ step: PipelineStep) -> Bool {
-        let maxStep = myConfig.parsingConfig.maxPipelineStep
+        let maxStep = model.myConfig.parsingConfig.maxPipelineStep
         if maxStep >= step { return true }
         return false
     }
@@ -107,13 +108,13 @@ struct ProcessorStepConfigViewSection: View {
             set: { isTurningOn in
                 if isTurningOn {
                     // Enabling step 3 automatically turns on steps 1 & 2
-                    myConfig.parsingConfig.maxPipelineStep = step
+                    model.myConfig.parsingConfig.maxPipelineStep = step
                 } else {
                     // Disabling step 2 drops max active step to step 1 (or nil if step 1 turned off)
                     if let previousStep = PipelineStep(rawValue: step.rawValue - 1) {
-                        myConfig.parsingConfig.maxPipelineStep = previousStep
+                        model.myConfig.parsingConfig.maxPipelineStep = previousStep
                     } else {
-                        myConfig.parsingConfig.maxPipelineStep = .step2
+                        model.myConfig.parsingConfig.maxPipelineStep = .step2
                     }
                 }
             }
@@ -122,6 +123,6 @@ struct ProcessorStepConfigViewSection: View {
 }
 
 #Preview {
-    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
-    ProcessorStepConfigViewSection(myConfig: $myConfig)
+//    @Previewable @State var previewConfig: TaggerConfig = TaggerConfig()
+    ProcessorStepConfigViewSection().environment(AppModel())
 }

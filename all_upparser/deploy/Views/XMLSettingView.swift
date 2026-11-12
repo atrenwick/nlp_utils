@@ -7,31 +7,32 @@
 import SwiftUI
 
 struct ExportSettingsDetailView: View{
-    @Binding var myConfig: TaggerConfig
+    @Environment(AppModel.self) internal var model
     @FocusState var isFocused
     
     var body: some View{
+        @Bindable var model = model
         Form{
-            if [.xmlConll, .conll, .conllTxt, .conllTidy].contains(myConfig.exportConfig.selectedExportFormat){
+            if [.xmlConll, .conll, .conllTxt, .conllTidy].contains(model.myConfig.exportConfig.selectedExportFormat){
                 Section("CoNLL Settings"){
-                    Toggle(isOn: $myConfig.exportConfig.includeConllSentIdLine) {
+                    Toggle(isOn: $model.myConfig.exportConfig.includeConllSentIdLine) {
                         Text("Add Conll Meta sent_ID")
                     }
-                    Toggle(isOn: $myConfig.exportConfig.includeConllSentText) {
+                    Toggle(isOn: $model.myConfig.exportConfig.includeConllSentText) {
                         Text("Add conll meta sent_text")
                     }
                 }
             }
                 //XML settings
-            if [.xmlConll, .xml].contains(myConfig.exportConfig.selectedExportFormat){
+            if [.xmlConll, .xml].contains(model.myConfig.exportConfig.selectedExportFormat){
                     Section("XML Settings"){
-                        TextField("XML Author", text: $myConfig.exportConfig.xmlAuthorName)
+                        TextField("XML Author", text: $model.myConfig.exportConfig.xmlAuthorName)
                             .textInputAutocapitalization(TextInputAutocapitalization.never)
                             .autocorrectionDisabled()
-                            .onChange(of: myConfig.exportConfig.xmlAuthorName) { _, newValue in
-                                let cleaned = myConfig.exportConfig.xmlAuthorName.xmlEscaped
+                            .onChange(of: model.myConfig.exportConfig.xmlAuthorName) { _, newValue in
+                                let cleaned = model.myConfig.exportConfig.xmlAuthorName.xmlEscaped
                                 if cleaned != newValue {
-                                    myConfig.exportConfig.xmlAuthorName = cleaned
+                                    model.myConfig.exportConfig.xmlAuthorName = cleaned
                                 }
                             }
                             .focused($isFocused)
@@ -39,13 +40,13 @@ struct ExportSettingsDetailView: View{
                             .onSubmit {
                                 isFocused = false
                             }
-                        TextField("XML Title", text: $myConfig.exportConfig.xmlTitle)
+                        TextField("XML Title", text: $model.myConfig.exportConfig.xmlTitle)
                             .textInputAutocapitalization(TextInputAutocapitalization.never)
                             .autocorrectionDisabled()
-                            .onChange(of: myConfig.exportConfig.xmlTitle) { _, newValue in
-                                let cleaned = myConfig.exportConfig.xmlTitle.xmlEscaped
+                            .onChange(of: model.myConfig.exportConfig.xmlTitle) { _, newValue in
+                                let cleaned = model.myConfig.exportConfig.xmlTitle.xmlEscaped
                                 if cleaned != newValue {
-                                    myConfig.exportConfig.xmlTitle = cleaned
+                                    model.myConfig.exportConfig.xmlTitle = cleaned
                                 }
                             }
                             .focused($isFocused)
@@ -59,6 +60,5 @@ struct ExportSettingsDetailView: View{
     }
 }
 #Preview {
-    @Previewable @State var myConfig: TaggerConfig = TaggerConfig()
-    ExportSettingsDetailView(myConfig: $myConfig)
+    ExportSettingsDetailView().environment(AppModel())
 }

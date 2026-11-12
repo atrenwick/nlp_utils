@@ -9,52 +9,60 @@ import SwiftUI
 
 /// Customised Architecture picker for model architectures, with onChange modifiers
 struct ArchitecturePickerView: View{
-    @Binding var myConfig: TaggerConfig
-    
+     @Environment(AppModel.self) private var model
+
     var body: some View {
-        Picker("Architecture", selection: $myConfig.parsingConfig.modelArchitecture){
+        @Bindable var model = model
+        Picker("Architecture", selection: $model.myConfig.parsingConfig.modelArchitecture){
             ForEach(ModelArchitecture.allCases.sorted {$0.rawValue < $1.rawValue }){modarch in
                 Text(modarch.displayName)
             }
-        }.onChange(of: myConfig.parsingConfig.modelArchitecture){
-            if myConfig.parsingConfig.modelArchitecture == .distilbert && myConfig.inputConfig.inputFileType == .txt {myConfig.parsingConfig.tokenizingMethod = .nltokeniser}
+        }.onChange(of: model.myConfig.parsingConfig.modelArchitecture){
+            if model.myConfig.parsingConfig.modelArchitecture == .distilbert && model.myConfig.inputConfig.inputFileType == .txt {model.myConfig.parsingConfig.tokenizingMethod = .nltokeniser}
         }
     }
 }
 
 /// Customised picker for languages with constraints on language and onChange modifiers
 struct ConstrainedPickerForLang: View{
-    @Binding var myConfig: TaggerConfig
-
+    @Environment(AppModel.self) private var model
     var availableLanguages: [Language] {
-        ConfigurationRules.availableLanguages(for: myConfig.parsingConfig.modelArchitecture)
+        ConfigurationRules.availableLanguages(for: model.myConfig.parsingConfig.modelArchitecture)
             .sorted {$0.rawValue < $1.rawValue}
     }
+    var archCondition: Bool {
+        !model.myConfig.parsingConfig.selectedLanguage.availableArchs.contains(model.myConfig.parsingConfig.modelArchitecture)
+    }
+    var tbCondition: Bool {
+        !model.myConfig.parsingConfig.selectedLanguage.availableTBs.contains(model.myConfig.parsingConfig.selectedTreebank)
+    }
+    
     var body: some View{
-        Picker("Language", selection: $myConfig.parsingConfig.selectedLanguage){
+        @Bindable var model = model
+        Picker("Language", selection: $model.myConfig.parsingConfig.selectedLanguage){
             ForEach(availableLanguages){lang in
                 Text(lang.displayName.uppercased())
             }
         }
-        .onChange(of: myConfig.parsingConfig.modelArchitecture) {
-            if !myConfig.parsingConfig.selectedLanguage.availableArchs.contains(myConfig.parsingConfig.modelArchitecture) || !myConfig.parsingConfig.selectedLanguage.availableTBs.contains(myConfig.parsingConfig.selectedTreebank){
+        .onChange(of: model.myConfig.parsingConfig.modelArchitecture) {
+            if archCondition || tbCondition{
                 if let first = availableLanguages.first {
-                    myConfig.parsingConfig.selectedLanguage = first
-                    if let firstTB = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
-                        myConfig.parsingConfig.selectedTreebank = firstTB
+                    model.myConfig.parsingConfig.selectedLanguage = first
+                    if let firstTB = model.myConfig.parsingConfig.selectedLanguage.availableTBs.first {
+                        model.myConfig.parsingConfig.selectedTreebank = firstTB
                     }
                 }
             }
         }
-        .onChange(of: myConfig.parsingConfig.selectedLanguage) {
-            if let first = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
-                myConfig.parsingConfig.selectedTreebank = first
+        .onChange(of: model.myConfig.parsingConfig.selectedLanguage) {
+            if let first = model.myConfig.parsingConfig.selectedLanguage.availableTBs.first {
+                model.myConfig.parsingConfig.selectedTreebank = first
             }
         }
-        .onChange(of: myConfig.inputConfig.selectedInputFile){
-            if myConfig.inputConfig.detectLanguage {
-                if let detectedLang = FileIngestionWorkflow.detectLangInFilename(inputURL:myConfig.inputConfig.selectedInputFile){
-                    myConfig.parsingConfig.selectedLanguage = detectedLang
+        .onChange(of: model.myConfig.inputConfig.selectedInputFile){
+            if model.myConfig.inputConfig.detectLanguage {
+                if let detectedLang = FileIngestionWorkflow.detectLangInFilename(inputURL:model.myConfig.inputConfig.selectedInputFile){
+                    model.myConfig.parsingConfig.selectedLanguage = detectedLang
                 }
             }
         }
@@ -62,26 +70,28 @@ struct ConstrainedPickerForLang: View{
 }
 /// Customised picker for treebanks based on selected language, with fallbacks, default
 struct ConstrainedPickerForTB: View{
-    @Binding var myConfig: TaggerConfig
-    
+    @Environment(AppModel.self) private var model
+
     var availableTreebanks: [Language.Treebank] {
         ConfigurationRules.availableTreebanks(
-            for: myConfig.parsingConfig.modelArchitecture,
-            language: myConfig.parsingConfig.selectedLanguage
+            for: model.myConfig.parsingConfig.modelArchitecture,
+            language: model.myConfig.parsingConfig.selectedLanguage
         )
     }
-    
+    var tbCondition: Bool {
+        !model.myConfig.parsingConfig.selectedLanguage.availableTBs.contains(model.myConfig.parsingConfig.selectedTreebank)
+    }
     var body: some View{
-        Picker("Treebank", selection: $myConfig.parsingConfig.selectedTreebank){
+        @Bindable var model = model
+
+        Picker("Treebank", selection: $model.myConfig.parsingConfig.selectedTreebank){
             ForEach(availableTreebanks.sorted {$0.rawValue < $1.rawValue}, id:\.self){tb in
                 Text(tb.shortTidy).tag(tb)
             }
         }
-        .onChange(of: myConfig.parsingConfig.selectedLanguage) {
-            if !myConfig.parsingConfig.selectedLanguage.availableTBs.contains(myConfig.parsingConfig.selectedTreebank){
-                if let first = myConfig.parsingConfig.selectedLanguage.availableTBs.first {
-                    myConfig.parsingConfig.selectedTreebank = first
-                }
+        .onChange(of: model.myConfig.parsingConfig.selectedLanguage) {
+            if tbCondition, let first = model.myConfig.parsingConfig.selectedLanguage.availableTBs.first {
+                    model.myConfig.parsingConfig.selectedTreebank = first
             }
         }
     }
@@ -176,24 +186,25 @@ struct DefaultPickerView<T: Hashable & CaseIterable & RawRepresentable>: View wh
 
 /// Toggle for Automatically match, detect filename-type
 struct MatchDetectToggleView: View{
-    @Binding var myConfig: TaggerConfig
-    @Binding var  fileContainerModel: SourceFileContainerModel
+     @Environment(AppModel.self) private var model
+
     var body: some View {
-        Toggle(isOn: $myConfig.inputConfig.detectLanguage) {
+        @Bindable var model = model
+        Toggle(isOn: $model.myConfig.inputConfig.detectLanguage) {
             Text("Autodetect Language")
-        }.onChange(of: myConfig.inputConfig.detectLanguage){_, newValue in
-            if newValue == true, let detectedLang =  FileIngestionWorkflow.detectLangInFilename(inputURL:fileContainerModel.localSandboxFileURL){
-                myConfig.parsingConfig.selectedLanguage = detectedLang
+        }.onChange(of: model.myConfig.inputConfig.detectLanguage){_, newValue in
+            if newValue == true, let detectedLang =  FileIngestionWorkflow.detectLangInFilename(inputURL:model.fileContainerModel.localSandboxFileURL){
+                model.myConfig.parsingConfig.selectedLanguage = detectedLang
             } else {print("case 3")}
         }
         .accessibilityIdentifier("DetectLanguageToggle")
         
-        Toggle(isOn: $myConfig.inputConfig.matchFileNameType) {
+        Toggle(isOn: $model.myConfig.inputConfig.matchFileNameType) {
             Text("Automatch filename-type")
-        }.onChange(of: myConfig.inputConfig.matchFileNameType){_, newValue in
-            if newValue == true, let detectedValue = fileContainerModel.localSandboxFileURL?.pathExtension {
+        }.onChange(of: model.myConfig.inputConfig.matchFileNameType){_, newValue in
+            if newValue == true, let detectedValue = model.fileContainerModel.localSandboxFileURL?.pathExtension {
                 if let convertedExt = InputFileType(rawValue: detectedValue.replacingOccurrences(of: ".", with: "")){
-                    myConfig.inputConfig.inputFileType = convertedExt
+                    model.myConfig.inputConfig.inputFileType = convertedExt
                 }
             }
         }
