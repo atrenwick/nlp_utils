@@ -40,6 +40,8 @@ struct TaggerConfig{
     
     struct ParsingConfig{
         var key: String
+        var parsingType: ParsingType
+        var pipelineRequests: [PipelineBuildRequest]
         var selectedArchitecture: ModelArchitecture
         var selectedLanguage: Language
         var selectedTreebank: Language.Treebank
@@ -64,6 +66,8 @@ struct TaggerConfig{
         // need to add = nil in init of it's to truly allow no parameters to be specified
         init(
             key: String? = nil,
+            parsingType: ParsingType? = nil,
+            pipelineRequests: [PipelineBuildRequest]? = nil,
             selectedArchitecture: ModelArchitecture? = nil,
             selectedLanguage: Language? = nil,
             selectedTreebank: Language.Treebank? = nil,
@@ -87,6 +91,8 @@ struct TaggerConfig{
         ){
             
             self.key = "XXX-XXX-XXX"
+            self.parsingType = .single
+            self.pipelineRequests = []
             self.selectedArchitecture = TaggerConfig.resolveRawRep(passed: selectedArchitecture, key: "modelArchitectureDefault", fallback: ModelArchitecture.cnnBiLSTM )
             self.selectedLanguage = TaggerConfig.resolveRawRep(passed: selectedLanguage, key: "selectedLanguageDefault", fallback: Language.FR )
             self.selectedTreebank = TaggerConfig.resolveRawRep(passed: selectedTreebank, key: "selectedTreebankDefault", fallback: Language.FR.defaultTB )

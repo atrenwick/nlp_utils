@@ -8,28 +8,21 @@ import SwiftUI
 
 struct RunOutputDetailView: View{
     @Environment(\.openURL) var openURL
+    @Environment(AppModel.self) internal var model
 
-    @Binding var myConfig: TaggerConfig
-    @Binding var topLevelOutput: [RunOutput]
     @Binding var run: RunOutput
-    @Binding var builtSents: [BuiltSentHolder]
-    @Binding var tempTokens: [TempToken]
-    @State var runOutputFileList: [OutputFileListHelper] = []
     @State var hasAppeared: Bool = false
     @State var fileToView: URL? =   nil
     @State var alertMessage: String?
     @State var additionalExportFormat: ExportFormat = .conll
 
-    let safeHeaderAttribs: XmlHeaderAttribs
-    let runExplicit = true
-    
     var shortUUID: String{
         String(Array(run.id.uuidString).suffix(7))
     }
         
     var exportFormatShowCases: [ExportFormat]{
         ExportFormat.allCases.filter { format in
-            format != myConfig.exportConfig.selectedExportFormat
+            format != model.myConfig.exportConfig.selectedExportFormat
         }
     }
     
@@ -37,29 +30,28 @@ struct RunOutputDetailView: View{
         NavigationStack{
             Form{
                 Section("Run \(shortUUID)"){
-                    if myConfig.inputConfig.inputFileType == .manual{
-                        NavigationLink(destination: BuiltSentsViewer(myConfig: $myConfig, builtSents: $builtSents)
+                    if model.myConfig.inputConfig.inputFileType == .manual{
+                        NavigationLink(destination: BuiltSentsViewer()
                         ){
                             Text("Input sents")
                         }
-                    }
-                    else {
+                    } else {
                         NavigationLink(destination: FileViewerView(fileURL: run.runMetas.sourceFileURL)) {
                             Text("Input file : \(run.runMetas.sourceFileName)")
                         }
                     }
                     //inspect output file/s
-                    if runOutputFileList.count == 1 {
+                    if model.runOutputFileList.count == 1 {
                         NavigationLink(destination: FileViewerView(fileURL: fileToView)) {
                             Text("Output : \(run.runMetas.outputFileName)")
                         }
                     } else {
-                        NavigationLink(destination: OutputFileListView(runOutputFileList: runOutputFileList)){
+                        NavigationLink(destination: OutputFileListView()){
                             Text("Output files")
                         }
                     }
-                    NavigationLink(destination: RunErrorSummaryView(myConfig: myConfig, toksIn: run.runData.tokCount)){
-                        Text("Coverage :: \(myConfig.outputData.outErrors.count) errors")}
+                    NavigationLink(destination: RunErrorSummaryView(myConfig: model.myConfig, toksIn: run.runData.tokCount)){
+                        Text("Coverage :: \(model.myConfig.outputData.outErrors.count) errors")}
                     Text("Sentence count : \(run.runData.sents.count)")
                     Text("Tok count : \(run.runData.tokCount)")
                     Text("Language : \(run.runMetas.lang)")
@@ -79,11 +71,11 @@ struct RunOutputDetailView: View{
                                 let runOutput = try additionalExportRunner(
                                     run: run,
                                     additionalExportFormat: additionalExportFormat,
-                                    processingStatus: myConfig.progressConfig.processingStatus
+                                    processingStatus: model.myConfig.progressConfig.processingStatus
                                 )
                                 if let hasURL = runOutput.runMetas.savedURL{
                                     
-                                    runOutputFileList.append(
+                                    model.runOutputFileList.append(
                                         OutputFileListHelper(
                                             id: UUID(),
                                             runID: runOutput.runMetas.runID,
@@ -91,7 +83,7 @@ struct RunOutputDetailView: View{
                                         )
                                         )
                                 }
-                                topLevelOutput.append(runOutput)
+                                model.allRunOutputs.append(runOutput)
                             } catch {
                                 switch error {
                                     case let exportError as PipelineError.ExportError:
@@ -134,7 +126,7 @@ struct RunOutputDetailView: View{
                 if hasAppeared == false{
                     hasAppeared = true
                     if let hasURL = run.runMetas.savedURL{
-                        runOutputFileList.append(
+                        model.runOutputFileList.append(
                             OutputFileListHelper(
                                 id: UUID(),
                                 runID: run.runMetas.runID,
@@ -178,15 +170,20 @@ struct RunOutputDetailView: View{
         print("exportformat found= \(additionalExportFormat.rawValue)")
         guard !exportContent.isEmpty else {
             print("throw @213")
-            throw PipelineError.ExportError.makeExportContentError }
-        
+            throw PipelineError.ExportError.makeExportContentError
+        }
         let runData = RunData(
             runID: run.runID,
             sents: run.runData.sents,
             exportContent: exportContent
         )
         let additionalExportParams = AdditionalExportParams(exportFormat: additionalExportFormat, includeConllSentText: run.runMetas.includeConllSentText)
-        let runMetas = WritingWorkflow.saveFileToChosenLocation(myConfig: myConfig, exportContent: exportContent, runID: run.runID, processingStatus: myConfig.progressConfig.processingStatus, additional: additionalExportParams)
+        let pipelineRequestForAdditional = PipelineBuildRequest(
+            languageCode: Language(rawValue: run.runMetas.lang) ?? Language.FR,
+            base: ModelArchitecture(rawValue: run.runMetas.safeHeaderAttribs.modelArchitecture) ?? ModelArchitecture.cnnBiLSTM,
+            treebank: Language.Treebank(rawValue: run.runMetas.treebank) ?? Language.Treebank.frTB1
+        )
+        let runMetas = WritingWorkflow.saveFileToChosenLocation(myConfig: model.myConfig, exportContent: exportContent, pipelineRequest: pipelineRequestForAdditional, runID: run.runID, processingStatus: model.myConfig.progressConfig.processingStatus, additional: additionalExportParams)
         let runOutput = RunOutput(runID: run.runID, runData: runData, runMetas: runMetas)
         return runOutput
     }
@@ -194,30 +191,21 @@ struct RunOutputDetailView: View{
 
 // overview list of runs == parent
 struct RunOutputView: View {
-    @Binding var myConfig: TaggerConfig
-    @Binding var runs: [RunOutput]
-    let safeHeaderAttribs: XmlHeaderAttribs
-    @Binding var builtSents: [BuiltSentHolder]
-    @Binding var tempTokens: [TempToken]
+    @Environment(AppModel.self) private var model
     @State var showImporter: Bool = false
-    let runExplicit = true
 
     var body: some View {
+        @Bindable var model = model
         NavigationStack{
-            if runs.count == 0 {
+            if model.allRunOutputs.count == 0 {
                 Text("Not much to see here")
             } else {
                 NavigationStack{
                     List{
-                        ForEach(runs.enumerated(), id:\.offset){num,run in
+                        ForEach(model.allRunOutputs.enumerated(), id:\.offset){num,run in
                             NavigationLink {
                                 RunOutputDetailView(
-                                    myConfig: $myConfig,
-                                    topLevelOutput: $runs,
                                     run: bindingFor(run),
-                                    builtSents: $builtSents,
-                                    tempTokens: $tempTokens,
-                                    safeHeaderAttribs: safeHeaderAttribs
                                 )
                             } label: {
                                 Text(makeRunLabel(run: run, num: num))
@@ -232,7 +220,7 @@ struct RunOutputView: View {
                 do {
                     let data = try Data(contentsOf: selectedURL)
                     let loadedResult = try JSONDecoder().decode(RunOutput.self, from: data)
-                    runs.append(loadedResult)
+                    model.allRunOutputs.append(loadedResult)
                 } catch {
                     print("Failed to decode: \(error)")
                 }
@@ -254,10 +242,11 @@ struct RunOutputView: View {
     
     // func to get binding for specific el to pass as write-accessible
     private func bindingFor(_ run: RunOutput) -> Binding<RunOutput> {
-            guard let index = runs.firstIndex(where: { $0.id == run.id }) else {
+        @Bindable var model = model
+        guard let index = model.allRunOutputs.firstIndex(where: { $0.id == run.id }) else {
                 fatalError("RunOutput not found — shouldn't happen")
             }
-            return $runs[index]
+        return $model.allRunOutputs[index]
         }
 }
 
@@ -347,8 +336,9 @@ struct RunErrorSummaryView: View{
         if toksIn == 0 || totalOutputToks == 0 {
             return " ??? "
         } else {
-            let intermed = Double(totalOutputToks) / Double(toksIn)
-            return String(format: "%.2f", (intermed * 100))
+            return String(
+                format: "%.2f", ( Double(totalOutputToks) / Double(toksIn) * 100 )
+            )
         }
     }
     

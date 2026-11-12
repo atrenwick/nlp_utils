@@ -10,19 +10,19 @@ internal import UniformTypeIdentifiers
 
 ///look at built sentences
 struct BuiltSentsViewer: View {
-    @Binding var myConfig: TaggerConfig
-    @Binding var builtSents:[BuiltSentHolder]
+    @Environment(AppModel.self) private var model
     @State var showClearAllButton: Bool = false
     var body: some View{
+        @Bindable var model = model
         Form{
-            ForEach($builtSents, id:\.self.id) { $sent in
-                NavigationLink(destination: TokenisationEditView(toks: $sent.tempToks, myConfig: $myConfig)) {
+            ForEach($model.builtSents, id:\.self.id) { $sent in
+                NavigationLink(destination: TokenisationEditView()) {
                     Text(sent.toShowString(tempToks: sent.tempToks))
                 }
                 .contentShape(Rectangle())
                 .swipeActions(edge: .trailing){
                     Button(role: .destructive){
-                        builtSents.removeAll(where: {$0.id == sent.id})
+                        model.builtSents.removeAll(where: {$0.id == sent.id})
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -30,12 +30,11 @@ struct BuiltSentsViewer: View {
             }
         }
         .toolbar{
-            if builtSents.count > 0 {
+            if model.builtSents.count > 0 {
                 ToolbarItem(placement: .topBarTrailing){
                     Button{
                         showClearAllButton = true
                     } label: {
-                        // look like this
                         Text("Clear all")
                     }
                 }
@@ -43,7 +42,7 @@ struct BuiltSentsViewer: View {
         }
         .confirmationDialog("Clear all" , isPresented: $showClearAllButton, titleVisibility: .visible){
             Button("Clear all", role: .destructive){
-                builtSents = []
+                model.builtSents = []
             }
             Button("Cancel", role: .cancel){ }
         } message: {
@@ -54,21 +53,22 @@ struct BuiltSentsViewer: View {
 
 /// Choose the source file to get, parse
 struct ChooseInputFileViewSection: View {
+    @Environment(AppModel.self) private var model
     @State private var isSelectingFile: Bool = false
-    @Binding var myConfig: TaggerConfig
     
     var body: some View {
+        @Bindable var model = model
         HStack {
             Text("Source:")
             Spacer()
-            Text(myConfig.inputConfig.selectedInputFile?.lastPathComponent ?? "Not Selected")
+            Text(model.myConfig.inputConfig.selectedInputFile?.lastPathComponent ?? "Not Selected")
                 .foregroundColor(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Button {
                 isSelectingFile = true
             } label: {
-                Image(systemName: myConfig.inputConfig.selectedInputFile == nil ? "folder" : "arrow.triangle.2.circlepath")
+                Image(systemName: model.myConfig.inputConfig.selectedInputFile == nil ? "folder" : "arrow.triangle.2.circlepath")
             }
         }
         // Folder Selection System Sheet
@@ -78,30 +78,30 @@ struct ChooseInputFileViewSection: View {
             allowsMultipleSelection: false
         ) { result in
             switch result {
-            case .success(let urls):
-                guard let url = urls.first else { return }
-                let gotAccess = url.startAccessingSecurityScopedResource()
-                defer { if gotAccess { url.stopAccessingSecurityScopedResource() } }
-                do {
-                    let _ = try String(contentsOf: url, encoding: .utf8)
-                    // hand off to your pipeline here
-                } catch {
-                    print("Failed to read file: \(error)")
-                }
-            case .failure(let error):
-                print("Folder selection error: \(error.localizedDescription)")
+                case .success(let urls):
+                    guard let url = urls.first else { return }
+                    let gotAccess = url.startAccessingSecurityScopedResource()
+                    defer { if gotAccess { url.stopAccessingSecurityScopedResource() } }
+                    do {
+                        let _ = try String(contentsOf: url, encoding: .utf8)
+                        // hand off to your pipeline here
+                    } catch {
+                        print("Failed to read file: \(error)")
+                    }
+                case .failure(let error):
+                    print("Folder selection error: \(error.localizedDescription)")
             }
         }
     }
 }
 ///choose where to export files
 struct ExportConfigViewSection: View {
+    @Environment(AppModel.self) private var model
     @State private var isSelectingFolder: Bool = false
     @State private var isProcessing: Bool = false
-    @Binding var myConfig: TaggerConfig
-    
+
     var xmlSettingDisplayText: String{
-        switch myConfig.exportConfig.selectedExportFormat {
+        switch model.myConfig.exportConfig.selectedExportFormat {
         case .xml:
             return "XML Settings"
         case .xmlConll:
@@ -112,20 +112,21 @@ struct ExportConfigViewSection: View {
     }
     
     var body: some View {
+        @Bindable var model = model
         Section("Export Configuration") {
-            Picker("Export (sub)type", selection: $myConfig.exportConfig.selectedExportFormat){
+            Picker("Export (sub)type", selection: $model.myConfig.exportConfig.selectedExportFormat){
                 ForEach(ExportFormat.allCases.sorted {$0.rawValue < $1.rawValue }){ formatOption in
                     Text(formatOption.rawValue)
                 }
             }
             // 1. User types the filename
-            FileNameInputViewSection(myConfig: $myConfig)
+            FileNameInputViewSection()
             
             // 2. User chooses the target folder
             HStack {
                 Text("Destination:")
                 Spacer()
-                Text(myConfig.exportConfig.targetFolderURL?.lastPathComponent ?? "Not Selected")
+                Text(model.myConfig.exportConfig.targetFolderURL?.lastPathComponent ?? "Not Selected")
                     .foregroundColor(.secondary)
                 Button("Choose...") {
                     isSelectingFolder = true
@@ -159,7 +160,7 @@ struct ExportConfigViewSection: View {
                     }
                 }
             NavigationLink {
-                ExportSettingsDetailView(myConfig: $myConfig)
+                ExportSettingsDetailView()
             } label: {
                 Text(xmlSettingDisplayText)
             }
@@ -175,7 +176,7 @@ struct ExportConfigViewSection: View {
                 if let url = urls.first {
                     // Gain security access to folder
                     if url.startAccessingSecurityScopedResource() {
-                        myConfig.exportConfig.targetFolderURL = url
+                        model.myConfig.exportConfig.targetFolderURL = url
                     }
                 }
             case .failure(let error):
@@ -187,9 +188,9 @@ struct ExportConfigViewSection: View {
         // Re-assign default bookmark URL back to the config instance
         switch dir {
         case .defaultvalue:
-            myConfig.exportConfig.targetFolderURL = PipelineServices.ExporterService.resolveDefaultBookmark()
+                model.myConfig.exportConfig.targetFolderURL = PipelineServices.ExporterService.resolveDefaultBookmark()
         case .sandbox:
-            myConfig.exportConfig.targetFolderURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                model.myConfig.exportConfig.targetFolderURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         }
     }
 }
@@ -201,18 +202,19 @@ struct ExportConfigViewSection: View {
 /// set name of file to export
 struct FileNameInputViewSection: View {
     // contains TextField for entering name of file to export
-    @Binding var myConfig: TaggerConfig
+    @Environment(AppModel.self) private var model
     @FocusState private var isFocused: Bool
     
     var body: some View {
+        @Bindable var model = model
         HStack{
-            TextField("File name", text: $myConfig.exportConfig.fileName)
+            TextField("File name", text: $model.myConfig.exportConfig.fileName)
                 .textInputAutocapitalization(TextInputAutocapitalization.never)
                 .autocorrectionDisabled()
-                .onChange(of: myConfig.exportConfig.fileName) { _, newValue in
-                    let cleaned = myConfig.exportConfig.fileName.sanitizedFileName
+                .onChange(of: model.myConfig.exportConfig.fileName) { _, newValue in
+                    let cleaned = model.myConfig.exportConfig.fileName.sanitizedFileName
                     if cleaned != newValue {
-                        myConfig.exportConfig.fileName = cleaned
+                        model.myConfig.exportConfig.fileName = cleaned
                     }
                 }
                 .focused($isFocused)
@@ -220,12 +222,13 @@ struct FileNameInputViewSection: View {
                 .onSubmit {
                     isFocused = false
                 }
-            Text(myConfig.exportConfig.selectedExportFormat.fileExtension).foregroundStyle(.secondary)
+            Text(model.myConfig.exportConfig.selectedExportFormat.fileExtension).foregroundStyle(.secondary)
         }
     }
     func getFullURL(in folderURL: URL) -> URL {
+        @Bindable var model = model
         // 1. Fallback to a default name if user left it blank
-        let cleanName = myConfig.exportConfig.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanName = model.myConfig.exportConfig.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = cleanName.isEmpty ? "Untitled" : cleanName
         return folderURL
             .appendingPathComponent(finalName)
@@ -273,28 +276,22 @@ struct GoSectionUpperHalf: View{
 
 /// view for choosing input file type
 struct InputFileViewEncapsulator: View {
-    @Binding var myConfig: TaggerConfig
-    @Binding var builtSents: [BuiltSentHolder]
-    @Binding var tempTokens: [TempToken]
-    let fileContainerModel: SourceFileContainerModel
+    @Environment(AppModel.self) private var model
 
     var linkDisplayString: String {
-        builtSents.count > 0 ? "Manual entry:             \(builtSents.count) sents" : "Manual entry…"
+        model.builtSents.count > 0 ? "Manual entry:             \(model.builtSents.count) sents" : "Manual entry…"
     }
     var body: some View{
-        if myConfig.inputConfig.inputFileType == .manual {
+         @Bindable var model = model
+        if model.myConfig.inputConfig.inputFileType == .manual {
             Section {
                 NavigationLink(linkDisplayString){
-                    ManualTokenisationView(
-                        myConfig: $myConfig,
-                        builtSents: $builtSents,
-                        tempTokens: $tempTokens
-                    )
+                    ManualTokenisationView()
                 }
             }
         } else {
             Section{
-                ImportFileViewSection(fileContainerModel: fileContainerModel, myConfig: $myConfig )
+                ImportFileViewSection(fileContainerModel: model.fileContainerModel, myConfig: $model.myConfig )
             }
         }
     }
@@ -302,10 +299,11 @@ struct InputFileViewEncapsulator: View {
 
 ///list of output files
 struct OutputFileListView: View{
-    let runOutputFileList: [OutputFileListHelper]
+     @Environment(AppModel.self) private var model
+
     var body: some View{
         Form{
-            ForEach(runOutputFileList){listItem in
+            ForEach(model.runOutputFileList){listItem in
                 NavigationLink(destination: FileViewerView(fileURL: listItem.url)) {
                     Text("Output : \(listItem.url.lastPathComponent)")
                 }
@@ -316,9 +314,10 @@ struct OutputFileListView: View{
 
 /// list of output lines
 struct OutputLinesExtractedView: View {
-    let outputLines: [String]
+    @Environment(AppModel.self) private var model
+
     private var visibleSents: [String] {
-        Array(outputLines.prefix(50))
+        Array(model.outputLines.prefix(50))
     }
 
     var body: some View{
@@ -339,10 +338,10 @@ struct OutputLinesExtractedView: View {
 
 /// View for looking at pretokenized sentences
 struct PretokenisedSentExtractedView : View {
-    @Binding var pretokSentsOut: [HashableSentence]
+     @Environment(AppModel.self) private var model
     var body: some View{
         ScrollView{
-            ForEach(pretokSentsOut, id:\.self){instance in
+            ForEach(model.pretokSentsOut, id:\.self){instance in
                 Text("foo")
                 ForEach(instance.tokens, id:\.self){tok in
                 Text(tok)}
@@ -352,39 +351,40 @@ struct PretokenisedSentExtractedView : View {
     }
     
     private func removeItems(_ offsets: IndexSet) {
+        @Bindable var model = model
         guard !offsets.isEmpty else { return }
         // 2. Filter the offsets to ensure they are actually within the current bounds.
-        let validOffsets = IndexSet(offsets.filter { $0 < pretokSentsOut.count })
+        let validOffsets = IndexSet(offsets.filter { $0 < model.pretokSentsOut.count })
         // If no offsets are valid (e.g., the user swiped on a deleted cell), just bail.
         guard !validOffsets.isEmpty else { return }
-        pretokSentsOut.remove(atOffsets: offsets)
+        model.pretokSentsOut.remove(atOffsets: offsets)
     }
 }
 
 /// View to edit tokenisation with form
 struct TokenisationEditView: View {
-    @Binding var toks: [TempToken]
-    @Binding var myConfig: TaggerConfig
+    @Environment(AppModel.self) private var model
     @FocusState var isFocused
-    var insertImage: String { (myConfig.parsingConfig.insertNewTokPosition == .before) ? "arrow.turn.left.up" : "arrow.turn.left.down"}
+    var insertImage: String { (model.myConfig.parsingConfig.insertNewTokPosition == .before) ? "arrow.turn.left.up" : "arrow.turn.left.down"}
     
     var body: some View {
+        @Bindable var model = model
         Form{
-            ForEach($toks) { token in
+            ForEach($model.toks) { token in
                 HStack{
                     TextField("Token", text: token.form)
                 }
                 .contentShape(Rectangle())
                 .swipeActions(edge: .trailing){
                     Button(role: .destructive){
-                        toks.removeAll(where: {$0.id == token.id})
+                        model.toks.removeAll(where: {$0.id == token.id})
                     } label : {
                         Label("Delete", systemImage: "trash")
                     }
                 }
                 .swipeActions(edge: .leading){
                     Button{
-                        insertItem( myConfig.parsingConfig.insertNewTokPosition, relativeTo: token.id)
+                        insertItem( model.myConfig.parsingConfig.insertNewTokPosition, relativeTo: token.id)
                     } label: {
                         VStack{
                             Image(systemName: insertImage)
@@ -403,10 +403,11 @@ struct TokenisationEditView: View {
     }
     
     func insertItem(_ position: InsertPosition, relativeTo id: UUID){
-        guard let index = toks.firstIndex(where: { $0.id == id }) else { return }
+        @Bindable var model = model
+        guard let index = model.toks.firstIndex(where: { $0.id == id }) else { return }
         let newItem = TempToken(form: "")
         let insertionIndex = (position == .before) ? index : index + 1
-        toks.insert(newItem, at: insertionIndex)
+        model.toks.insert(newItem, at: insertionIndex)
     }
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -437,24 +438,26 @@ struct BigGoButtonReadinessExtractedView: View{
 
 /// Picker for input types and its onChange modifiers
 struct InputTypeExtractedView: View{
-    @Binding var myConfig: TaggerConfig
-    @Binding var fileContainerModel: SourceFileContainerModel
+    @Environment(AppModel.self) private var model
+
     var body: some View{
+        @Bindable var model = model
         
-        Picker("Input type", selection: $myConfig.inputConfig.inputFileType){
+        Picker("Input type", selection: $model.myConfig.inputConfig.inputFileType){
             ForEach(InputFileType.allCases.sorted {$0.rawValue < $1.rawValue }){fType in
                 Text(fType.rawValue)}
         }
-        .onChange(of: myConfig.inputConfig.inputFileType) { _, newFileType in
+        .onChange(of: model.myConfig.inputConfig.inputFileType) { _, newFileType in
             switch newFileType{
             case .txt:
-                myConfig.parsingConfig.runRetokeniser = true
+                    model.myConfig.parsingConfig.runRetokeniser = true
             case .manual:
-                myConfig.parsingConfig.runRetokeniser = false
+                    model.myConfig.parsingConfig.runRetokeniser = false
             case .conll, .xml, .xmlConll:
-                if myConfig.inputConfig.detectLanguage {
-                    if let detectedLang = FileIngestionWorkflow.detectLangInFilename(inputURL: fileContainerModel.localSandboxFileURL) {
-                        myConfig.parsingConfig.selectedLanguage = detectedLang
+                    if model.myConfig.inputConfig.detectLanguage {
+                        if let detectedLang = FileIngestionWorkflow.detectLangInFilename(
+                            inputURL: model.fileContainerModel.localSandboxFileURL) {
+                            model.myConfig.parsingConfig.selectedLanguage = detectedLang
                     }
                 }
             }
@@ -464,14 +467,14 @@ struct InputTypeExtractedView: View{
 
 ///View for set of buttons to run test load functions
 struct RunExplicitButtonExtractedView: View{
-    @Binding var myConfig: TaggerConfig
+    @Environment(AppModel.self) private var model
     @State var outputString: String = "not yet run"
     
     var body: some View{
-        if myConfig.parsingConfig.runExplicit{
+        if model.myConfig.parsingConfig.runExplicit{
             HStack{
                 Button {
-//                    outputString = testInstantiatePipeline(myConfig: myConfig)
+                    //                    outputString = testInstantiatePipeline(myConfig: myConfig)
                 } label: {
                     Text("Test load")
                 }
@@ -486,7 +489,7 @@ struct RunExplicitButtonExtractedView: View{
                 .tint(.blue)
                 .buttonStyle(.borderedProminent)
                 
-                Text("Use \(myConfig.parsingConfig.selectedLanguage.displayName) \(myConfig.parsingConfig.selectedTreebank.short)")
+                Text("Use \(model.myConfig.parsingConfig.selectedLanguage.displayName) \(model.myConfig.parsingConfig.selectedTreebank.short)")
                 Text(outputString)
             }
         }
@@ -495,17 +498,15 @@ struct RunExplicitButtonExtractedView: View{
 
 /// View to specify where to start processing sents : @ sent0, 1, 2…
 struct TaggingOffsetParamsView: View{
-    @Binding var allRunOutputs: [RunOutput]
-    @Binding var requestedOffset: Int
-    @State var usePreviousRun: Bool = false
+    @Environment(AppModel.self) private var model
     /// is there a previous run which might be able to be resumed
     var previousRun: [RunOutput] {
-        if allRunOutputs.count == 0 {
+        if model.allRunOutputs.count == 0 {
             return []
-        } else if allRunOutputs.count == 1 {
-            return allRunOutputs
+        } else if model.allRunOutputs.count == 1 {
+            return model.allRunOutputs
         } else {
-            let sorted = allRunOutputs.sorted {$0.runMetas.safeHeaderAttribs.taggingDate < $1.runMetas.safeHeaderAttribs.taggingDate}
+            let sorted = model.allRunOutputs.sorted {$0.runMetas.safeHeaderAttribs.taggingDate < $1.runMetas.safeHeaderAttribs.taggingDate}
             if let mostRecent = sorted.last{
                 return [mostRecent]
             } else {
@@ -523,18 +524,20 @@ struct TaggingOffsetParamsView: View{
     }
     
     var body: some View{
+        @Bindable var model = model
         Form {
-            Toggle(isOn: $usePreviousRun) {
+            Toggle(isOn: $model.usePreviousRun) {
                 Text("Restart last interrupted")
-            }.onChange(of: usePreviousRun){_, newValue in
+            }
+            .onChange(of: model.usePreviousRun){_, newValue in
                 if newValue == true && previousResumable {
-                    requestedOffset = previousRun[0].runMetas.processedCount
+                    model.requestedOffset = previousRun[0].runMetas.processedCount
                 }
             }
             .disabled(previousResumable == false)
             
             HStack{Text("Start from sentence…")
-                TextField("Add sent number", value: $requestedOffset, format: .number)
+                TextField("Add sent number", value: $model.requestedOffset, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.decimalPad)
             }
@@ -544,15 +547,14 @@ struct TaggingOffsetParamsView: View{
 
 /// visual of the button to push to run the pipeline
 struct TaggingProgressButtonExtractedView: View{
-    @EnvironmentObject var pipelineCache: PipelineCache
+    @Environment(AppModel.self) private var model
+
     let taggingInProgress: Bool
     let isPipelineReady: Bool
     let pipelineSummary: String
     @Binding var currentPipelineDesc: PipelineDesc?
     @Binding var currentPipelineLoaded: Bool
-    
     var previous: Int = 0
-
     var body: some View {
         Group {
             VStack {
@@ -581,40 +583,15 @@ struct TaggingProgressButtonExtractedView: View{
     }
 }
 
-//#Preview{
-//    @Previewable let isPipelineReady: Bool = true
-//    @Previewable let taggingInProgress: Bool = false
-//    @Previewable @State var currentPipelineLoaded: Bool = true
-//    @Previewable @State var currentPipelineDesc: PipelineDesc = PipelineDesc(tb: "GSD", lang: "FR", tok: "WPiece", llm: "CamemBERT")
-//
-//    TaggingProgressButtonExtractedView(
-//        taggingInProgress: taggingInProgress,
-//        isPipelineReady: isPipelineReady,
-//        pipelineSummary: "foobar",
-//        currentPipelineDesc: $currentPipelineDesc,
-//        currentPipelineLoaded: $currentPipelineLoaded,
-//        previous: 2)
-//}
-
 /// Navigation link + image to RunOutput view
 struct ToolbarLinkToOutputExtractedView: View {
-    @Binding var myConfig: TaggerConfig
-    @Binding var allRunOutputs: [RunOutput]
-    @Binding var builtSents: [BuiltSentHolder]
-    @Binding var tempTokens: [TempToken]
-    let unreadCount: Int
-    let safeHeaderAttribs: XmlHeaderAttribs
+    @Environment(AppModel.self) private var model
+    var unreadCount: Int = 0
     
     var body: some View{
         
         NavigationLink{
-            RunOutputView(
-                myConfig: $myConfig,
-                runs: $allRunOutputs,
-                safeHeaderAttribs: safeHeaderAttribs,
-                builtSents: $builtSents,
-                tempTokens: $tempTokens,
-            )
+            RunOutputView()
         } label: {
             Image(systemName: "book.pages.fill")
                 .overlay(alignment: .topTrailing) {

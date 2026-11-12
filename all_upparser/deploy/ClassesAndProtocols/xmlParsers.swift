@@ -1,79 +1,11 @@
 //
-//  DataAndFileClasses.swift
+//  xmlParsers.swift
 //  Tagger
 //
-//  Created by Adam on 10/09/2026.
-//  Classes used in decoding, reading, parsing, saving data
-
+//  Created by Adam on 11/11/2026.
+//
 import Foundation
-import Combine
 
-/// cache object to hold the currently loaded pipeline and allow verification of change
-@MainActor
-final class PipelineCache: ObservableObject {
-    let objectWillChange = ObservableObjectPublisher()
-    @Published var isLive: Bool = false
-    var key: PipelineKey?
-    private var pipeline: (any PipelineHelper)?
-
-    func lookup(_ newKey: String) -> (any PipelineHelper)? {
-        if let pipeline, key == newKey { return pipeline }   // reuse
-        pipeline = nil
-        key = nil                            // else release the old one FIRST
-        isLive = false
-        return nil
-    }
-    func store(_ newPipeline: any PipelineHelper, key newKey: String) {
-        print("running store function")
-        pipeline = newPipeline
-        key = newKey
-        isLive = true
-        print("live status inside func == \(isLive)")
-    }
-    func evict() { pipeline = nil; key = nil }
-    init(){}
-}
-
-/// class for interacting with the sandbox
-@Observable
-class SourceFileContainerModel {
-    // to make a shared, mutable state container across multiple views -->> use Class
-    var localSandboxFileURL: URL?
-    var selectedFileName: String { localSandboxFileURL?.lastPathComponent ?? "No file selected" }
-}
-
-//MARK: 2 : Classes: for loading, decoding, parsing
-///define the vocab class used for input vocabs from ML models used in BERT-like pipes, CNN-BiLSTM
-final class Vocab {
-    let itos: [String]
-    let stoi: [String: Int]
-    let pad: String
-    let unk: String
-    
-    //   //init method for the vocab class
-    init(data: VocabData) {
-        itos = data.itos
-        pad = data.pad
-        unk = data.unk
-        var map = [String: Int](minimumCapacity: data.itos.count)
-        for (i, s) in data.itos.enumerated() { map[s] = i }
-        stoi = map
-    }
-
-    var unkId: Int { stoi[unk] ?? 1 }
-    func encode(_ token: String) -> Int {  stoi[token] ?? unkId  }
-    func decode(_ id: Int) -> String { (id >= 0 && id < itos.count) ? itos[id] : unk }
-
-    //func to get path to file, load, decode and return decoded data based on name of json file
-    static func load(named name: String, bundle: Bundle = .main) throws -> Vocab {
-        guard let url = bundle.url(forResource: name, withExtension: "json") else {
-            throw PipelineError.GenericError.missingResource("\(name).json")
-        }
-        let data = try Data(contentsOf: url)
-        let decoded = try JSONDecoder().decode(VocabData.self, from: data)
-        return Vocab(data: decoded)
-    }
-}
 
 ///XML parsing looking for s elements ->> used for XML-CONLL parsing:: get s block, text == s.text
 /// The class has three parser functions differing by signature and operations based on start sent, in sentence or end of sent

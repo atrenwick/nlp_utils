@@ -93,12 +93,16 @@ extension PipelineLoader{
         )
     }
     /// safely load ML compiled model
-    static func loadMlpackage(named name: String, myConfig: TaggerConfig) throws -> MLModel{
+    static func loadMlpackage(named name: String, pipelineBuildRequest: PipelineBuildRequest) throws -> MLModel{
+        let modelname = pipelineBuildRequest.base.keyChunk
+        print("getting mlpackageg for \(name)")
         guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else {
-            throw PipelineError.LoadingError.packageLoadFailed(name)
+            print("guardletfail")
+            throw PipelineError.LoadingError.packageLoadFailed(name, modelname)
         }
+        print(url)
         do {
-            switch myConfig.parsingConfig.modelArchitecture {
+            switch pipelineBuildRequest.base {
                 case .distilbert, .camembert, .roberta, .rnn:
                 let configuration = MLModelConfiguration()
                 configuration.computeUnits = .all
@@ -107,12 +111,10 @@ extension PipelineLoader{
                 return try MLModel(contentsOf: url)
             }
         } catch {
-            
-            throw PipelineError.LoadingError.packageLoadFailed("failed to load model \(name)")
+            throw PipelineError.LoadingError.packageLoadFailed("failed to load file \(name) for model \(modelname) ", modelname)
         }
     }
 }
-
 
 /// loader for RNN pipeline
 final class RNNPipelineLoader: ObservableObject, PipelineLoader{
@@ -182,11 +184,15 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
     @concurrent
     func loadRNNpipeline(
         myConfig: TaggerConfig,
+        pipelineBuildRequest: PipelineBuildRequest,
         onProgress: @MainActor @Sendable (Int, String) -> Void
     ) async throws -> RNNPipeline {
         let myConfig: TaggerConfig = myConfig
-        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
-        let treebank = await myConfig.parsingConfig.selectedTreebank.short
+//        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
+//        let treebank = await myConfig.parsingConfig.selectedTreebank.short
+        let languageCode = pipelineBuildRequest.languageCode.rawValue
+        let treebank = pipelineBuildRequest.treebank.rawValue
+
         let runExplicit: Bool = myConfig.parsingConfig.runExplicit
         let tagRole: RNNTagRole = .xpos
         let normalizeToNFC: Bool = true
@@ -209,13 +215,13 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
         let lemMeta: RNNLemmatizerMeta = try await Bundle.main.safelyDecodeJson("\(languageCode)_rnn_encoder_vocab_nmt")
         
         await onProgress(3, "Loading tagger model")
-        let taggerModel = try await RNNPipelineLoader.loadMlpackage(named: "\(languageCode)_rnn_model_rnn", myConfig: myConfig)
+        let taggerModel = try await RNNPipelineLoader.loadMlpackage(named: "\(languageCode)_rnn_model_rnn", pipelineBuildRequest: pipelineBuildRequest)
         
         await onProgress(4, "Loading lemmatizer encoder")
-        let encoderModel = try await RNNPipelineLoader.loadMlpackage(named: "\(languageCode)_rnn_encoder_nmt", myConfig: myConfig)
+        let encoderModel = try await RNNPipelineLoader.loadMlpackage(named: "\(languageCode)_rnn_encoder_nmt", pipelineBuildRequest: pipelineBuildRequest)
 
         await onProgress(5, "Loading lemmatizer decoder")
-        let decoderStepModel = try await RNNPipelineLoader.loadMlpackage(named: "\(languageCode)_rnn_decoder_step_nmt", myConfig: myConfig)
+        let decoderStepModel = try await RNNPipelineLoader.loadMlpackage(named: "\(languageCode)_rnn_decoder_step_nmt", pipelineBuildRequest: pipelineBuildRequest)
         
         return try await convertToRealRNNPipe(
             taggerModel: taggerModel,
@@ -293,11 +299,14 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
     @concurrent
     func loadBERTlikePipeline(
         myConfig: TaggerConfig,
+        pipelineBuildRequest: PipelineBuildRequest,
         onProgress: @MainActor @Sendable (Int, String) -> Void
     ) async throws -> BERTlikePipeline{
         let myConfig: TaggerConfig = myConfig
-        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
-        let treebank = await myConfig.parsingConfig.selectedTreebank.short
+//        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
+//        let treebank = await myConfig.parsingConfig.selectedTreebank.short
+        let languageCode = pipelineBuildRequest.languageCode.rawValue
+        let treebank = pipelineBuildRequest.treebank.rawValue
         let runExplicit: Bool = myConfig.parsingConfig.runExplicit
         print("loading on main thread::", Thread.isMainThread)
         let tokenizer: BERTlikeTokenizerHelper?
@@ -337,13 +346,8 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         }
 
         await onProgress(3, "Loading bertlike model")
-        let taggerModel = try await BERTlikePipeline.loadMlpackage(named: mlcPackagePaths.packageName, myConfig: myConfig)
-        // other cases like this need to be de-guarded to keep the original error thrown from the Method
-//        guard let taggerModel = try? await BERTlikePipeline.loadMlpackage(named: mlcPackagePaths.packageName, myConfig: myConfig) else {
-//                print("camembertpipeline line 118")
-//                throw PipelineError.GenericError.missingResource("\(mlcPackagePaths.packageName).mlc")
-//        }
-        //        taggerModel = try await BERTlikePipeline.loadMlpackage(named: T##String, myConfig: myConfig)
+        let taggerModel = try await BERTlikePipeline.loadMlpackage(named: mlcPackagePaths.packageName, pipelineBuildRequest: pipelineBuildRequest)
+
         await onProgress(4, "Verifying settings")
             let limits = try await Self.limits(of: taggerModel)
             seqLen = limits.seqLen
@@ -428,10 +432,16 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
     @concurrent
     func loadCNNBiLSTMpipe(
         myConfig: TaggerConfig,
+        pipelineBuildRequest: PipelineBuildRequest,
         onProgress: @MainActor @Sendable (Int, String) -> Void
     ) async throws -> CNNBiLSTMPipeline {
-        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
-        let treebank = await myConfig.parsingConfig.selectedTreebank.short
+//        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
+//        let treebank = await myConfig.parsingConfig.selectedTreebank.short
+        let languageCode = pipelineBuildRequest.languageCode.rawValue
+        let treebank = pipelineBuildRequest.treebank.short
+        
+
+
         let myConfig: TaggerConfig = myConfig
         let tokenizerModel: MLModel?
         let taggerModel: MLModel?
@@ -448,16 +458,16 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
         await onProgress(1, "Loading tokenizer model")
         let tokName = "\(languageCode)_tokenizer_\(treebank)"
         tokenizerModel = try await safeLoad(name: "\(tokName).mlc") {
-            try await Self.loadMlpackage(named: tokName, myConfig: myConfig)
+            try await Self.loadMlpackage(named: tokName, pipelineBuildRequest: pipelineBuildRequest)
         }
-
+        print("tok loaded462")
         // 2. Tagger Model
         await onProgress(2, "Loading tagger")
         let tagName = "\(languageCode)_tagger_parser_\(treebank)"
         taggerModel = try await safeLoad(name: "\(tagName).mlc") {
-            try await Self.loadMlpackage(named: tagName, myConfig: myConfig)
+            try await Self.loadMlpackage(named: tagName, pipelineBuildRequest: pipelineBuildRequest)
         }
-
+        print("tagger loaded469")
         // 3-9. Vocabularies with safeLoad for each to ensure we know WHICH vocab failed
         await onProgress(3, "Loading tokenizer char vocab")
         tokenizerCharVocab = try await safeLoad(name: "\(languageCode)_tokenizer_char_vocab_\(treebank)") {
