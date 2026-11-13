@@ -114,6 +114,11 @@ struct TaggerConfig{
             self.loadingProgress  = 0.0
             self.loadingComplete = false
         }
+        
+        func makePipeKey() -> String {
+            [modelArchitecture.keyChunk, selectedLanguage.keyChunk, selectedTreebank.keyChunk]
+                .joined(separator: "-")
+        }
     }
     
     struct ExportConfig{

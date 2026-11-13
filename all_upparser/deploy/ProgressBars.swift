@@ -57,8 +57,9 @@ struct TqdmProgressView: View {
 }
 
 struct AppleProgressView: View {
+    @Environment(AppModel.self) internal var model
     @Binding var myConfig: TaggerConfig
-
+    var requestNum: Int = 0
     struct RateData{
         let eta: String
         let rate: String
@@ -78,14 +79,15 @@ struct AppleProgressView: View {
     }
 
     var safePercent: String {
-        if myConfig.progressConfig.totalCount == myConfig.progressConfig.processedCount {
+        let overallTotal = myConfig.progressConfig.totalCount * model.myConfig.parsingConfig.pipelineRequests.count
+        if overallTotal == myConfig.progressConfig.processedCount {
             if myConfig.progressConfig.processedCount == 0 {return "0" } else { return "100"}
         } else {
-            let tidyPercent = (Double(myConfig.progressConfig.processedCount) / Double(myConfig.progressConfig.totalCount) ) * 100
+            let tidyPercent = (Double(myConfig.progressConfig.processedCount) / Double(overallTotal) ) * 100
             return String(format: "%.1f", tidyPercent)
         }
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ///  Percentage completed (leading) + Speed (trailing)
@@ -96,20 +98,33 @@ struct AppleProgressView: View {
             }
             .font(.callout)
             .foregroundColor(.primary)
-            
+
             /// Progress Bar driven by substructure values
-            ProgressView(value: Double(myConfig.progressConfig.processedCount), total: Double(myConfig.progressConfig.totalCount))
+//            ForEach(model.myConfig.parsingConfig.pipelineRequests.enumerated(), id:\.self.offset){(num,request) in :: for each goes up i n main view
+                let total = Double(myConfig.progressConfig.totalCount)
+                let processed = Double(myConfig.progressConfig.processedCount)
+                let clampedValue = total > 0 ? max(0, min(processed, total)) : 0
+            
+            ProgressView(
+                value: clampedValue, total: total)
+//                value: Double( myConfig.progressConfig.processedCount - (myConfig.progressConfig.totalCount * num) ),
+//                total: Double(myConfig.progressConfig.totalCount))
             
             /// Current item count (leading) + ETA (trailing)
             HStack {
-                Text("\(myConfig.progressConfig.processedCount) of \(myConfig.progressConfig.totalCount)")
+                Text("\(asString(processed)) of \(asString(clampedValue))")
                 Spacer()
                 Text(speedInfo.eta)
             }
             .font(.footnote)
             .foregroundColor(.secondary)
+//        }
         }
     }
+    func asString(_ number: Double)-> String{
+        String(format: "%.0f", number)
+    }
+    
 }
 
 struct PipelineProgressView: View {

@@ -850,7 +850,7 @@ extension PipelineSettingsView {
                             llm: llm
         )
     }
-    func makePipeKey(myConfig: TaggerConfig) -> String{
+    func makePipeKey(myConfig: TaggerConfig) -> String {
         return [myConfig.parsingConfig.modelArchitecture.keyChunk, myConfig.parsingConfig.selectedLanguage.keyChunk, myConfig.parsingConfig.selectedTreebank.keyChunk].joined(separator: "-")
     }
     
@@ -896,12 +896,12 @@ extension PipelineSettingsView {
         Task {
             do {
                 for pipelineRequest in model.myConfig.parsingConfig.pipelineRequests {
-                    
                     model.myConfig.progressConfig.processingStatus = .inprogress
                     model.myConfig.viewSettings.showLoadProgress = true
                     model.myConfig.viewSettings.showProcessingProgress = false
-                    /// update
-                    var currentKey: String = makePipeKey(myConfig: model.myConfig)
+
+                    //                    var currentKey: String = makePipeKey(myConfig: model.myConfig)
+                    let currentKey: String = model.myConfig.parsingConfig.makePipeKey()
                     model.myConfig.parsingConfig.key = currentKey
                     model.myConfig.outputData.safeHeaderAttribs = XMLMakingWorkflow
                         .makeSafeHeaderAttribs(
@@ -909,13 +909,12 @@ extension PipelineSettingsView {
                             pipelineRequest: pipelineRequest,
                             fileContainerModel: model.fileContainerModel
                         )
-
                     
                     var allSentences: [HashableSentence] = []
                     var pipeline: any PipelineHelper
+                    defer { model.myConfig.viewSettings.showLoadProgress = false }
                     do {
                         model.myConfig.outputData.outSents = []
-                        
                         if model.currentMode != .multi, let cachedPipeline = pipelineCache.lookup(currentKey) {
                             pipeline = cachedPipeline
                         } else {
@@ -933,25 +932,26 @@ extension PipelineSettingsView {
                             
                             //MARK: set pipeline maxwords, seqlen
                             pipeline = loadedPipeline
-                            print(describePipeline(pipepline: pipeline, myConfig: model.myConfig))
                             pipelineCache.store(pipeline, key: currentKey)
-                            if model.myConfig.parsingConfig.runExplicit { print("Pipelinemax_words = \(loadedPipeline.maxWords) @ 228") }
+                            if model.myConfig.parsingConfig.runExplicit {
+                                print(describePipeline(pipepline: pipeline, myConfig: model.myConfig))
+                                print("Pipelinemax_words = \(loadedPipeline.maxWords) @ 228")
+                            }
                         }
                     } catch let loadingError as PipelineError.LoadingError {
-                        // Pass specific pipeline errors (like missingResource or architectureConflict) straight through
                         if model.myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(loadingError)") }
                         currentStatus = "Error loading pipeline."
-                        model.myConfig.viewSettings.showLoadProgress = false
+//                        model.myConfig.viewSettings.showLoadProgress = false
                         model.myConfig.progressConfig.processingStatus = .failed
                         throw loadingError
                     } catch {
                         if model.myConfig.parsingConfig.runExplicit { print("Failed to load pipeline funct internal 1074: \(error)") }
                         currentStatus = "Error loading pipeline."
-                        model.myConfig.viewSettings.showLoadProgress = false
+//                        model.myConfig.viewSettings.showLoadProgress = false
                         model.myConfig.progressConfig.processingStatus = .failed
                         throw PipelineError.ConfigurationError.notReadyToSendToRunner
                     }
-                    model.myConfig.viewSettings.showLoadProgress = false
+//                    model.myConfig.viewSettings.showLoadProgress = false
                     if model.myConfig.parsingConfig.runExplicit { print(currentStatus) }
                     
                     //MARK: INGEST SENTS, trim to custom offset or 0 :: dropfirst 0 doesn't drop the 0th item in array
@@ -1058,34 +1058,59 @@ extension PipelineSettingsView {
                 model.myConfig.progressConfig.processingStatus = .failed
                 model.myConfig.viewSettings.showProcessingProgress = false
                 print(type(of: error))
-                switch error {
-                        // Match nested errors with .syntax
-                    case let tokPieceError as PipelineError.TokPieceError:
-                        model.myConfig.progressConfig.alertMessage = tokPieceError.errorDescription ?? "Unknown TokPieceError "
-                    case let sentencePieceTokenizerError as PipelineError.SentencePieceTokenizerError:
-                        model.myConfig.progressConfig.alertMessage = sentencePieceTokenizerError.errorDescription ?? "Unknown SentencePieceTokenizerError"
-                    case let configurationError as PipelineError.ConfigurationError:
-                        model.myConfig.progressConfig.alertMessage = configurationError.errorDescription ?? "Unknown ConfigurationError"
-                    case let loadingError as PipelineError.LoadingError:
-                        model.myConfig.progressConfig.alertMessage = loadingError.errorDescription ?? "Unknown LoadingError"
-                    case let ingestionError as PipelineError.IngestionError:
-                        model.myConfig.progressConfig.alertMessage = ingestionError.errorDescription ?? "Unknown IngestionError"
-                    case let processingError as PipelineError.ProcessingError:
-                        model.myConfig.progressConfig.alertMessage = processingError.errorDescription ?? "Unknown ProcessingError"
-                    case let exportError as PipelineError.ExportError:
-                        model.myConfig.progressConfig.alertMessage = exportError.errorDescription ?? "Unknown ExportError"
-                    case let genericError as PipelineError.GenericError:
-                        model.myConfig.progressConfig.alertMessage = genericError.errorDescription ?? "Unknown GenericError"
-                    case let nsError as NSError where nsError.domain == XMLParser.errorDomain:
-                        model.myConfig.progressConfig.alertMessage = "XML Parsing error : No valid XML to parse"
-                    default:
-                        model.myConfig.progressConfig.alertMessage = error.localizedDescription
+                handlePipelineErrorAlerts(error: error)
+//                switch error {
+//                    case let tokPieceError as PipelineError.TokPieceError:
+//                        model.myConfig.progressConfig.alertMessage = tokPieceError.errorDescription ?? "Unknown TokPieceError "
+//                    case let sentencePieceTokenizerError as PipelineError.SentencePieceTokenizerError:
+//                        model.myConfig.progressConfig.alertMessage = sentencePieceTokenizerError.errorDescription ?? "Unknown SentencePieceTokenizerError"
+//                    case let configurationError as PipelineError.ConfigurationError:
+//                        model.myConfig.progressConfig.alertMessage = configurationError.errorDescription ?? "Unknown ConfigurationError"
+//                    case let loadingError as PipelineError.LoadingError:
+//                        model.myConfig.progressConfig.alertMessage = loadingError.errorDescription ?? "Unknown LoadingError"
+//                    case let ingestionError as PipelineError.IngestionError:
+//                        model.myConfig.progressConfig.alertMessage = ingestionError.errorDescription ?? "Unknown IngestionError"
+//                    case let processingError as PipelineError.ProcessingError:
+//                        model.myConfig.progressConfig.alertMessage = processingError.errorDescription ?? "Unknown ProcessingError"
+//                    case let exportError as PipelineError.ExportError:
+//                        model.myConfig.progressConfig.alertMessage = exportError.errorDescription ?? "Unknown ExportError"
+//                    case let genericError as PipelineError.GenericError:
+//                        model.myConfig.progressConfig.alertMessage = genericError.errorDescription ?? "Unknown GenericError"
+//                    case let nsError as NSError where nsError.domain == XMLParser.errorDomain:
+//                        model.myConfig.progressConfig.alertMessage = "XML Parsing error : No valid XML to parse"
+//                    default:
+//                        model.myConfig.progressConfig.alertMessage = error.localizedDescription
                 }
                 await MainActor.run {
                     taggingInProgress.wrappedValue = false
                 }
             }
         }
+    
+    func handlePipelineErrorAlerts(error: Error){
+        switch error {
+            case let tokPieceError as PipelineError.TokPieceError:
+                model.myConfig.progressConfig.alertMessage = tokPieceError.errorDescription ?? "Unknown TokPieceError "
+            case let sentencePieceTokenizerError as PipelineError.SentencePieceTokenizerError:
+                model.myConfig.progressConfig.alertMessage = sentencePieceTokenizerError.errorDescription ?? "Unknown SentencePieceTokenizerError"
+            case let configurationError as PipelineError.ConfigurationError:
+                model.myConfig.progressConfig.alertMessage = configurationError.errorDescription ?? "Unknown ConfigurationError"
+            case let loadingError as PipelineError.LoadingError:
+                model.myConfig.progressConfig.alertMessage = loadingError.errorDescription ?? "Unknown LoadingError"
+            case let ingestionError as PipelineError.IngestionError:
+                model.myConfig.progressConfig.alertMessage = ingestionError.errorDescription ?? "Unknown IngestionError"
+            case let processingError as PipelineError.ProcessingError:
+                model.myConfig.progressConfig.alertMessage = processingError.errorDescription ?? "Unknown ProcessingError"
+            case let exportError as PipelineError.ExportError:
+                model.myConfig.progressConfig.alertMessage = exportError.errorDescription ?? "Unknown ExportError"
+            case let genericError as PipelineError.GenericError:
+                model.myConfig.progressConfig.alertMessage = genericError.errorDescription ?? "Unknown GenericError"
+            case let nsError as NSError where nsError.domain == XMLParser.errorDomain:
+                model.myConfig.progressConfig.alertMessage = "XML Parsing error : No valid XML to parse"
+            default:
+                model.myConfig.progressConfig.alertMessage = error.localizedDescription
+
+    }
     }
 }
 //MARK: 2 : Classes: for loading, decoding, parsing

@@ -164,6 +164,11 @@ struct PipelineBuildRequest: Identifiable{
     }
 }
 
+struct MLCPackagePath {
+    let tokenizerName: String
+    let packageName: String
+}
+
 struct RegexLangPatternToLangMap: Identifiable{
     var id = UUID()
     let string: String
