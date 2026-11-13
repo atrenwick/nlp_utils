@@ -8,12 +8,13 @@
 import Foundation
 internal import UniformTypeIdentifiers
 
-
-struct MLCPackagePath {
-    let tokenizerName: String
-    let packageName: String
+/// ultrasimple enumeration used for getting URLs for tagging assets
+enum AssetType: String{
+    case mlmodelc
+    case json
 }
 
+/// architecture for ML model used for annotation
 enum ModelArchitecture: String, CaseIterable, Identifiable{
     var id: Self { self }
     case distilbert
@@ -47,11 +48,13 @@ enum ConllLineContent {
     case blank
 }
 
+/// direction in which to process tokens looking at either the current token or the next token
 enum EosApproach{
     case current
     case next
 }
 
+/// export format for annotations
 enum ExportFormat: String, CaseIterable, Identifiable, Codable {
     var id: Self {self}
     case xml
@@ -71,6 +74,7 @@ enum ExportFormat: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+/// file type for files to be tagged
 enum InputFileType: String, Identifiable, CaseIterable, Codable {
     var id: Self { self }
     case conll
@@ -104,6 +108,7 @@ enum InputFileType: String, Identifiable, CaseIterable, Codable {
         }
     }
     
+    /// var linking specific file extensions to plainText type
     var utType: UTType{
         switch self {
         case .conll, .manual, .txt: return .plainText
@@ -112,6 +117,8 @@ enum InputFileType: String, Identifiable, CaseIterable, Codable {
     }
 }
 
+/// position where new items should be placed relative to the row selected
+/// used in forms allowing manual addition of items
 enum InsertPosition : String, Identifiable, CaseIterable{
     var id: Self {self}
     case before
@@ -265,6 +272,7 @@ enum Language: String, CaseIterable, Identifiable {
     }
 }
 
+/// source for lemmas : via rule-based or hybrid method
 enum LemmaSource: String, CaseIterable, Identifiable{
     var id: Self {self}
     case rule
@@ -280,6 +288,7 @@ enum LemmaSource: String, CaseIterable, Identifiable{
     }
 }
 
+/// possible results of post-processing a sentence
 enum OnSentResultType: String, RawRepresentable, CaseIterable{
     var id : Self {self}
     case empty
@@ -289,13 +298,14 @@ enum OnSentResultType: String, RawRepresentable, CaseIterable{
     case otherError
 }
 
+/// parsing a document with a single parser, or with multiple, successive but independent parsers
 enum ParsingType: String, Identifiable, CaseIterable {
     var id: Self {self}
     case single
     case multi
 }
 
-
+/// Which pipeline steps should be run
 enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
     /// RawValue type (Int) links each case to an integer (1, 2, 3, 4).
     /// Comparable conformance allows using <, >, <=, >= on enum cases.
@@ -323,8 +333,8 @@ enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
     }
 }
 
+/// general stash of regexes for tokenisation and sentencisation
 enum RegexStash{
-    
     enum blobToSents{
         static let regex1 = try! Regex("\n\n")
         static let regex2 = try! Regex("\n")
@@ -359,6 +369,7 @@ enum RegexStash{
     }
 }
 
+/// status of processing by an annotation pipeline
 enum ProcessingStatus: String, CaseIterable, Codable {
     case notstarted
     case inprogress
@@ -386,11 +397,13 @@ enum ProcessingStatus: String, CaseIterable, Codable {
     }
 }
 
+/// reset the export directory to which location
 enum ResetDirOption{
     case defaultvalue
     case sandbox
 }
 
+/// strategies to apply when retokenising already tokenised text
 /// skip is special case for txt parsed from raw file - is already Hashable, so skip by toggling value
 enum RetokenisationType: String, Identifiable, CaseIterable, Codable{
     var id: Self {self}
@@ -400,6 +413,7 @@ enum RetokenisationType: String, Identifiable, CaseIterable, Codable{
     case skip = "skip"
     }
 
+/// strategies for dividing texts into sentences
 enum SentencizingMethod: String, Identifiable, CaseIterable, Codable {
     var id: Self {self}
     case nlSentencizer
@@ -417,11 +431,13 @@ enum SentencizingMethod: String, Identifiable, CaseIterable, Codable {
     }
 }
 
+/// keys used in reading, writing defaults for output directory, as URL and Data
 enum StoreKey {
     static let outputDir = "outputDirDefault"        // URL (for comparison/display)
     static let outputBookmark = "outputDirBookmark"  // Data (for access)
 }
 
+/// strategies for tokenising text
 enum TokenizingMethod : String, Identifiable, CaseIterable, Codable{
     var id: Self {self}
     case custom = "Custom"

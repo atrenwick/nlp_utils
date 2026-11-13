@@ -62,10 +62,11 @@ extension PipelineLoader{
     static func loadLabelVocabularies(languageCode: String,
                                       treebank: String,
                                       bundle: Bundle = .main,
-                                      modelArchitecture: ModelArchitecture
+                                      modelArchitecture: ModelArchitecture,
+                                      pipelineBuildRequest: PipelineBuildRequest
     ) throws -> BERTpipeHelperStructs.LabelVocabs {
         
-        func vocab(_ label: String) throws -> Vocab {
+        func vocab(_ label: String,  pipelineBuildRequest: PipelineBuildRequest,) throws -> Vocab {
             let name: String
             switch modelArchitecture {
             case .distilbert:
@@ -77,29 +78,47 @@ extension PipelineLoader{
                 case .cnnBiLSTM, .rnn:
                     throw PipelineError.ConfigurationError.architectureConflict
             }
-            guard let url = bundle.url(forResource: name, withExtension: "json") else {
-                throw PipelineError.LoadingError.resourceMissing("\(name).json")
-            }
+            let url = try getSafeAssetURL(named: name, pipelineBuildRequest: pipelineBuildRequest, assetType: AssetType.json)
+//            guard let url = bundle.url(forResource: name, withExtension: "json")
+//            else {
+//                throw PipelineError.LoadingError.resourceMissing("\(name).json")
+//            }
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode(VocabData.self, from: data)
             return Vocab(data: decoded)
         }
 
         return BERTpipeHelperStructs.LabelVocabs(
-            upos: try vocab("upos"),
-            feats: try vocab("feats"),
-            deprel: try vocab("deprel"),
-            lemmaRule: try vocab("lemma_rule")
+            upos: try vocab("upos",  pipelineBuildRequest: pipelineBuildRequest),
+            feats: try vocab("feats", pipelineBuildRequest: pipelineBuildRequest),
+            deprel: try vocab("deprel", pipelineBuildRequest: pipelineBuildRequest),
+            lemmaRule: try vocab("lemma_rule", pipelineBuildRequest: pipelineBuildRequest)
         )
     }
+    static func getSafeAssetURL(named name: String, pipelineBuildRequest: PipelineBuildRequest, assetType: AssetType) throws -> URL {
+        let modelname = pipelineBuildRequest.base.keyChunk
+        let specificSubfolder = "\(pipelineBuildRequest.base)_lmlmodelc" // hardcoded for moment, as all jsons bundled
+        guard let bundleURL = Bundle.main.url(forResource: name, withExtension: assetType.rawValue) else {
+            // 2. Fallback: Try the app's sandbox documents directory
+            guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                throw PipelineError.LoadingError.packageLoadFailed(name, modelname)
+            }
+            let sandboxURL = documentsDirectory.appendingPathComponent("models").appendingPathComponent(specificSubfolder).appendingPathComponent(name).appendingPathExtension(assetType.rawValue)
+            // Verify the file actually exists in the sandbox before returning
+            if FileManager.default.fileExists(atPath: sandboxURL.path) {
+                return sandboxURL
+            } else {
+                throw PipelineError.LoadingError.packageLoadFailed(name, modelname)
+            }
+        }
+        return bundleURL
+    }
+
     /// safely load ML compiled model
     static func loadMlpackage(named name: String, pipelineBuildRequest: PipelineBuildRequest) throws -> MLModel{
-        let modelname = pipelineBuildRequest.base.keyChunk
         print("getting mlpackageg for \(name)")
-        guard let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc") else {
-            print("guardletfail")
-            throw PipelineError.LoadingError.packageLoadFailed(name, modelname)
-        }
+        let modelname = pipelineBuildRequest.base.keyChunk
+        let url = try getSafeAssetURL(named: name, pipelineBuildRequest: pipelineBuildRequest, assetType: AssetType.mlmodelc)
         print(url)
         do {
             switch pipelineBuildRequest.base {
@@ -306,7 +325,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
 //        let languageCode = myConfig.parsingConfig.selectedLanguage.rawValue
 //        let treebank = await myConfig.parsingConfig.selectedTreebank.short
         let languageCode = pipelineBuildRequest.languageCode.rawValue
-        let treebank = pipelineBuildRequest.treebank.rawValue
+        let treebank = await pipelineBuildRequest.treebank.short
         let runExplicit: Bool = myConfig.parsingConfig.runExplicit
         print("loading on main thread::", Thread.isMainThread)
         let tokenizer: BERTlikeTokenizerHelper?
@@ -318,7 +337,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         var mlcPackagePaths: MLCPackagePath
         mlcPackagePaths = await makeMlcNames(languageCode: languageCode, base: myConfig.parsingConfig.modelArchitecture, treebank: treebank)
         await onProgress(1, "Loading vocabs")
-        labels = try await BERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, modelArchitecture: modelArchitecture)
+        labels = try await BERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, modelArchitecture: modelArchitecture, pipelineBuildRequest: pipelineBuildRequest)
 
         switch modelArchitecture {
             case .camembert, .roberta:
