@@ -41,6 +41,37 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .roberta: return "ROB"
         }
     }
+    
+    var llm: String{
+        switch self{
+        case .distilbert: return "DistilBERT"
+        case .cnnBiLSTM: return "NA"
+        case .camembert: return "CamemBERT"
+        case .rnn: return "NA"
+        case .roberta: return "XLM-roBERTa"
+        }
+    }
+    var internalTokeniser: String{
+        switch self{
+        case .distilbert: return "WPiece"
+        case .cnnBiLSTM, .rnn: return "NA"
+        case .camembert, .roberta: return "SPiece"
+        
+        }
+    }
+}
+
+enum LLMInternalTokeniser: String {
+    var id: Self {self}
+    case sentencePiece
+    case wordPiece
+
+    var shortName: String {
+    switch self {
+        case .sentencePiece: return "SPiece"
+        case .wordPiece: return "WPiece"
+    }
+    }
 }
 
 enum ConllLineContent {
@@ -123,6 +154,13 @@ enum InsertPosition : String, Identifiable, CaseIterable{
     var id: Self {self}
     case before
     case after
+    
+    var imageName: String {
+        switch self{
+            case .before: return "arrow.turn.left.up"
+            case .after: return "arrow.turn.left.down"
+        }
+    }
 }
 
 enum Language: String, CaseIterable, Identifiable {

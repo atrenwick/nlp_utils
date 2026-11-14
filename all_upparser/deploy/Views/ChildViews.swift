@@ -50,8 +50,7 @@ struct BuiltSentsViewer: View {
         }
     }
 }
-
-/// Choose the source file to get, parse
+// Choose the source file to get, parse
 struct ChooseInputFileViewSection: View {
     @Environment(AppModel.self) private var model
     @State private var isSelectingFile: Bool = false
@@ -119,10 +118,10 @@ struct ExportConfigViewSection: View {
                     Text(formatOption.rawValue)
                 }
             }
-            // 1. User types the filename
+            /// User types the filename here
             FileNameInputViewSection()
             
-            // 2. User chooses the target folder
+            /// User chooses the target folder here
             HStack {
                 Text("Destination:")
                 Spacer()
@@ -165,7 +164,7 @@ struct ExportConfigViewSection: View {
                 Text(xmlSettingDisplayText)
             }
         }
-        // Folder Selection System Sheet
+        /// Folder Selection System Sheet
         .fileImporter(
             isPresented: $isSelectingFolder,
             allowedContentTypes: [.folder],
@@ -255,7 +254,7 @@ struct GoSectionUpperHalf: View{
             missingReqsMessage: missingReqsMessage
         )
         if myConfig.viewSettings.showLoadProgress  {
-            Text("part2")
+//            Text("part2")
             VStack {
                 ProgressView(
                     value: isLoading ? Double(loadedCount) : 0.0,
@@ -316,9 +315,7 @@ struct OutputFileListView: View{
 struct OutputLinesExtractedView: View {
     @Environment(AppModel.self) private var model
 
-    private var visibleSents: [String] {
-        Array(model.outputLines.prefix(50))
-    }
+    private var visibleSents: [String] { Array(model.outputLines.prefix(50)) }
 
     var body: some View{
         ScrollView {
@@ -365,7 +362,7 @@ struct PretokenisedSentExtractedView : View {
 struct TokenisationEditView: View {
     @Environment(AppModel.self) private var model
     @FocusState var isFocused
-    var insertImage: String { (model.myConfig.parsingConfig.insertNewTokPosition == .before) ? "arrow.turn.left.up" : "arrow.turn.left.down"}
+//    var insertImage: String { (model.myConfig.parsingConfig.insertNewTokPosition == .before) ? "arrow.turn.left.up" : "arrow.turn.left.down"}
     
     var body: some View {
         @Bindable var model = model
@@ -387,7 +384,7 @@ struct TokenisationEditView: View {
                         insertItem( model.myConfig.parsingConfig.insertNewTokPosition, relativeTo: token.id)
                     } label: {
                         VStack{
-                            Image(systemName: insertImage)
+                            Image(systemName: model.myConfig.parsingConfig.insertNewTokPosition.imageName)
                         }
                     }
                 }
@@ -449,17 +446,15 @@ struct InputTypeExtractedView: View{
         }
         .onChange(of: model.myConfig.inputConfig.inputFileType) { _, newFileType in
             switch newFileType{
-            case .txt:
+                case .txt:
                     model.myConfig.parsingConfig.runRetokeniser = true
-            case .manual:
+                case .manual:
                     model.myConfig.parsingConfig.runRetokeniser = false
-            case .conll, .xml, .xmlConll:
-                    if model.myConfig.inputConfig.detectLanguage {
-                        if let detectedLang = FileIngestionWorkflow.detectLangInFilename(
-                            inputURL: model.fileContainerModel.localSandboxFileURL) {
-                            model.myConfig.parsingConfig.selectedLanguage = detectedLang
+                case .conll, .xml, .xmlConll:
+                    if model.myConfig.inputConfig.detectLanguage, let detectedLang = FileIngestionWorkflow.detectLangInFilename(
+                        inputURL: model.fileContainerModel.localSandboxFileURL) {
+                        model.myConfig.parsingConfig.selectedLanguage = detectedLang
                     }
-                }
             }
         }
     }
@@ -515,7 +510,7 @@ struct TaggingOffsetParamsView: View{
         }
     }
     /// determine if a previous run that does exist is actually resumable
-    var previousResumable: Bool{
+    var previousResumable: Bool {
         if previousRun.count >= 1  && previousRun[0].runMetas.processingStatus.interruptRequested == "True" {
             return true
         } else {
@@ -587,7 +582,6 @@ struct TaggingProgressButtonExtractedView: View{
 struct ToolbarLinkToOutputExtractedView: View {
     @Environment(AppModel.self) private var model
     var unreadCount: Int = 0
-    
     var body: some View{
         
         NavigationLink{
