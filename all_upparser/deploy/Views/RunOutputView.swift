@@ -74,7 +74,6 @@ struct RunOutputDetailView: View{
                                     processingStatus: model.myConfig.progressConfig.processingStatus
                                 )
                                 if let hasURL = runOutput.runMetas.savedURL{
-                                    
                                     model.runOutputFileList.append(
                                         OutputFileListHelper(
                                             id: UUID(),
@@ -159,7 +158,10 @@ struct RunOutputDetailView: View{
         additionalExportFormat: ExportFormat,
         processingStatus: ProcessingStatus
     ) throws -> RunOutput {
-        
+        @Bindable var model = model
+        var newRunNumber: Int = model.runNum
+        newRunNumber += 1
+        model.runNum = newRunNumber
         let exportContent = GeneralOutputMakingWorkflow.makeExportContent(
             headers: run.runMetas.safeHeaderAttribs,
             sents: run.runData.sents,
@@ -184,7 +186,7 @@ struct RunOutputDetailView: View{
             treebank: Language.Treebank(rawValue: run.runMetas.treebank) ?? Language.Treebank.frTB1
         )
         let runMetas = WritingWorkflow.saveFileToChosenLocation(myConfig: model.myConfig, exportContent: exportContent, pipelineRequest: pipelineRequestForAdditional, runID: run.runID, processingStatus: model.myConfig.progressConfig.processingStatus, additional: additionalExportParams)
-        let runOutput = RunOutput(runID: run.runID, runData: runData, runMetas: runMetas)
+        let runOutput = RunOutput(num: newRunNumber, runID: run.runID, runData: runData, runMetas: runMetas)
         return runOutput
     }
 }
@@ -193,40 +195,34 @@ struct RunOutputDetailView: View{
 struct RunOutputView: View {
     @Environment(AppModel.self) private var model
     @State var showImporter: Bool = false
-
     var body: some View {
         @Bindable var model = model
         NavigationStack{
-            if model.allRunOutputs.count == 0 {
-                Text("Not much to see here")
-            } else {
-                NavigationStack{
-                    List{
-                        ForEach(model.allRunOutputs.enumerated(), id:\.offset){num,run in
+            VStack{
+                if model.allRunOutputs.count == 0 {
+                    Text("No previous runs for this session\nTo load saved runs, use Load")
+                } else {
+                    Form{
+                        ForEach($model.allRunOutputs){$run in
                             NavigationLink {
-                                RunOutputDetailView(
-                                    run: bindingFor(run),
-                                )
+                                RunOutputDetailView( run: $run)
                             } label: {
-                                Text(makeRunLabel(run: run, num: num))
+                                Text(makeRunLabel(run: run, num: run.num))
                             }
+                            .contentShape(Rectangle())
+                            .swipeActions(edge: .trailing){
+                                Button(role: .destructive){
+                                    deleteRun(runID: run.runID)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            } // end of for each, attach deletion here
                         }
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showImporter) {
-            RunSelectorModal { selectedURL in
-                do {
-                    let data = try Data(contentsOf: selectedURL)
-                    let loadedResult = try JSONDecoder().decode(RunOutput.self, from: data)
-                    model.allRunOutputs.append(loadedResult)
-                } catch {
-                    print("Failed to decode: \(error)")
-                }
-            }
-        }
-        .toolbar{
+            // toolbar insidethe navstack and the sheet its action button will call
+            .toolbar{
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showImporter = true
@@ -235,19 +231,31 @@ struct RunOutputView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showImporter) {
+                RunSelectorModal { selectedURL in
+                    do {
+                        let data = try Data(contentsOf: selectedURL)
+                        let loadedResult = try JSONDecoder().decode(RunOutput.self, from: data)
+                        model.allRunOutputs.append(loadedResult)
+                    } catch {
+                        print("Failed to decode: \(error)")
+                    }
+                }
+            }
+        }
     }
     func makeRunLabel(run: RunOutput, num: Int) -> String{
-        return "Run \(num + 1): \(run.runMetas.sourceFileName) | \(run.runMetas.lang) | \(run.runMetas.treebank) | \(run.runMetas.exportFormat)"
+        return "Run \(num + 1): \(run.runMetas.sourceFileName) | \(run.runMetas.lang) | \(run.runMetas.safeHeaderAttribs.modelArchitecture) | \(run.runMetas.treebank) | \(run.runMetas.exportFormat)"
     }
-    
-    // func to get binding for specific el to pass as write-accessible
-    private func bindingFor(_ run: RunOutput) -> Binding<RunOutput> {
-        @Bindable var model = model
-        guard let index = model.allRunOutputs.firstIndex(where: { $0.id == run.id }) else {
-                fatalError("RunOutput not found — shouldn't happen")
-            }
-        return $model.allRunOutputs[index]
-        }
+    // func to take an already evaluated runID and then do a delete on it, to avoid simultaneous access attempts from getID and deleteItem
+    func deleteRun(runID: String){
+        model.allRunOutputs.removeAll {$0.runID == runID}
+    }
+}
+
+#Preview {
+    @Previewable @State var appModel = AppModel()
+    RunOutputView( ).environment(appModel)
 }
 
 // choose a previous run to load

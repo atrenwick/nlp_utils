@@ -27,6 +27,10 @@ struct TaggerApp: App {
                 Tab("Outputs", systemImage: "book.pages.fill"){
                     RunOutputView()
                 }
+                Tab("Settings", systemImage: "gear"){
+                    SetDefaultsView()
+                }
+
             }
             
             .environment(model)

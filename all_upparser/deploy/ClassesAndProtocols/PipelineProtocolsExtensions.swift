@@ -149,6 +149,7 @@ protocol PipelineHelper {
     
 }
 
+
 /// protocol specific to bert-likes for subtoken awareness
 protocol SubtokenAwarePipelineHelper {
     var seqLen: Int { get }
@@ -859,8 +860,6 @@ extension PipelineSettingsView {
         isFirstRun: Binding<Bool>,
     ) {
         @Bindable var model = model
-        let pipelineCache: PipelineCache = model.pipelineCache
-        var requestedOffset: Int = model.requestedOffset
 
         // MARK: parameters, initialisations for task
         if !isFirstRun.wrappedValue {
@@ -869,21 +868,15 @@ extension PipelineSettingsView {
             isFirstRun.wrappedValue = false
         }
         
+        let pipelineCache: PipelineCache = model.pipelineCache
+        var requestedOffset: Int = model.requestedOffset
         /// set bools
         model.myConfig.parsingConfig.runExplicit = true
         model.myConfig.progressConfig.hasStarted = true
         taggingInProgress.wrappedValue = true
         interruptSignalled = false
         
-        /// var + constants for run
-//        var requestedOffset = requestedOffset
-//        let theseHeaderAttribs = XMLMakingWorkflow.makeSafeHeaderAttribs(myConfig: model.myConfig, fileContainerModel: model.fileContainerModel)
-//        let currentKey: String = makePipeKey(myConfig: model.myConfig)
-//        model.myConfig.outputData.safeHeaderAttribs = theseHeaderAttribs
-//        model.myConfig.parsingConfig.key = currentKey
-//        if model.myConfig.parsingConfig.runExplicit { print("Build header attribs: \(theseHeaderAttribs)") }
-//        print("currentKey = \(currentKey), currentInterrupt = \(interruptSignalled)")
-//        
+//
         if model.currentMode == ParsingType.single {
             model.myConfig.parsingConfig.pipelineRequests =  [PipelineBuildRequest(
                 languageCode: model.myConfig.parsingConfig.selectedLanguage,
@@ -900,7 +893,6 @@ extension PipelineSettingsView {
                     model.myConfig.viewSettings.showLoadProgress = true
                     model.myConfig.viewSettings.showProcessingProgress = false
 
-                    //                    var currentKey: String = makePipeKey(myConfig: model.myConfig)
                     let currentKey: String = model.myConfig.parsingConfig.makePipeKey()
                     model.myConfig.parsingConfig.key = currentKey
                     model.myConfig.outputData.safeHeaderAttribs = XMLMakingWorkflow
@@ -941,17 +933,14 @@ extension PipelineSettingsView {
                     } catch let loadingError as PipelineError.LoadingError {
                         if model.myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(loadingError)") }
                         currentStatus = "Error loading pipeline."
-//                        model.myConfig.viewSettings.showLoadProgress = false
                         model.myConfig.progressConfig.processingStatus = .failed
                         throw loadingError
                     } catch {
                         if model.myConfig.parsingConfig.runExplicit { print("Failed to load pipeline funct internal 1074: \(error)") }
                         currentStatus = "Error loading pipeline."
-//                        model.myConfig.viewSettings.showLoadProgress = false
                         model.myConfig.progressConfig.processingStatus = .failed
                         throw PipelineError.ConfigurationError.notReadyToSendToRunner
                     }
-//                    model.myConfig.viewSettings.showLoadProgress = false
                     if model.myConfig.parsingConfig.runExplicit { print(currentStatus) }
                     
                     //MARK: INGEST SENTS, trim to custom offset or 0 :: dropfirst 0 doesn't drop the 0th item in array
@@ -1040,7 +1029,7 @@ extension PipelineSettingsView {
                     //MARK: print
                     print("exit condition == \(model.myConfig.progressConfig.exitCondition)")
                     try PrintWorkflow.dumpDetailsForRunExplicit(myConfig: model.myConfig, taggingInProgress: $taggingInProgress)
-                    model.runOutput = PostPipelineWorkflow.makeTidyRunOutput(myConfig: model.myConfig, pipelineRequest: pipelineRequest)
+                    model.runOutput = PostPipelineWorkflow.makeTidyRunOutput(myConfig: model.myConfig, pipelineRequest: pipelineRequest, model: model)
                     
                     try await MainActor.run {
                         taggingInProgress.wrappedValue = false
@@ -1057,29 +1046,7 @@ extension PipelineSettingsView {
             } catch {
                 model.myConfig.progressConfig.processingStatus = .failed
                 model.myConfig.viewSettings.showProcessingProgress = false
-                print(type(of: error))
                 handlePipelineErrorAlerts(error: error)
-//                switch error {
-//                    case let tokPieceError as PipelineError.TokPieceError:
-//                        model.myConfig.progressConfig.alertMessage = tokPieceError.errorDescription ?? "Unknown TokPieceError "
-//                    case let sentencePieceTokenizerError as PipelineError.SentencePieceTokenizerError:
-//                        model.myConfig.progressConfig.alertMessage = sentencePieceTokenizerError.errorDescription ?? "Unknown SentencePieceTokenizerError"
-//                    case let configurationError as PipelineError.ConfigurationError:
-//                        model.myConfig.progressConfig.alertMessage = configurationError.errorDescription ?? "Unknown ConfigurationError"
-//                    case let loadingError as PipelineError.LoadingError:
-//                        model.myConfig.progressConfig.alertMessage = loadingError.errorDescription ?? "Unknown LoadingError"
-//                    case let ingestionError as PipelineError.IngestionError:
-//                        model.myConfig.progressConfig.alertMessage = ingestionError.errorDescription ?? "Unknown IngestionError"
-//                    case let processingError as PipelineError.ProcessingError:
-//                        model.myConfig.progressConfig.alertMessage = processingError.errorDescription ?? "Unknown ProcessingError"
-//                    case let exportError as PipelineError.ExportError:
-//                        model.myConfig.progressConfig.alertMessage = exportError.errorDescription ?? "Unknown ExportError"
-//                    case let genericError as PipelineError.GenericError:
-//                        model.myConfig.progressConfig.alertMessage = genericError.errorDescription ?? "Unknown GenericError"
-//                    case let nsError as NSError where nsError.domain == XMLParser.errorDomain:
-//                        model.myConfig.progressConfig.alertMessage = "XML Parsing error : No valid XML to parse"
-//                    default:
-//                        model.myConfig.progressConfig.alertMessage = error.localizedDescription
                 }
                 await MainActor.run {
                     taggingInProgress.wrappedValue = false
@@ -1088,6 +1055,7 @@ extension PipelineSettingsView {
         }
     
     func handlePipelineErrorAlerts(error: Error){
+        print(type(of: error))
         switch error {
             case let tokPieceError as PipelineError.TokPieceError:
                 model.myConfig.progressConfig.alertMessage = tokPieceError.errorDescription ?? "Unknown TokPieceError "
@@ -1109,8 +1077,7 @@ extension PipelineSettingsView {
                 model.myConfig.progressConfig.alertMessage = "XML Parsing error : No valid XML to parse"
             default:
                 model.myConfig.progressConfig.alertMessage = error.localizedDescription
-
-    }
+        }
     }
 }
 //MARK: 2 : Classes: for loading, decoding, parsing

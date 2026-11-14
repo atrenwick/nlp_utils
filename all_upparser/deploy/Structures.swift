@@ -162,6 +162,14 @@ struct PipelineBuildRequest: Identifiable{
     var description: String {
         "\(base.displayName) - \(languageCode.rawValue) - \(treebank.short)"
     }
+    
+    func describePipeline() -> PipelineDesc{
+        return PipelineDesc(tb: treebank.shortTidy,
+                            lang: languageCode.displayName,
+                            tok: base.internalTokeniser,
+                            llm: base.llm
+                            )
+    }
 }
 
 struct MLCPackagePath {
@@ -231,6 +239,7 @@ struct RunMetas: Identifiable, Codable {
 
 struct RunOutput: Identifiable, Codable {
     var id = UUID()
+    let num: Int
     let runID: String
     let runData: RunData
     var runMetas: RunMetas
@@ -259,7 +268,7 @@ struct SandboxImporter {
     }
 }
 
-struct Sentence : Identifiable, Codable {
+struct Sentence: Identifiable, Codable {
     var id = UUID()
     let sentID: String
     let conllData: [Token]

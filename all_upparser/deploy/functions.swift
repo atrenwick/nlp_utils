@@ -816,8 +816,11 @@ enum PostPipelineWorkflow{
     //----------------------------------------------------------------------------------------------------------------------------
     //----------------------------------------------------------------------------------------------------------------------------
     //MARK: settings updaters
-    static func makeTidyRunOutput(myConfig: TaggerConfig, pipelineRequest: PipelineBuildRequest ) -> RunOutput {
-        
+    static func makeTidyRunOutput(myConfig: TaggerConfig, pipelineRequest: PipelineBuildRequest, model: AppModel ) -> RunOutput {
+        @Bindable var model = model
+        var newRunNumber: Int = model.runNum
+        newRunNumber += 1
+        model.runNum = newRunNumber
         let runID = myConfig.outputData.safeHeaderAttribs.runID
         let processingStatus = myConfig.progressConfig.processingStatus
         let exportContent = GeneralOutputMakingWorkflow.makeExportContent(
@@ -844,6 +847,7 @@ enum PostPipelineWorkflow{
         )
         
         let runOutput = RunOutput(
+            num: newRunNumber,
             runID: runID,
             runData: runData,
             runMetas: runMetas

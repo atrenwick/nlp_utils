@@ -99,16 +99,12 @@ struct AppleProgressView: View {
             .font(.callout)
             .foregroundColor(.primary)
 
-            /// Progress Bar driven by substructure values
 //            ForEach(model.myConfig.parsingConfig.pipelineRequests.enumerated(), id:\.self.offset){(num,request) in :: for each goes up i n main view
                 let total = Double(myConfig.progressConfig.totalCount)
                 let processed = Double(myConfig.progressConfig.processedCount)
                 let clampedValue = total > 0 ? max(0, min(processed, total)) : 0
             
-            ProgressView(
-                value: clampedValue, total: total)
-//                value: Double( myConfig.progressConfig.processedCount - (myConfig.progressConfig.totalCount * num) ),
-//                total: Double(myConfig.progressConfig.totalCount))
+            ProgressView(value: clampedValue, total: total)
             
             /// Current item count (leading) + ETA (trailing)
             HStack {
@@ -118,13 +114,11 @@ struct AppleProgressView: View {
             }
             .font(.footnote)
             .foregroundColor(.secondary)
-//        }
         }
     }
     func asString(_ number: Double)-> String{
         String(format: "%.0f", number)
     }
-    
 }
 
 struct PipelineProgressView: View {
