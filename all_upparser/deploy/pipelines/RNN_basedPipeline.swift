@@ -64,7 +64,7 @@ final class RNNPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableO
     var seqLen: Int = 999
     let description = "I'm an RNNTagger + NMT-lemmatiser pipeline"
     let maxWords: Int
-    var runExplicit: Bool
+    var verbosity: Verbosity
     
     // models and metadata
     let taggerModel: MLModel
@@ -110,7 +110,7 @@ final class RNNPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableO
          seqLen: Int,
          languageCode: String,
          treebank: String,
-         runExplicitValue: Bool
+         verbosity: Verbosity
          
     ) throws {
         var chars: [UInt32: Int32] = [:]
@@ -131,7 +131,7 @@ final class RNNPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableO
         self.stepModel = stepModel
         self.taggerMeta = taggerMeta
         self.lemmaMeta = lemmaMeta
-        self.runExplicit = runExplicitValue
+        self.verbosity = verbosity
         self.tagRole = tagRole
         self.normalizeToNFC = normalizeToNFC
         self.lowercaseLemmaInput = lowercaseLemmaInput
@@ -185,7 +185,7 @@ final class RNNPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableO
     /// Same contract as CNNBiLSTMPipeline.runOnSentence. Level 2 = tags, level 3 = lemmas.
     /// RNNTagger has no parser or feature head, so features, heads and relations stay "_".
     func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) -> OnSentResult {
-        if runExplicit { print("running on sents with RNNTagger + NMT pipeline") }
+        if verbosity.rawValue > 1 { print("running on sents with RNNTagger + NMT pipeline") }
         let wordPieceCount = -5
         guard !sentence.tokens.isEmpty else {
             return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .empty, decoded: [])
@@ -228,12 +228,13 @@ final class RNNPipeline: PipelineHelper, LinguisticProcessingHelper, ObservableO
                     deprel: "_",
                     col8: "_",
                     col9: "_",
-                    subTokens: []
+                    subTokens: [],
+                    preservedUUID: 1 == 1 ? sentence.uuidList[i] : "_"
                 )
             }
             return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .success, decoded: tokens)
         } catch {
-            if runExplicit { print("sentence failed: \(error.localizedDescription)") }
+            if verbosity.rawValue > 0 { print("sentence failed: \(error.localizedDescription)") }
             return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .otherError, decoded: [])
         }
     }

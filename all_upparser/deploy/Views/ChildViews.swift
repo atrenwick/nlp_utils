@@ -466,7 +466,7 @@ struct RunExplicitButtonExtractedView: View{
     @State var outputString: String = "not yet run"
     
     var body: some View{
-        if model.myConfig.parsingConfig.runExplicit{
+        if model.myConfig.parsingConfig.verbosity.rawValue > 0{
             HStack{
                 Button {
                     //                    outputString = testInstantiatePipeline(myConfig: myConfig)

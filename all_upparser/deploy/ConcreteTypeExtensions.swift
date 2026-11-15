@@ -20,7 +20,7 @@ extension Collection where Element == TempToken {
                 keepTokens.append(item.form)
             }
         }
-        let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens, conllMetas: [])
+        let returnObject = HashableSentence(id: UUID().uuidString, tokens: keepTokens, conllMetas: [], uuidList: [])
         for x in returnObject.tokens{
             print(x)
         }

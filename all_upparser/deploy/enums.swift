@@ -484,3 +484,28 @@ enum TokenizingMethod : String, Identifiable, CaseIterable, Codable{
     case manual = "Manual"
     case skip = "Skip"
 }
+
+enum Verbosity: Int, CaseIterable, Identifiable, Comparable, Codable {
+    /// RawValue type (Int) links each case to an integer (1, 2, 3, 4).
+    /// Comparable conformance allows using <, >, <=, >= on enum cases.
+    /// step1 is tokenisation, and is handled with diff pipe
+    case level0 = 0
+    case level1 = 1
+    case level2 = 2
+    
+    /// raw value = id, to conform to Identifiable
+    var id: Int { rawValue }
+    
+    /// Computed property: evaluates 'self' on demand and returns the matching  string
+    var title: String {
+        switch self {
+        case .level0: return "Minimal"
+        case .level1: return "Verbose"
+        case .level2: return "Very verbose"
+        }
+    }
+    /// required for Comparable : Swift expects this to build other comparison operattions
+    static func < (lhs: Verbosity, rhs: Verbosity) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}

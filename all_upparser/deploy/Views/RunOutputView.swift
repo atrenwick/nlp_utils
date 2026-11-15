@@ -57,7 +57,14 @@ struct RunOutputDetailView: View{
                     Text("Language : \(run.runMetas.lang)")
                     Text("Treebank : \(run.runMetas.treebank)")
                 }
-                
+                Section(){
+                    NavigationLink {
+                        TaggingComparisonView()
+                    } label: {
+                        Text("Tagging comp view")
+                    }
+
+                }
                 Section("Additional Export"){
                     HStack{
                         Picker("Format", selection: $additionalExportFormat) {
@@ -98,29 +105,30 @@ struct RunOutputDetailView: View{
                         .buttonStyle(.borderedProminent)
                     }
                 }
-                Section("Save"){
-                    HStack{
-                        Spacer()
-                        Button {
-                            do {
-                                if let savedURL = try PipelineServices.ResultStorageManager.saveRun(run){
-                                    print("Saved to \(savedURL)")}
-                            } catch {
-                                switch error {
-                                    case let fileSaveError as PipelineError.ExportError:
-                                        alertMessage = fileSaveError.errorDescription
-                                    default:
-                                        alertMessage = error.localizedDescription
-                                }
+                
+            }
+            .toolbar{
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        do {
+                            if let savedURL = try PipelineServices.ResultStorageManager.saveRun(run){
+                                print("Saved to \(savedURL)")}
+                        } catch {
+                            switch error {
+                                case let fileSaveError as PipelineError.ExportError:
+                                    alertMessage = fileSaveError.errorDescription
+                                default:
+                                    alertMessage = error.localizedDescription
                             }
-                        } label: {
-                            Text("Save")
                         }
+                    } label: {
+                        Text("Save")
                     }
-                    .tint(.blue)
-                    .buttonStyle(.borderedProminent)
+//                    .tint(.blue)
+//                    .buttonStyle(.borderedProminent)
                 }
             }
+
             .onAppear{
                 if hasAppeared == false{
                     hasAppeared = true
@@ -191,6 +199,101 @@ struct RunOutputDetailView: View{
     }
 }
 
+struct TaggingComparisonView: View{
+    @Environment(AppModel.self) private var model
+    
+    var runPair: [RunOutput] {
+        let runCount = model.myConfig.outputData.allRunOutputs.count
+        var run1: RunOutput
+        var run2: RunOutput
+        if runCount == 2 {
+            run1 = model.myConfig.outputData.allRunOutputs[0]
+            run2 = model.myConfig.outputData.allRunOutputs[1]
+        return [run1, run2]
+        }
+        else {
+            return []
+        }
+    }
+    @State var resultSet: [ComparisonElement] = []
+    var body: some View{
+        @Bindable var model = model
+        if model.allRunOutputs.count == 2{
+            let run1 = model.allRunOutputs[0]
+            let run2 = model.allRunOutputs[1]
+            
+            List {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                    // Optional header row
+                    GridRow {
+                        Text("TokID").bold()
+                        Text("Form").bold()
+                        Text("POS 1").bold()
+                        Text("POS 2").bold()
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    
+                    Divider()
+                        .gridCellUnsizedAxes(.horizontal)
+
+                    // Data rows via ForEach
+                    ForEach(processRunPair(run1: run1, run2: run2)) { item in
+                        GridRow {
+                            Text(item.tokID)
+                            Text(item.form)
+                            Text(item.pos1)
+                            Text(item.pos2)
+                        }
+                        .font(.body)
+                    }
+                }
+            }
+        }
+
+
+    }
+//    func getUUIDs()->[String]{
+//        var internalList: [String] = []
+//        if model.allRunOutputs.count > 0{
+//            for run in model.allRunOutputs{
+//                for sent in run.runData.sents{
+//                    for token in sent.conllData{
+//                        let key = token.unwrappedUUID
+////                        let value = token
+//                        internalList.append(key)
+//                    }
+//                }
+//            }
+//        }
+//        return internalList
+//    }
+    func processRunPair(run1: RunOutput, run2: RunOutput)-> [ComparisonElement] {
+        var internalResults: [ComparisonElement] = []
+                for (sent1, sent2) in zip(run1.runData.sents, run2.runData.sents){
+                    for (token1, token2) in zip(sent1.conllData, sent2.conllData){
+                        internalResults.append(
+                            ComparisonElement(
+                                uuid: token1.unwrappedUUID,
+                                tokID: String(token1.tokid),
+                                form: token1.form,
+                                pos1: token1.upos == "_" ? token1.xpos : token1.upos,
+                                pos2: token2.upos == "_" ? token2.xpos : token2.upos,
+                                lemma1: token1.lemma,  //== "_" ? token1.lemma : token1.lemma,
+                                lemma2: token2.lemma, //== "_" ? token2.lemma : token2.lemma,
+                                feats1: token1.feats, //== "_" ? token1.feats : token1.feats,
+                                feats2: token2.feats, //== "_" ? token2.feats : token2.feats,
+                                deprel1: token1.deprel, // == "_" ? token1.deprel : token1.deprel,
+                                deprel2: token2.deprel, // == "_" ? token2.deprel : token2.deprel,
+                                head1: token1.head, // == "_" ? token1.head : token1.head,
+                                head2: token2.head, // == "_" ? token2.head : token2.head,
+                            )
+                        )
+                    }
+                }
+        return internalResults
+    }
+}
 // overview list of runs == parent
 struct RunOutputView: View {
     @Environment(AppModel.self) private var model
@@ -253,10 +356,10 @@ struct RunOutputView: View {
     }
 }
 
-#Preview {
-    @Previewable @State var appModel = AppModel()
-    RunOutputView( ).environment(appModel)
-}
+//#Preview {
+//    @Previewable @State var appModel = AppModel()
+//    RunOutputView( ).environment(appModel)
+//}
 
 // choose a previous run to load
 struct RunSelectorModal: View {

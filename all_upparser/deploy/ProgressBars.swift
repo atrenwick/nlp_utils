@@ -35,7 +35,7 @@ struct TqdmProgressView: View {
         Text(tqdmLine())
             .font(.system(.footnote, design: .monospaced))
             .lineLimit(1)
-            .minimumScaleFactor(0.6) // shrinks to fit if space is tight (e.g. inside a button)
+            .minimumScaleFactor(0.6)
     }
 
     private func tqdmLine(width: Int = 20) -> String {
@@ -146,12 +146,12 @@ struct RunProgressButton: View {
     let maxPipelineStep: PipelineStep
     
     var body: some View {
-            HStack {
-                Image(systemName: taggingInProgress ? "hourglass" : "play.fill")
-                Text(taggingInProgress ? "(\(processed)/\(total))" : "Run")
-                    .fontWeight(.semibold)
-                Spacer()
-            }.opacity(taggingInProgress ? 0.5 : 1)
+        HStack {
+            Image(systemName: taggingInProgress ? "hourglass" : "play.fill")
+            Text(taggingInProgress ? "(\(processed)/\(total))" : "Run")
+                .fontWeight(.semibold)
+            Spacer()
+        }.opacity(taggingInProgress ? 0.5 : 1)
             .font(.headline)
             .frame(maxWidth: .infinity)
             .padding()
@@ -165,5 +165,5 @@ struct RunProgressButton: View {
                 }
             }
             .clipShape(Capsule())
-        }
+    }
 }

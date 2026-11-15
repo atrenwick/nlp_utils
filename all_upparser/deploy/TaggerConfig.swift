@@ -56,12 +56,13 @@ struct TaggerConfig{
         var priLemSource: LemmaSource
         var secLemSource: LemmaSource
         var getSecLems: Bool
-        var runExplicit: Bool
+//        var runExplicit: Bool
         var loadingStatusMessage: String
         var loadingProgress: Double
         var loadingComplete: Bool
         var maxSeqLen: Int
         var maxWords: Int
+        var verbosity: Verbosity
         
         // need to add = nil in init of it's to truly allow no parameters to be specified
         init(
@@ -82,12 +83,13 @@ struct TaggerConfig{
             priLemSource: LemmaSource? = nil,
             secLemSource: LemmaSource? = nil,
             getSecLems: Bool? = nil,
-            runExplicit: Bool? = nil,
+//            runExplicit: Bool? = nil,
             loadingStatusMessage: String? = nil,
             loadingProgress: Double? = nil,
             loadingComplete: Bool? = nil,
             maxSeqLen: Int? = nil,
-            maxWords: Int? = nil
+            maxWords: Int? = nil,
+            verbosity: Verbosity? = nil
         ){
             
             self.key = "XXX-XXX-XXX"
@@ -107,12 +109,14 @@ struct TaggerConfig{
             self.priLemSource = TaggerConfig.resolveRawRep(passed: priLemSource, key: "priLemSourceDefault", fallback: .hybrid )
             self.secLemSource = TaggerConfig.resolveRawRep(passed: secLemSource, key: "secLemSourceDefault", fallback: .rule )
             self.getSecLems = TaggerConfig.resolveBool(passed: getSecLems, key: "getSecLemsDefault")
-            self.runExplicit = TaggerConfig.resolveBool(passed: runExplicit, key: "runExplicifDefault")
+//            self.runExplicit = TaggerConfig.resolveBool(passed: runExplicit, key: "runExplicifDefault")
+            self.verbosity = TaggerConfig.resolveRawRep(passed: verbosity, key: "verbosityDefault", fallback: .level0)
             self.maxWords = -1
             self.maxSeqLen = 2
             self.loadingStatusMessage = ""
             self.loadingProgress  = 0.0
             self.loadingComplete = false
+            self.verbosity = Verbosity.level0
         }
         
         func makePipeKey() -> String {
@@ -212,7 +216,7 @@ struct TaggerConfig{
             self.processingStatus = ProcessingStatus.notstarted
         }
     }
-    //    // sentences ::
+    // sentences ::
     struct InputData{
         var allSentences: [HashableSentence]
         var builtSents: [BuiltSentHolder]

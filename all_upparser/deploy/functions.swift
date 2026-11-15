@@ -162,7 +162,8 @@ enum ConLLParsingWorkflow{
                         deprel: String(lineChunks[7]),
                         col8: String(lineChunks[8]),
                         col9: String(lineChunks[9]),
-                        subTokens: []
+                        subTokens: [],
+                        preservedUUID: ""
                     )
                     currentToks.append(newTok)
                 }
@@ -382,7 +383,7 @@ enum SentencizationWorkflow{
         let chunks = test2.components(separatedBy: "_EOS_")
         
         let validChunks = chunks.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        if myConfig.parsingConfig.runExplicit{
+        if myConfig.parsingConfig.verbosity.rawValue > 1 {
             for (num, chunk) in validChunks.enumerated() {
                 print("\(num) :: \(chunk)")
             }
@@ -402,7 +403,7 @@ enum SentencizationWorkflow{
         case .FR,.FRM, .FRO: nlLang = NLLanguage.french
         case .DE: nlLang = NLLanguage.german
         }
-        if myConfig.parsingConfig.runExplicit{
+        if myConfig.parsingConfig.verbosity.rawValue > 1 {
             print("sentencizing with nlSentencizer->192")
         }
         tokenizer.setLanguage(nlLang)
@@ -414,7 +415,7 @@ enum SentencizationWorkflow{
                 sentencesOut.append(itemToAppend)}
             return true
         }
-        if myConfig.parsingConfig.runExplicit{
+        if myConfig.parsingConfig.verbosity.rawValue > 1 {
             for (num, chunk) in sentencesOut.enumerated() {
                 print("\(num) :: \(chunk)")
             }
@@ -432,24 +433,24 @@ enum SentencizationWorkflow{
             // use NL or custom logic to get sentences as strings from an input blob
         case .nlSentencizer:
             // get sentences from input blob
-            if myConfig.parsingConfig.runExplicit{
+                if myConfig.parsingConfig.verbosity.rawValue > 1 {
                 print("sentencizing with nlSentencizer")
             }
             sentencesAsStrings = _getSentencesWithNL(text: normalizedText, myConfig: myConfig)
             
         case .eosMark:
-            if myConfig.parsingConfig.runExplicit{
+                if myConfig.parsingConfig.verbosity.rawValue > 1 {
                 print("finish code from EOS marking wiht regex")
             }
             
         case .custom:
-            if myConfig.parsingConfig.runExplicit{
+                if myConfig.parsingConfig.verbosity.rawValue > 1 {
                 print("sentencizing with custom")
             }
             sentencesAsStrings = _blobToSents(blob: normalizedText, myConfig: myConfig)
             
         case .naive:
-            if myConfig.parsingConfig.runExplicit{
+                if myConfig.parsingConfig.verbosity.rawValue > 1 {
                 print("Using naive sentencizer based on toks")
             }
             
@@ -508,7 +509,7 @@ enum SentencizationWorkflow{
             print("guard let failed loading form file")
             return []
         }
-        if myConfig.parsingConfig.runExplicit{
+        if myConfig.parsingConfig.verbosity.rawValue > 1 {
             print("running text file to sent strings function")
         }
         let inputString = try FileIngestionWorkflow.readFromFile(inputURL: myConfig.inputConfig.selectedInputFile)
@@ -517,7 +518,7 @@ enum SentencizationWorkflow{
         }
         do {
             let normalizedText = inputString.replacingOccurrences(of: "\\n", with: "\n").replacingOccurrences(of: "\\t", with: "\t")
-            if myConfig.parsingConfig.runExplicit{
+            if myConfig.parsingConfig.verbosity.rawValue > 1 {
                 print("first let success")
             }
             let sentencesAsString = try _applySentencizingMethodToString(normalizedText: normalizedText, myConfig: myConfig)
@@ -588,7 +589,7 @@ enum SentencizationWorkflow{
         case .txt:
             // this uses NaturalLanguage tagger as a sentenciser or custom ruleset (not yet written to sentencize blobs of text
             allSentences = try TokenisationWorkflow.textFileToHashableSents(myConfig: myConfig, pipeline: pipeline)
-            if myConfig.parsingConfig.runExplicit{
+                if myConfig.parsingConfig.verbosity.rawValue > 0 {
                 print("Mode a: \(allSentences.count) sents ")
             }
         }
@@ -734,10 +735,10 @@ enum TokenisationWorkflow{
                 }
                 return true
             }
-            let doneSent = HashableSentence(id: String(snum), tokens: currentToks, conllMetas: [])
+            let doneSent = HashableSentence(id: String(snum), tokens: currentToks, conllMetas: [], uuidList: [])
             sentsOut.append(doneSent)
         }
-        if myConfig.parsingConfig.runExplicit{
+        if myConfig.parsingConfig.verbosity.rawValue > 1 {
             for sent in sentsOut{
                 let printArray = Array(repeating: "#", count: 133).joined(separator: "")
                 print(printArray)
@@ -755,57 +756,52 @@ enum TokenisationWorkflow{
         
         var internalSentList: [HashableSentence] = []
         switch myConfig.parsingConfig.tokenizingMethod {
-            
-        case .custom, .manual, .skip:
-            if myConfig.parsingConfig.runExplicit{
-                print("using custom rules:: need to get Swift version of rules……")
-            }
-            break
-            
-        case .nltokeniser:
-            if myConfig.parsingConfig.runExplicit{
-                print("calling getTokSents @ line 85")
-                print("nltokeniser")
-            }
-            internalSentList = _getTokenisedSentences(sents: sents, myConfig: myConfig)
-            
-        case .trained:
-            switch myConfig.parsingConfig.modelArchitecture {
-                case .distilbert, .camembert, .roberta, .rnn:
-                throw PipelineError.ConfigurationError.architectureConflict
-            case .cnnBiLSTM:
-                // retokenize everything with model
-                // MARK: can change this IN to be testSentences
+            case .custom, .manual, .skip:
+                if myConfig.parsingConfig.verbosity.rawValue > 1 {
+                    print("using custom rules:: need to get Swift version of rules……")
+                }
+                break
                 
-                if myConfig.parsingConfig.runExplicit{
-                    print("sentencizing with trained")
+            case .nltokeniser:
+                if myConfig.parsingConfig.verbosity.rawValue > 1 {
+                    print("calling getTokSents @ line 85")
+                    print("nltokeniser")
                 }
-                if let success = pipeline as? CNNBiLSTMPipeline {
-                    
-                for sentence in sents {
-                    // todo :: use tokenize method from cnnpipe
-                    let tokenisedSent = try success.tokenize(sentence)
-                    internalSentList.append(contentsOf: tokenisedSent)
+                internalSentList = _getTokenisedSentences(sents: sents, myConfig: myConfig)
+                
+            case .trained:
+                switch myConfig.parsingConfig.modelArchitecture {
+                    case .distilbert, .camembert, .roberta, .rnn:
+                        throw PipelineError.ConfigurationError.architectureConflict
+                    case .cnnBiLSTM:
+                        // retokenize everything with model
+                        if myConfig.parsingConfig.verbosity.rawValue > 1 {
+                            print("sentencizing with trained")
+                        }
+                        if let success = pipeline as? CNNBiLSTMPipeline {
+                            for sentence in sents {
+                                let tokenisedSent = try success.tokenize(sentence)
+                                internalSentList.append(contentsOf: tokenisedSent)
+                            }
+                        }
                 }
-                }
-            }
         }
         return internalSentList
     }
     
     // 5 : markup for UI
     static func markupTokenisationInSent(hashableSent: HashableSentence) -> AttributedString{
-            
-            var result = AttributedString()
-            for (index, word) in hashableSent.tokens.enumerated() {
-                result.append(AttributedString(word))
-                if index < hashableSent.tokens.count - 1 {
-                    var separator = AttributedString("/")
-                    separator.foregroundColor = .red // Make separator red
-                    separator.font = .system(size: 17, weight: .bold)
-                    result.append(separator)
-                }
+        
+        var result = AttributedString()
+        for (index, word) in hashableSent.tokens.enumerated() {
+            result.append(AttributedString(word))
+            if index < hashableSent.tokens.count - 1 {
+                var separator = AttributedString("/")
+                separator.foregroundColor = .red // Make separator red
+                separator.font = .system(size: 17, weight: .bold)
+                result.append(separator)
             }
+        }
         return result
     }
 }
@@ -841,7 +837,7 @@ enum PostPipelineWorkflow{
         let runMetas = WritingWorkflow.saveFileToChosenLocation(
             myConfig: myConfig,
             exportContent: exportContent,
-            pipelineRequest: pipelineRequest ,
+            pipelineRequest: pipelineRequest,
             runID: runID,
             processingStatus: processingStatus
         )
@@ -857,9 +853,6 @@ enum PostPipelineWorkflow{
     
     static func postprocessSentence(sentence: HashableSentence, parsedTokens: [Token] )->Sentence{
         
-//        if myConfig.parsingConfig.runExplicit {
-//            print("max requested step == \(myConfig.parsingConfig.maxPipelineStep.rawValue)")
-//        }
         let mySent: Sentence = Sentence(
             sentID: sentence.id,
             conllData: parsedTokens,
@@ -978,7 +971,6 @@ enum XMLMakingWorkflow{
         let safeHeaderAttribs = headers
         let sentences = sents
         let sentCount = String(sentences.count)
-//        print("sentCount inside sentlist to xml = \(sentCount)")
         let tokCount = String(sentences.generateTokCount())
         var outputStore: [String] = []
         
@@ -1084,7 +1076,7 @@ enum WritingWorkflow{
         }
         
         guard let folderURL = myConfig.exportConfig.targetFolderURL else {
-            if myConfig.parsingConfig.runExplicit{ print("Guard 661 fail") }
+            if myConfig.parsingConfig.verbosity.rawValue > 1{ print("Guard 661 fail") }
             exportStatusMessage = "Guard failure in save file to chosen location"
             return RunMetas(
                 runID: runID,
@@ -1113,7 +1105,7 @@ enum WritingWorkflow{
                 unread: true
             )
         }
-        if myConfig.parsingConfig.runExplicit{ print("Guard 661 pass")  }
+        if myConfig.parsingConfig.verbosity.rawValue > 1 { print("Guard 661 pass")  }
         do {
             print("export content inside Exporter service count == \(exportContent.count)")
             savedURL = try PipelineServices.ExporterService.exportDataToFile(
@@ -1121,28 +1113,26 @@ enum WritingWorkflow{
                 customName: "\(myConfig.exportConfig.fileName)_\(pipelineRequest.treebank.short)_\(pipelineRequest.base.keyChunk)_\(pipelineRequest.languageCode.keyChunk)_\(updatedExportFormat.rawValue)",
                 targetFolderURL: folderURL,
                 exportFormat: updatedExportFormat,
-                runExplicit: myConfig.parsingConfig.runExplicit,
+                verbosity: myConfig.parsingConfig.verbosity
             )
             exportStatusMessage = "Successfully exported to"
             if let savedURL {
-                
-                if myConfig.parsingConfig.runExplicit{
+                if myConfig.parsingConfig.verbosity.rawValue > 1{
                     print("Line 685: \(savedURL)")
                 }
                 exportStatusMessage += "\(savedURL.lastPathComponent)"
-                if myConfig.parsingConfig.runExplicit {print (exportStatusMessage) }
+                if myConfig.parsingConfig.verbosity.rawValue > 1 {print (exportStatusMessage) }
             }
         } catch {
             
             exportStatusMessage = "Export failed: \(error.localizedDescription)"
-            if myConfig.parsingConfig.runExplicit {
+            if myConfig.parsingConfig.verbosity.rawValue > 1{
                 print("return 690: \(exportStatusMessage)")
             }
         }
-        // return for do-catch
-//        if myConfig.parsingConfig.runExplicit{
-//            print("return 694: ")
-//        }
+        if myConfig.parsingConfig.verbosity.rawValue > 1{
+            print("return 694: ")
+        }
         
         return RunMetas(
             runID: runID,
@@ -1168,33 +1158,9 @@ enum WritingWorkflow{
             totalCount: myConfig.progressConfig.totalCount,
             treebank: myConfig.parsingConfig.selectedTreebank.short,
             processingStatus: processingStatus,
-            unread:  true,
+            unread: true,
         )
     }
-    
-//    static func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
-//        try writeStringDump(lines)
-//        try writeStringDump(rawLines)
-//        
-//        let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-//        let outputPath = docsDir.appendingPathComponent("output.conllu").path
-//        try writeToFile(rawLines.joined(separator: "\n"), outputPath)
-//    }
-    
-//    static func writeStringDump(_ lines: [String]) throws -> URL {
-//        // write 2 versions of output string, with FileManager and to specified dev folder
-//        let content = lines.joined(separator: "\n")
-//        let fileName = "string_dump_\(Int(Date().timeIntervalSince1970 * 1_000_000_000)).conllu"
-//        
-//        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-//        let fileURL = documentsURL.appendingPathComponent(fileName)
-//        let newUrl: URL = URL(fileURLWithPath: "/Volumes/Kappa/Xcode/parses/\(fileName)")
-//        try content.write(to: newUrl, atomically: true, encoding: .utf8)
-//        try content.write(to: fileURL, atomically: true, encoding: .utf8)
-//        print("Saved CoNLL dump to: \(fileURL.path)")
-//        
-//        return fileURL
-//    }
     
     static func writeToFile(_ content: String, _ path: String) throws {
         let url = URL(fileURLWithPath: path)
@@ -1269,17 +1235,17 @@ enum PrintWorkflow{
             throw PipelineError.ProcessingError.noRunOutput
         }
         
-        if myConfig.parsingConfig.runExplicit {
-//            print("Printing conllRaw")
-//            print(myConfig.outputData.outSents.generateXMLsentences())
-            //        print(myConfig.outputData.outSents.generateExportText())
+        if myConfig.parsingConfig.verbosity.rawValue > 1 {
+            print("Printing conllRaw")
+            print(myConfig.outputData.outSents.generateXMLsentences())
+                    print(myConfig.outputData.outSents.generateExportText())
             if let printPath = myConfig.exportConfig.targetFolderURL?.path(){
                 print(printPath)
             } else {
                 print("Problem with print path from URL 274")
             }
-//            print("output name = \(myConfig.exportConfig.fileName)")
-//            print("Main actor done, running function 277")
+            print("output name = \(myConfig.exportConfig.fileName)")
+            print("Main actor done, running function 277")
         }
     }
     
@@ -1351,7 +1317,7 @@ func getNLTags(text: String) -> NLParseResults{
     return NLParseResults(posReturn: posReturn, lemmaReturn: lemmaReturn, namedEntities: namedEntitiesReturn)
 }
 
-
+/// no longer called::
 //func testInstantiatePipeline(myConfig: TaggerConfig)   -> String {
 //    // test instantiation of pipeline class based on params chosen
 //    var outputString: String = ""
@@ -1371,3 +1337,27 @@ func getNLTags(text: String) -> NLParseResults{
 //    return outputString
 //}
 //5
+
+//    static func runWriteCoordinator(lines: [String], rawLines: [String]) throws {
+//        try writeStringDump(lines)
+//        try writeStringDump(rawLines)
+//
+//        let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+//        let outputPath = docsDir.appendingPathComponent("output.conllu").path
+//        try writeToFile(rawLines.joined(separator: "\n"), outputPath)
+//    }
+    
+//    static func writeStringDump(_ lines: [String]) throws -> URL {
+//        // write 2 versions of output string, with FileManager and to specified dev folder
+//        let content = lines.joined(separator: "\n")
+//        let fileName = "string_dump_\(Int(Date().timeIntervalSince1970 * 1_000_000_000)).conllu"
+//
+//        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+//        let fileURL = documentsURL.appendingPathComponent(fileName)
+//        let newUrl: URL = URL(fileURLWithPath: "/Volumes/Kappa/Xcode/parses/\(fileName)")
+//        try content.write(to: newUrl, atomically: true, encoding: .utf8)
+//        try content.write(to: fileURL, atomically: true, encoding: .utf8)
+//        print("Saved CoNLL dump to: \(fileURL.path)")
+//
+//        return fileURL
+//    }
