@@ -22,10 +22,10 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
     static let maxWordLen = 20 // same as tagger_parser/data.py's encode_sentence default
     let description = "I'm a CNN-BiLSTM pipeline"
     let maxWords: Int = 256 // prefer parse // extract from metas
-
-    internal var runExplicit: Bool {
-        UserDefaults.standard.bool(forKey: "runExplicit")
-    }
+    let verbosity: Verbosity
+//    internal var runExplicit: Bool {
+//        UserDefaults.standard.bool(forKey: "runExplicit")
+//    }
 
     // MARK: - Result of one tagger-parser prediction
     /// Everything one tagger-parser prediction produces. UPOS tags and neural lemmas are decoded
@@ -55,7 +55,8 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
         uposVocab: Vocab,
         featsVocab: Vocab,
         deprelVocab: Vocab,
-        lemmaRuleVocab: Vocab
+        lemmaRuleVocab: Vocab,
+        verbosity: Verbosity
     ) {
         self.tokenizerModel = tokenizerModel
         self.taggerModel = taggerModel
@@ -67,6 +68,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
         self.featsVocab = featsVocab
         self.deprelVocab = deprelVocab
         self.lemmaRuleVocab = lemmaRuleVocab
+        self.verbosity = verbosity
     }
 
     // MARK: Step 1 -- character-level tokenizer / sentence segmenter
@@ -116,7 +118,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
         if !currentSentence.isEmpty { tokenLists.append(currentSentence) }
 
         return tokenLists.enumerated().map { i, tokens in
-            HashableSentence(id: String(i + 1), tokens: tokens, conllMetas: [])
+            HashableSentence(id: String(i + 1), tokens: tokens, conllMetas: [], uuidList: [])
         }
     }
 
@@ -160,7 +162,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
             arcs = try BERTpipeHelperStructs.LogitReader(output, "arc_logits", rank: 3, rows: seqLen)
             deprels = try BERTpipeHelperStructs.LogitReader(output, "label_logits", rank: 4, rows: seqLen, labels: deprelVocab.itos.count)
         } catch {
-            if runExplicit { print(describeOutputs(output)) }
+            if verbosity.rawValue > 1 { print(describeOutputs(output)) }
             throw PipelineError.ProcessingError.predictionFailedAtLogits("unexpected model output type 310 :: \(error)")
         }
 
@@ -229,7 +231,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
     // MARK: Step 5 (decode) -- dependency parsing via methods in protocol extension
     private func decodeDependencies(_ raw: TaggerOutput) -> [(head: Int, deprel: String)] {
         decodeParse(
-            runExplicit: true,
+            verbosity: .level2,
             wordCount: raw.seqLen - 1,
             deprelVocab: deprelVocab,
             arcScore: { d, h in Double(raw.arcs.value(row: d, column: h)) },
@@ -239,7 +241,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
 
     // MARK: Per-sentence processing: for progress-reporting callers
     func runOnSentence(_ sentence: HashableSentence,  myConfig: TaggerConfig)  -> OnSentResult {
-        if runExplicit { print("running on sents with CNN-BiLSTM pipeline") }
+        if verbosity.rawValue > 1 { print("running on sents with CNN-BiLSTM pipeline") }
         let wordPieceCount = -5
         guard !sentence.tokens.isEmpty else {
             return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .empty, decoded: [])
@@ -296,12 +298,13 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
                     deprel: deprels[i],
                     col8: myConfig.parsingConfig.getSecLems ? secondaryLemmas[i] : "_",
                     col9: "_",
-                    subTokens: []
+                    subTokens: [],
+                    preservedUUID: 1 == 1 ? sentence.uuidList[i] : "_"
                 )
             }
             return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .success, decoded: tokens)
         } catch {
-            if runExplicit { print("sentence failed: \(error.localizedDescription)") }
+            if verbosity.rawValue > 0 { print("sentence failed: \(error.localizedDescription)") }
             return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .otherError, decoded: [])
         }
     }

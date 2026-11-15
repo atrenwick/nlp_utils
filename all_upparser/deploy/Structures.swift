@@ -118,6 +118,7 @@ struct HashableSentence: Hashable {
     var detokenised: String {
         tokens.joined(separator: " ")
     }
+    let uuidList: [String]
 }
 
 struct OnSentResult: Identifiable {
@@ -142,17 +143,6 @@ struct OutputFileListHelper: Identifiable{
     let url: URL
 }
 
-struct PipelineDesc{
-    let tb: String
-    let lang: String
-    let tok: String
-    let llm: String
-    
-    func describe() -> String {
-        return " \(self.tb) - \(self.lang) - \(self.tok) - \(self.llm)"
-    }
-}
-
 struct PipelineBuildRequest: Identifiable{
     var id = UUID()
     let languageCode: Language
@@ -169,6 +159,17 @@ struct PipelineBuildRequest: Identifiable{
                             tok: base.internalTokeniser,
                             llm: base.llm
                             )
+    }
+}
+
+struct PipelineDesc{
+    let tb: String
+    let lang: String
+    let tok: String
+    let llm: String
+    
+    func describe() -> String {
+        return " \(self.tb) - \(self.lang) - \(self.tok) - \(self.llm)"
     }
 }
 
@@ -311,12 +312,12 @@ struct Sentence: Identifiable, Codable {
         }
 
         switch exportFormat{
-        case .xml:
-            xmlTokenElements.append(conllData.makeSentenceXML())
-        case .xmlConll:
-            xmlTokenElements.append(conllData.makeSentenceXMLconll())
-        default:
-            return ""
+            case .xml:
+                xmlTokenElements.append(conllData.makeSentenceXML())
+            case .xmlConll:
+                xmlTokenElements.append(conllData.makeSentenceXMLconll())
+            default:
+                return ""
         }
         xmlTokenElements.append(sentFooter)
         return xmlTokenElements.joined(separator: "\n")
@@ -350,10 +351,12 @@ struct Sentence: Identifiable, Codable {
     var hashableSentence: HashableSentence{
         //convert to TokenisedSentence for parsing
         var internalTokList: [String] = []
+        var internalUUIDList: [String] = []
         for token in conllData{
             internalTokList.append(token.form)
+            internalUUIDList.append(token.id.uuidString)
         }
-        return HashableSentence(id: sentID, tokens: internalTokList, conllMetas: self.conllMetas)
+        return HashableSentence(id: sentID, tokens: internalTokList, conllMetas: self.conllMetas, uuidList: internalUUIDList)
     }
     
     func formatRaw() -> [String]{
@@ -461,6 +464,7 @@ struct Token : Identifiable, Codable {
     let col8: String
     let col9: String
     let subTokens: [String]?
+    let preservedUUID: String?
     
     var conlluLine: String {
         [String(tokid), form, lemma, upos, xpos, feats, head, deprel, col8, col9].joined(separator: "\t")
@@ -477,10 +481,12 @@ struct Token : Identifiable, Codable {
             return col9.xmlEscaped
         }
     }
-    
+    var unwrappedUUID: String {
+        preservedUUID ?? "_"
+    }
     var asXML: String{
                 """
-                <w tokID=\"\(tokid)\"  form=\"\(form.xmlEscaped)\" lemma=\"\(lemma.xmlEscaped)\" upos=\"\(upos.xmlEscaped)\" xpos=\"\(xpos.xmlEscaped)\" feats=\"\(feats.xmlEscaped)\" head=\"\(head.xmlEscaped)\" deprel=\"\(deprel.xmlEscaped)\" secLem=\"\(col8.xmlEscaped)\" subtoks=\"\(escapedUnwrappedSubtoks)\">\(form.xmlEscaped)</w>
+                <w UUID=\"\(unwrappedUUID)\" tokID=\"\(tokid)\"  form=\"\(form.xmlEscaped)\" lemma=\"\(lemma.xmlEscaped)\" upos=\"\(upos.xmlEscaped)\" xpos=\"\(xpos.xmlEscaped)\" feats=\"\(feats.xmlEscaped)\" head=\"\(head.xmlEscaped)\" deprel=\"\(deprel.xmlEscaped)\" secLem=\"\(col8.xmlEscaped)\" subtoks=\"\(escapedUnwrappedSubtoks)\">\(form.xmlEscaped)</w>
                 """
     }
 }

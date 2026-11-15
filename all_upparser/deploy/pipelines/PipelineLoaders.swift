@@ -147,7 +147,7 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
     var modelArchitecture: ModelArchitecture?
     var seqLen: Int = 256
     var maxWords: Int = 999
-    let runExplicit: Bool = true
+    let verbosity: Verbosity = Verbosity.level0
     
     var description: String {
         switch modelArchitecture {
@@ -177,7 +177,7 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
         maxWords: Int,
         languageCode: String,
         treebank: String,
-        runExplicitValue: Bool,
+        verbosity: Verbosity,
         tagRole: RNNTagRole,
         normalizeToNFC: Bool,
         lowercaseLemmaInput: Bool
@@ -195,7 +195,7 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
             seqLen: 999,
             languageCode: languageCode,
             treebank: treebank,
-            runExplicitValue: runExplicit,
+            verbosity: verbosity
         )
     }
     
@@ -212,7 +212,7 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
         let languageCode = pipelineBuildRequest.languageCode.rawValue
         let treebank = pipelineBuildRequest.treebank.rawValue
 
-        let runExplicit: Bool = myConfig.parsingConfig.runExplicit
+        let verbosity: Verbosity = myConfig.parsingConfig.verbosity
         let tagRole: RNNTagRole = .xpos
         let normalizeToNFC: Bool = true
         let lowercaseLemmaInput: Bool = false
@@ -252,7 +252,7 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
             maxWords: maxWords,
             languageCode: languageCode,
             treebank: treebank,
-            runExplicitValue: runExplicit,
+            verbosity: verbosity,
             tagRole: tagRole,
             normalizeToNFC: normalizeToNFC,
             lowercaseLemmaInput: lowercaseLemmaInput,
@@ -272,7 +272,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
     var modelArchitecture: ModelArchitecture?
     var seqLen: Int = 512
     var maxWords: Int = 192
-    let runExplicit: Bool = true
+    let verbosity: Verbosity = Verbosity.level0
 
     var description: String {
         switch modelArchitecture {
@@ -302,7 +302,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         maxWords: Int,
         languageCode: String,
         treebank: String,
-        runExplicitValue: Bool
+        verbosity: Verbosity
     ) throws -> BERTlikePipeline{
         print("calling converter")
         return BERTlikePipeline(
@@ -311,7 +311,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
             labels: labels,
             seqLen: seqLen,
             maxWords: maxWords,
-            runExplicitValue: runExplicitValue
+            verbosity: verbosity
         )
     }
     
@@ -326,7 +326,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
 //        let treebank = await myConfig.parsingConfig.selectedTreebank.short
         let languageCode = pipelineBuildRequest.languageCode.rawValue
         let treebank = await pipelineBuildRequest.treebank.short
-        let runExplicit: Bool = myConfig.parsingConfig.runExplicit
+        let verbosity: Verbosity = myConfig.parsingConfig.verbosity
         print("loading on main thread::", Thread.isMainThread)
         let tokenizer: BERTlikeTokenizerHelper?
         let labels: BERTpipeHelperStructs.LabelVocabs?
@@ -386,7 +386,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
             maxWords: maxWords,
             languageCode: languageCode,
             treebank: treebank,
-            runExplicitValue: runExplicit
+            verbosity: verbosity
         )
     }
 }
@@ -414,9 +414,11 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
     static let rootToken = "<root>"
     static let maxWordLen = 20 // matches tagger_parser/data.py's encode_sentence default
     let maxWords: Int = 256
-    private var runExplicit: Bool {
-        UserDefaults.standard.bool(forKey: "runExplicit")
-    }
+    let verbosity: Verbosity = Verbosity.level0
+
+//    private var runExplicit: Bool {
+//        UserDefaults.standard.bool(forKey: "runExplicit")
+//    }
     
     /// 3. LIGHTWEIGHT INIT
     init() {}
@@ -431,7 +433,8 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
         uposVocab: Vocab,
         featsVocab: Vocab,
         deprelVocab: Vocab,
-        lemmaRuleVocab: Vocab
+        lemmaRuleVocab: Vocab,
+        verbosity: Verbosity
     ) throws -> CNNBiLSTMPipeline {
         print("calling converter")
         return CNNBiLSTMPipeline(
@@ -444,7 +447,8 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
             uposVocab: uposVocab,
             featsVocab: featsVocab,
             deprelVocab: deprelVocab,
-            lemmaRuleVocab: lemmaRuleVocab
+            lemmaRuleVocab: lemmaRuleVocab,
+            verbosity: verbosity
         )
     }
     /// actually load the pipeline elements with try + await to get optionals then guard to check all optionals have values
@@ -458,7 +462,7 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
 //        let treebank = await myConfig.parsingConfig.selectedTreebank.short
         let languageCode = pipelineBuildRequest.languageCode.rawValue
         let treebank = pipelineBuildRequest.treebank.short
-        
+        let verbosity = myConfig.parsingConfig.verbosity
 
 
         let myConfig: TaggerConfig = myConfig
@@ -548,7 +552,8 @@ final class CNNBiLSTMPipelineLoader: ObservableObject, PipelineLoader {
             uposVocab: uposVocab,
             featsVocab: featsVocab,
             deprelVocab: deprelVocab,
-            lemmaRuleVocab: lemmaRuleVocab
+            lemmaRuleVocab: lemmaRuleVocab,
+            verbosity: verbosity
         )
     }
     /// Helper to wrap loading calls. If system error is thrown, it fets caught and custom .missingResource error instead.

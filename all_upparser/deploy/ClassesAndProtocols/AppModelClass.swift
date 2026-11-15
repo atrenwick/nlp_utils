@@ -10,7 +10,7 @@ import Combine
 @Observable
 class AppModel {
     var runNum: Int = 1
-    var currentMode: ParsingType = .single
+    var currentMode: ParsingType = .multi
     var myConfig = TaggerConfig()
     var allRunOutputs: [RunOutput] = []
     var runOutput: RunOutput?

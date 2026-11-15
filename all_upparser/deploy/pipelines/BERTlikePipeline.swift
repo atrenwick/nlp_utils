@@ -21,7 +21,7 @@ final class BERTlikePipeline: BERTderivedPipelineHelper, SubtokenAwarePipelineHe
     let tokenizer: any BERTlikeTokenizerHelper
     let seqLen: Int
     let maxWords: Int
-    let runExplicit: Bool
+    let verbosity: Verbosity
 
     init(
         taggerModel: MLModel,
@@ -29,18 +29,18 @@ final class BERTlikePipeline: BERTderivedPipelineHelper, SubtokenAwarePipelineHe
         labels: BERTpipeHelperStructs.LabelVocabs,
         seqLen: Int,
         maxWords: Int,
-        runExplicitValue: Bool
+        verbosity: Verbosity
     ){
         self.taggerModel = taggerModel
         self.tokenizer = tokenizer
         self.labels = labels
         self.seqLen = seqLen
         self.maxWords = maxWords
-        self.runExplicit = runExplicitValue
+        self.verbosity = verbosity
     }
     
     func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) -> OnSentResult {
-        if runExplicit { print("running on sents with bert pipeline") }
+        if verbosity.rawValue > 0 { print("running on sents with bert pipeline") }
         guard !sentence.tokens.isEmpty else {
             return OnSentResult(sentence: sentence, resultType: .empty, decoded: [])
         }
@@ -59,14 +59,14 @@ final class BERTlikePipeline: BERTderivedPipelineHelper, SubtokenAwarePipelineHe
             }
             currentWordpieceCount = encoded.pieces?.count ?? -4
             let output = try predict(encoded)
-            let decoded = try decode(output, words: sentence.tokens, pieces: encoded.pieces)
+            let decoded = try decode(output, words: sentence.tokens, pieces: encoded.pieces, uuidList: sentence.uuidList)
             return OnSentResult(sentence: sentence,  subtokCount: currentWordpieceCount, resultType: .success, decoded: decoded)
         } catch PipelineError.TokPieceError.tooManySubwords {
             return OnSentResult(sentence: sentence,  subtokCount: currentWordpieceCount, resultType: .tooManySubtoks, decoded: [])
         } catch PipelineError.TokPieceError.tooManyWords {                              // backstop; the guard above catches this first
             return OnSentResult(sentence: sentence, resultType: .tooManyWords, decoded: [])
         } catch {
-            if runExplicit { print("sentence failed: \(error.localizedDescription)") }
+            if verbosity.rawValue > 0 { print("sentence failed: \(error.localizedDescription)") }
             return OnSentResult(sentence: sentence, resultType: .otherError, decoded: [])
         }
     }

@@ -30,9 +30,7 @@ struct TaggerApp: App {
                 Tab("Settings", systemImage: "gear"){
                     SetDefaultsView()
                 }
-
             }
-            
             .environment(model)
         }
     }

@@ -37,15 +37,14 @@ struct MultiParseConfigurationView: View {
                 Section{
                     ForEach(model.myConfig.parsingConfig.pipelineRequests){item in
                         Text(item.description)
-                    
-                    .contentShape(Rectangle())
-                    .swipeActions(edge: .trailing){
-                        Button(role: .destructive){
-                            model.myConfig.parsingConfig.pipelineRequests.removeAll(where: {$0.description == item.description})
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
+                            .contentShape(Rectangle())
+                            .swipeActions(edge: .trailing){
+                                Button(role: .destructive){
+                                    model.myConfig.parsingConfig.pipelineRequests.removeAll(where: {$0.description == item.description})
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                     }
                 }
             }.navigationTitle("Multiparse mode")

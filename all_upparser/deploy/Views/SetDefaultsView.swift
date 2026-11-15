@@ -10,8 +10,8 @@ import NaturalLanguage
 internal import UniformTypeIdentifiers
 
 struct SetDefaultsView: View {
-    @AppStorage("runExplicitDefault")  var runExplicitDefault: Bool = false
-    
+//    @AppStorage("runExplicitDefault")  var runExplicitDefault: Bool = false
+    @AppStorage("verboseDefault") var verboseDefault: Verbosity = .level0
     //input file
     @AppStorage("inputTypeDefault") private var inputFileTypeDefault: InputFileType = .txt
 
@@ -27,6 +27,8 @@ struct SetDefaultsView: View {
     @AppStorage("sentencizingMethodDefault")  var sentencizingMethodDefault: SentencizingMethod = .nlSentencizer
     @AppStorage("maxPipelineStepDefault")  var maxPipelineStepDefault: PipelineStep = .step5
     @AppStorage("insertNewTokPositionDefault") var insertNewTokPositionDefault: InsertPosition = .after
+    @AppStorage("parsingTypeDefault") var parsingTypeDefault: ParsingType = .multi
+
     @AppStorage("runRetokeniserDefault") var runRetokeniserDefault: Bool = false
     @AppStorage("runResentenciserDefault")  var runResentenciserDefault: Bool = false
     @AppStorage("progressBarStyleDefault") var progressBarStyleDefault: ProgressBarStyle = .apple
@@ -56,8 +58,10 @@ struct SetDefaultsView: View {
         VStack{
             Form{
                 Section{
-                    Toggle(isOn: $runExplicitDefault){
-                        Text("Verbose Mode")
+                    Picker("Verbosity level", selection: $verboseDefault){
+                        ForEach(Verbosity.allCases){ thisLevel in
+                            Text(String(thisLevel.rawValue)).tag(thisLevel)
+                        }
                     }
                 }
                 Section("Source file"){
@@ -92,6 +96,7 @@ struct SetDefaultsView: View {
                             Text(step.title).tag(step)
                         }
                     }
+                    DefaultPickerView(title: "Parsing type", selection: $parsingTypeDefault)
                 }
                 Section("Tokenisation"){
                     Toggle(isOn: $runRetokeniserDefault){
