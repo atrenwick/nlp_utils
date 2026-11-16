@@ -76,7 +76,7 @@ extension PipelineLoader{
             case .roberta:
                 name = "\(languageCode)_roberta_\(label)_vocab_\(treebank)"
                 case .cnnBiLSTM, .rnn:
-                    throw PipelineError.ConfigurationError.architectureConflict
+                    throw PipelineError.ConfigurationError.architectureConflict("type1")
             }
             let url = try getSafeAssetURL(named: name, pipelineBuildRequest: pipelineBuildRequest, assetType: AssetType.json)
 //            guard let url = bundle.url(forResource: name, withExtension: "json")
@@ -108,7 +108,8 @@ extension PipelineLoader{
             if FileManager.default.fileExists(atPath: sandboxURL.path) {
                 return sandboxURL
             } else {
-                throw PipelineError.LoadingError.packageLoadFailed(name, modelname)
+                print("type 111 error")
+                throw PipelineError.LoadingError.packageLoadFailed(name, modelname+"foo")
             }
         }
         return bundleURL
@@ -332,10 +333,10 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
         let labels: BERTpipeHelperStructs.LabelVocabs?
         var seqLen: Int?
         var maxWords: Int?
-        let modelArchitecture: ModelArchitecture = myConfig.parsingConfig.modelArchitecture
+        let modelArchitecture: ModelArchitecture = pipelineBuildRequest.base
 
         var mlcPackagePaths: MLCPackagePath
-        mlcPackagePaths = await makeMlcNames(languageCode: languageCode, base: myConfig.parsingConfig.modelArchitecture, treebank: treebank)
+        mlcPackagePaths = await makeMlcNames(languageCode: languageCode, base: modelArchitecture, treebank: treebank)
         await onProgress(1, "Loading vocabs")
         labels = try await BERTlikePipelineLoader.loadLabelVocabularies(languageCode: languageCode, treebank: treebank, modelArchitecture: modelArchitecture, pipelineBuildRequest: pipelineBuildRequest)
 
@@ -361,7 +362,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
                 }
                 tokenizer = internalTokenizer
             default:
-                throw PipelineError.ConfigurationError.architectureConflict
+                throw PipelineError.ConfigurationError.architectureConflict("line365")
         }
 
         await onProgress(3, "Loading bertlike model")

@@ -109,7 +109,6 @@ struct TaggerConfig{
             self.priLemSource = TaggerConfig.resolveRawRep(passed: priLemSource, key: "priLemSourceDefault", fallback: .hybrid )
             self.secLemSource = TaggerConfig.resolveRawRep(passed: secLemSource, key: "secLemSourceDefault", fallback: .rule )
             self.getSecLems = TaggerConfig.resolveBool(passed: getSecLems, key: "getSecLemsDefault")
-//            self.runExplicit = TaggerConfig.resolveBool(passed: runExplicit, key: "runExplicifDefault")
             self.verbosity = TaggerConfig.resolveRawRep(passed: verbosity, key: "verbosityDefault", fallback: .level0)
             self.maxWords = -1
             self.maxSeqLen = 2
@@ -119,7 +118,7 @@ struct TaggerConfig{
             self.verbosity = Verbosity.level0
         }
         
-        func makePipeKey() -> String {
+        func makePipeKeyOld() -> String {
             [modelArchitecture.keyChunk, selectedLanguage.keyChunk, selectedTreebank.keyChunk]
                 .joined(separator: "-")
         }

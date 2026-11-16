@@ -144,11 +144,10 @@ protocol PipelineHelper {
     var description: String { get }
     var maxWords: Int { get }
     var taggerModel: MLModel { get }
-    var runExplicit: Bool { get }
+    var verbosity: Verbosity { get }
     var seqLen: Int { get  }
     
 }
-
 
 /// protocol specific to bert-likes for subtoken awareness
 protocol SubtokenAwarePipelineHelper {
@@ -190,13 +189,14 @@ extension LinguisticProcessingHelper{
     ///   - arcScore: score of `head` as the head of `dependent`.
     ///   - labelScore: score of relation `label` on the arc head -> dependent.
     /// - Returns: one (head, deprel) per word, in word order (ROOT not included).
-    func decodeParse(runExplicit: Bool, wordCount: Int,
+    func decodeParse(verbosity: Verbosity,
+                     wordCount: Int,
                      deprelVocab: Vocab,
                      arcScore: (_ dependent: Int, _ head: Int) -> Double,
                      labelScore: (_ label: Int, _ dependent: Int, _ head: Int) -> Double)
         -> [(head: Int, deprel: String)] {
         let n = wordCount + 1
-//        if runExplicit { print("Decoding deps:: raw seq len == \(n)") }
+        if verbosity.rawValue > 1 { print("Decoding deps:: raw seq len == \(n)") }
             
         // Dense head-score matrix: scoreMatrix[h][d] = score of dependent d attaching to head h.
         // d == 0 (root can't be a dependent) and h == d (a word can't be its own head) are left
@@ -209,7 +209,7 @@ extension LinguisticProcessingHelper{
             }
         }
         let heads = solveArborescence(activeNodes: Array(0..<n), scoreMatrix: scoreMatrix)
-//        if runExplicit { print("heads == \(heads)") }
+        if verbosity.rawValue > 1 { print("heads == \(heads)") }
 
         return (1..<n).map { t in
             // Every non-root node is guaranteed a parent by solveArborescence;
@@ -220,9 +220,9 @@ extension LinguisticProcessingHelper{
                 let v = labelScore(c, t, head)
                 if v > bestDeprelScore { bestDeprelScore = v; bestDeprelId = c }
             }
-//            if runExplicit {
-//                print("Decode deps::\n head ==\(head); deprel===\(deprelVocab.decode(bestDeprelId))")
-//            }
+            if verbosity.rawValue > 1 {
+                print("Decode deps::\n head ==\(head); deprel===\(deprelVocab.decode(bestDeprelId))")
+            }
             return (head: head, deprel: deprelVocab.decode(bestDeprelId))
         }
     }
@@ -408,13 +408,13 @@ extension BERTderivedPipelineHelper  {
         let input = naughtyString
         let intermediate = input.split(separator: " ")
         let output = intermediate.map {String($0)}
-        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [])
+        let outputSent = HashableSentence(id: "e2", tokens: output, conllMetas: [], uuidList: [])
         print("this should't have been callable…")
         return outputSent
     }
     
-    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig) throws -> OnSentResult {
-        if runExplicit { print("running on sents with bert pipeline") }
+    func runOnSentence(_ sentence: HashableSentence, myConfig: TaggerConfig, pipelineRequest: PipelineBuildRequest) throws -> OnSentResult {
+        if verbosity.rawValue > 0 { print("running on sents with bert pipeline") }
         
         guard !sentence.tokens.isEmpty else {
             return OnSentResult(sentence: sentence, resultType: .empty, decoded: [])
@@ -426,23 +426,24 @@ extension BERTderivedPipelineHelper  {
         var thisTokenizer: BERTlikeTokenizerHelper
         var currentPieceCount: Int = -3
         /// get the right tokenizer
-        switch myConfig.parsingConfig.modelArchitecture{
+        switch pipelineRequest.base{
             case .camembert, .roberta:
                 if let useThis = tokenizer as? SentencePieceTokenizer {
                     thisTokenizer = useThis
                     thisTokenizer.showPieces = myConfig.exportConfig.getsubtokens
                 } else {
-                    throw PipelineError.GenericError.unexpectedOutput("tok distilbert")
+                    throw PipelineError.GenericError.unexpectedOutput("tok distilbertA")
                 }
             case .distilbert:
                 if let useThis = tokenizer as? WordPieceTokenizer {
                     thisTokenizer = useThis
                     thisTokenizer.showPieces = myConfig.exportConfig.getsubtokens
                 } else {
-                    throw PipelineError.GenericError.unexpectedOutput("tok distilbert")
+                    print("expected WPtokenizer, found SPtokenizer") // need to ensure that previous tokeniser is removed along wiht previous pipelines
+                    throw PipelineError.GenericError.unexpectedOutput("expected WPtokenizer, found SPtokenizer")
                 }
             default:
-                throw PipelineError.ConfigurationError.architectureConflict
+                throw PipelineError.ConfigurationError.architectureConflict("line 445")
         }
         /// use the tokeniser
         do {
@@ -456,10 +457,10 @@ extension BERTderivedPipelineHelper  {
                 case .distilbert:
                     currentPieceCount = encoded.pieces?.count ?? -4
                 default:
-                    throw PipelineError.ConfigurationError.architectureConflict
+                    throw PipelineError.ConfigurationError.architectureConflict("line 459")
             }
-            let output = try predict(encoded) //
-            let decoded = try decode(output, words: sentence.tokens, pieces: encoded.pieces) // same as decode in WP methods ?
+            let output = try predict(encoded)
+            let decoded = try decode(output, words: sentence.tokens, pieces: encoded.pieces, uuidList: sentence.uuidList)
             
             return OnSentResult(sentence: sentence,  subtokCount: currentPieceCount, resultType: .success, decoded: decoded)
             
@@ -468,25 +469,25 @@ extension BERTderivedPipelineHelper  {
         } catch PipelineError.TokPieceError.tooManyWords {                              // backstop; the guard above catches this first
             return OnSentResult(sentence: sentence, resultType: .tooManyWords, decoded: [])
         } catch {
-            if runExplicit { print("sentence failed: \(error.localizedDescription)") }
+            if verbosity.rawValue > 1 { print("sentence failed: \(error.localizedDescription)") }
             return OnSentResult(sentence: sentence, resultType: .otherError, decoded: [])
         }
     }
     
     func predict(_ encoded: BERTpipeEncodedSentence) throws -> MLFeatureProvider {
-            let arrays = try encoded.multiArrays()
-            let inputs = try MLDictionaryFeatureProvider(dictionary: [
-                "input_ids": MLFeatureValue(multiArray: arrays.inputIDs),
-                "word_index": MLFeatureValue(multiArray: arrays.wordIndex),
-            ])
-            do {
-                return try taggerModel.prediction(from: inputs)
-            } catch {
-                throw PipelineError.ProcessingError.predictionFailed(error)
-            }
+        let arrays = try encoded.multiArrays()
+        let inputs = try MLDictionaryFeatureProvider(dictionary: [
+            "input_ids": MLFeatureValue(multiArray: arrays.inputIDs),
+            "word_index": MLFeatureValue(multiArray: arrays.wordIndex),
+        ])
+        do {
+            return try taggerModel.prediction(from: inputs)
+        } catch {
+            throw PipelineError.ProcessingError.predictionFailed(error)
         }
-    
-    func decode(_ output: MLFeatureProvider, words: [String], pieces: [[String]]?) throws -> [Token] {
+    }
+    /// to enable alignment on input tokenisation, use uuidList
+    func decode(_ output: MLFeatureProvider, words: [String], pieces: [[String]]?, uuidList: [String]) throws -> [Token] {
         /// 6 padded output tensors -> labelled tokens. Only the first (words + 1) cols mean anything, rest is PAD
         let n = words.count + 1
         let upos = try BERTpipeHelperStructs.LogitReader(output, "upos_logits", rank: 3, rows: n, labels: labels.upos.itos.count)
@@ -497,7 +498,7 @@ extension BERTderivedPipelineHelper  {
         
         // deprel, head decoding
         let parse = decodeParse(
-            runExplicit: true,
+            verbosity: verbosity,
             wordCount: words.count,
             deprelVocab: labels.deprel,
             arcScore: { dependent, head in Double(arc.value(row: dependent, column: head)) },
@@ -526,9 +527,10 @@ extension BERTderivedPipelineHelper  {
                 deprel: parse[i - 1].deprel,
                 col8: "_",
                 col9: "_",
-                subTokens: pieces?[i - 1]
+                subTokens: pieces?[i - 1],
+                preservedUUID: uuidList.count > 1 ? uuidList[i-1] : "_"
             ))
-            if runExplicit{
+            if verbosity.rawValue > 1{
                 var subels: String = "empty"
                 let tidy1 = pieces?[i-1]
                 if let success = tidy1{
@@ -541,7 +543,6 @@ extension BERTderivedPipelineHelper  {
     }
 }
 
-/// combination of extension: Language and a protocol
 /// 1. Define a protocol that guarantees availableTBs exists
 protocol TreebankProvidable {
     associatedtype TreebankType: Hashable
@@ -600,7 +601,7 @@ enum PipelineServices {
         }
     }
     struct ExporterService {
-         // 1. A reusable helper function to resolve the bookmark from standard UserDefaults
+         /// 1. A reusable helper function to resolve the bookmark from standard UserDefaults
         static func resolveDefaultBookmark() -> URL {
             let defaults = UserDefaults.standard
             if let data = defaults.data(forKey: "outputDirBookmark") {
@@ -622,25 +623,24 @@ enum PipelineServices {
             customName: String,
             targetFolderURL: URL,
             exportFormat: ExportFormat,
-            runExplicit: Bool
-            
+            verbosity: Verbosity
         ) throws -> URL {
             //1 check file extension
             let fileExtension = exportFormat.fileExtension
-//            if runExplicit{ print("step1 success : file extension exists") }
+            if verbosity.rawValue > 1 { print("step1 success : file extension exists") }
 
             // 2. Format sanitized filename
             var safeName = customName.sanitizedFileName
             if !safeName.hasSuffix(".\(fileExtension)") { safeName += ".\(fileExtension)" }
-//            if runExplicit{ print(safeName) ;  print("step2 success") }
+            if verbosity.rawValue > 1 { print(safeName) ;  print("step2 success") }
 
             // 3. Resolve directory & obtain security scope
-//            print("start step 3 : resolve dir + scope")
             let (folder, _) = try resolveOutputDir(targetFolderURL: targetFolderURL)
 
             // 4a. Elevate security permissions BEFORE constructing child paths
             let gotAccess = folder.startAccessingSecurityScopedResource()
-//            if runExplicit { print("step4a gotAccess == \(gotAccess), scheme == \(folder.scheme ?? "nil")") }
+            if verbosity.rawValue > 1 {
+                 print("step4a gotAccess == \(gotAccess), scheme == \(folder.scheme ?? "nil")") }
             defer {
                 if gotAccess {
                     folder.stopAccessingSecurityScopedResource()
@@ -648,18 +648,17 @@ enum PipelineServices {
             }
             // 4b. Construct destination path inside the accessed directory
             let destinationFileURL = folder.appendingPathComponent(safeName)
-//            if runExplicit && destinationFileURL.isFileURL {
-//                print("step4b success:: -> \(destinationFileURL)")
-//            } else {
-//                print("destination file URL failed isURL test")
-//            }
-//            print("line 418")
+            if verbosity.rawValue > 1  && destinationFileURL.isFileURL {
+                print("line 653: step4b success:: -> \(destinationFileURL)")
+            } else {
+                print("destination file URL failed isURL test @ ling 655")
+            }
             // 5. Write
             do {
                 try exportContent.write(to: destinationFileURL, atomically: true, encoding: .utf8)
-//                if runExplicit{
-//                    print("step5 success URL == \(destinationFileURL.path())")
-//                }
+                if verbosity.rawValue > 1 {
+                    print("step5 success URL == \(destinationFileURL.path())")
+                }
             } catch {
                 let e = error as NSError
                 print("write failed: \(e.domain) \(e.code) \(e.localizedDescription)")
@@ -716,17 +715,7 @@ protocol SubwordEncoder {
 }
 
 extension PipelineSettingsView {
-    
-    func loadButtonColours(){
-        if let saved = try? JSONDecoder().decode(StoredColor.self, from: buttonColor1DefaultData){
-            buttonColor1 = saved.color
-        }
-        if let saved = try? JSONDecoder().decode(StoredColor.self, from: buttonColor2DefaultData){
-            buttonColor2 = saved.color
-        }
-    }
-    
-    //MARK:  calculated properties
+//MARK:  calculated properties
     var loadTotal: Int {
         if model.myConfig.parsingConfig.modelArchitecture == .distilbert {
             return 4
@@ -770,8 +759,16 @@ extension PipelineSettingsView {
     }
     
     ///MARK: instance methods
+    func loadButtonColours(){
+        if let saved = try? JSONDecoder().decode(StoredColor.self, from: buttonColor1DefaultData){
+            buttonColor1 = saved.color
+        }
+        if let saved = try? JSONDecoder().decode(StoredColor.self, from: buttonColor2DefaultData){
+            buttonColor2 = saved.color
+        }
+    }
+    
     func processSentsFromPipeline(sentResult: OnSentResult)   {
-        
         switch sentResult.resultType {
         case .success:
                 print("successful parse, adding to model.myconfig.outputdata.outsents")
@@ -782,21 +779,21 @@ extension PipelineSettingsView {
                 model.myConfig.outputData.outErrors.append(PostPipelineWorkflow.postprocessErrorSent(sentResult: sentResult))
             print("error handled")
         }
-//        if myConfig.wrappedValue.parsingConfig.runExplicit { print("awaitng mainactor line 237") }
+        if model.myConfig.parsingConfig.verbosity.rawValue > 1 { print("awaitng mainactor line 237") }
     }
     
     func callPipelineLoader(for pipelineRequest: PipelineBuildRequest) async throws -> PipelineHelper {
         let pipeline: PipelineHelper
         isLoading = true
         
-        defer { isLoading = false }          // runs on every exit, including throws
-
+        // runs on every exit, including throws
+        defer { isLoading = false }
         do {
             switch pipelineRequest.base {
             case .camembert, .roberta, .distilbert:
                     print("case bert")
                 let loader = BERTlikePipelineLoader()
-                    pipeline = try await loader.loadBERTlikePipeline(myConfig: model.myConfig, pipelineBuildRequest: pipelineRequest) { step, message in
+                pipeline = try await loader.loadBERTlikePipeline(myConfig: model.myConfig, pipelineBuildRequest: pipelineRequest) { step, message in
                     loadedCount = step
                     loadStatus = message
                 }
@@ -816,7 +813,7 @@ extension PipelineSettingsView {
                 }
             }
         } catch {
-            if model.myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(error)") }
+            if model.myConfig.parsingConfig.verbosity.rawValue > 1 { print("Failed to load pipeline: \(error)") }
             model.myConfig.viewSettings.showLoadProgress = false
             model.myConfig.progressConfig.processingStatus = .failed
             throw error                       // the original, specific error
@@ -855,13 +852,14 @@ extension PipelineSettingsView {
         return [myConfig.parsingConfig.modelArchitecture.keyChunk, myConfig.parsingConfig.selectedLanguage.keyChunk, myConfig.parsingConfig.selectedTreebank.keyChunk].joined(separator: "-")
     }
     
-    func runTagging(
+// MARK: tagging :
+/// actually do tagging here
+func runTagging(
         taggingInProgress: Binding<Bool>,
         isFirstRun: Binding<Bool>,
-    ) {
-        @Bindable var model = model
-
+        ) {
         // MARK: parameters, initialisations for task
+        @Bindable var model = model
         if !isFirstRun.wrappedValue {
             model.myConfig.runResetters()
         } else {
@@ -870,13 +868,11 @@ extension PipelineSettingsView {
         
         let pipelineCache: PipelineCache = model.pipelineCache
         var requestedOffset: Int = model.requestedOffset
-        /// set bools
-        model.myConfig.parsingConfig.runExplicit = true
+        model.myConfig.parsingConfig.verbosity = .level2
         model.myConfig.progressConfig.hasStarted = true
         taggingInProgress.wrappedValue = true
         interruptSignalled = false
         
-//
         if model.currentMode == ParsingType.single {
             model.myConfig.parsingConfig.pipelineRequests =  [PipelineBuildRequest(
                 languageCode: model.myConfig.parsingConfig.selectedLanguage,
@@ -885,15 +881,15 @@ extension PipelineSettingsView {
             )]
         }
         
-        // MARK: tagging :
         Task {
             do {
+                var allSentences: [HashableSentence] = []
                 for pipelineRequest in model.myConfig.parsingConfig.pipelineRequests {
                     model.myConfig.progressConfig.processingStatus = .inprogress
                     model.myConfig.viewSettings.showLoadProgress = true
                     model.myConfig.viewSettings.showProcessingProgress = false
 
-                    let currentKey: String = model.myConfig.parsingConfig.makePipeKey()
+                    let currentKey: String = pipelineRequest.makePipeReqKey()
                     model.myConfig.parsingConfig.key = currentKey
                     model.myConfig.outputData.safeHeaderAttribs = XMLMakingWorkflow
                         .makeSafeHeaderAttribs(
@@ -902,7 +898,6 @@ extension PipelineSettingsView {
                             fileContainerModel: model.fileContainerModel
                         )
                     
-                    var allSentences: [HashableSentence] = []
                     var pipeline: any PipelineHelper
                     defer { model.myConfig.viewSettings.showLoadProgress = false }
                     do {
@@ -915,7 +910,7 @@ extension PipelineSettingsView {
                             if let subAwarePipeline = loadedPipeline as? SubtokenAwarePipelineHelper {
                                 model.myConfig.outputData.safeHeaderAttribs.maxSeqLen = String(subAwarePipeline.seqLen)
                                 model.myConfig.parsingConfig.maxSeqLen = subAwarePipeline.seqLen
-                                if model.myConfig.parsingConfig.runExplicit { print("maxSeqLen = \(subAwarePipeline.seqLen) @ 232")}
+                                if model.myConfig.parsingConfig.verbosity.rawValue > 1 { print("maxSeqLen = \(subAwarePipeline.seqLen) @ 232")}
                             }
                             model.myConfig.parsingConfig.maxWords = loadedPipeline.maxWords
                             model.myConfig.outputData.safeHeaderAttribs.maxWords = String(loadedPipeline.maxWords)
@@ -925,27 +920,33 @@ extension PipelineSettingsView {
                             //MARK: set pipeline maxwords, seqlen
                             pipeline = loadedPipeline
                             pipelineCache.store(pipeline, key: currentKey)
-                            if model.myConfig.parsingConfig.runExplicit {
+                            if model.myConfig.parsingConfig.verbosity.rawValue > 1 {
                                 print(describePipeline(pipepline: pipeline, myConfig: model.myConfig))
                                 print("Pipelinemax_words = \(loadedPipeline.maxWords) @ 228")
                             }
                         }
                     } catch let loadingError as PipelineError.LoadingError {
-                        if model.myConfig.parsingConfig.runExplicit { print("Failed to load pipeline: \(loadingError)") }
+                        if model.myConfig.parsingConfig.verbosity.rawValue > 1 { print("Failed to load pipeline: \(loadingError)") }
                         currentStatus = "Error loading pipeline."
                         model.myConfig.progressConfig.processingStatus = .failed
                         throw loadingError
                     } catch {
-                        if model.myConfig.parsingConfig.runExplicit { print("Failed to load pipeline funct internal 1074: \(error)") }
+                        if model.myConfig.parsingConfig.verbosity.rawValue > 1 { print("Failed to load pipeline funct internal 1074: \(error)") }
                         currentStatus = "Error loading pipeline."
                         model.myConfig.progressConfig.processingStatus = .failed
                         throw PipelineError.ConfigurationError.notReadyToSendToRunner
                     }
-                    if model.myConfig.parsingConfig.runExplicit { print(currentStatus) }
+                    if model.myConfig.parsingConfig.verbosity.rawValue > 1 { print(currentStatus) }
                     
                     //MARK: INGEST SENTS, trim to custom offset or 0 :: dropfirst 0 doesn't drop the 0th item in array
                     model.myConfig.viewSettings.showProcessingProgress = true
-                    allSentences = try SentencizationWorkflow.ingestSentences(currentStatus: currentStatus, myConfig: model.myConfig, pipeline: pipeline)
+                    if allSentences == [] && model.myConfig.parsingConfig.verbosity.rawValue > 1 {
+                        print("all sents empty, so loading, current mode ==  \(model.myConfig.parsingConfig.parsingType)")
+                        // && model.myConfig.parsingConfig.parsingType != ParsingType.multi
+                        allSentences = try SentencizationWorkflow.ingestSentences(currentStatus: currentStatus, myConfig: model.myConfig, pipeline: pipeline)
+                    } else {
+                        print("using previous value of allsents")
+                    }
                     allSentences = Array(allSentences.dropFirst(max(0, requestedOffset)))
                     
                     guard !allSentences.isEmpty else {
@@ -968,8 +969,8 @@ extension PipelineSettingsView {
                     
                     //MARK: run retokeniser if required/requested
                     if model.myConfig.inputConfig.inputFileType != .txt && model.myConfig.parsingConfig.runRetokeniser && [TokenizingMethod.nltokeniser, TokenizingMethod.trained].contains(model.myConfig.parsingConfig.tokenizingMethod) {
-                        if model.myConfig.parsingConfig.runExplicit {
-                            currentStatus = "retokenizing"
+                        currentStatus = "retokenizing"
+                        if model.myConfig.parsingConfig.verbosity.rawValue > 1 {
                             print("Retokenising")
                         }
                         allSentences = try SentencizationWorkflow.retokenisationEncapsulator(
@@ -980,8 +981,8 @@ extension PipelineSettingsView {
                     }
                     
                     // optional chunk to test build-in NL parsing, send POS, lemmas to cols 8,9
-                    if model.myConfig.parsingConfig.runExplicit{
-                        currentStatus = "getting NL Tags"
+                    currentStatus = "getting NL Tags"
+                    if model.myConfig.parsingConfig.verbosity.rawValue > 1 {
                         var nlInputTexts: [String] = []
                         for sent in allSentences{
                             nlInputTexts.append(sent.tokens.joined(separator: " "))
@@ -1009,7 +1010,7 @@ extension PipelineSettingsView {
                             currentStatus = "Ready to tag"
                             var sentResult: OnSentResult?
                             if let bertDerivedPipe = pipeline as? BERTderivedPipelineHelper{
-                                sentResult = try bertDerivedPipe.runOnSentence(sentence, myConfig: model.myConfig)
+                                sentResult = try bertDerivedPipe.runOnSentence(sentence, myConfig: model.myConfig, pipelineRequest: pipelineRequest)
                             } else if let cnnPipeline = pipeline as? CNNBiLSTMPipeline {
                                 sentResult =  cnnPipeline.runOnSentence(sentence, myConfig: model.myConfig)
                             } else {
@@ -1027,7 +1028,9 @@ extension PipelineSettingsView {
                     model.myConfig.progressConfig.exitCondition = interruptSignalled ? "Interrup requested" : "ProcessingComplete"
                     
                     //MARK: print
-                    print("exit condition == \(model.myConfig.progressConfig.exitCondition)")
+                    if model.myConfig.parsingConfig.verbosity.rawValue > 1 {
+                        print("exit condition == \(model.myConfig.progressConfig.exitCondition)")
+                    }
                     try PrintWorkflow.dumpDetailsForRunExplicit(myConfig: model.myConfig, taggingInProgress: $taggingInProgress)
                     model.runOutput = PostPipelineWorkflow.makeTidyRunOutput(myConfig: model.myConfig, pipelineRequest: pipelineRequest, model: model)
                     
@@ -1038,7 +1041,7 @@ extension PipelineSettingsView {
                         guard let runOutput = model.runOutput else { throw PipelineError.ProcessingError.noRunOutput }
                         model.allRunOutputs.append(runOutput)
                         loadedPipelines.append(pipeline)
-                        if model.myConfig.parsingConfig.runExplicit{
+                        if model.myConfig.parsingConfig.verbosity.rawValue > 1 {
                             print("allRunOutputs length == \(model.allRunOutputs.count)")
                         }
                     }
