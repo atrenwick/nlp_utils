@@ -7,7 +7,7 @@
 import SwiftUI
 
 struct ProcessorStepConfigViewSection: View {
-     @Environment(AppModel.self) private var model
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
@@ -65,7 +65,7 @@ struct ProcessorStepConfigViewSection: View {
                 }
                 .onChange(of: model.myConfig.parsingConfig.secLemSource){_, newValue in
                     if model.myConfig.parsingConfig.secLemSource == model.myConfig.parsingConfig.priLemSource {
-                        if let remaining = LemmaSource.allCases.filter({ format in format != model.myConfig.parsingConfig.secLemSource  }).first{
+                        if let remaining = LemmaSource.allCases.filter({ format in format != model.myConfig.parsingConfig.secLemSource }).first{
                             model.myConfig.parsingConfig.priLemSource = remaining
                         }
                     }

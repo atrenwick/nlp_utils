@@ -23,10 +23,7 @@ struct PipelineSettingsView: View {
     @State internal var loadStatus = ""
     @State internal var taggingInProgress: Bool = false
     @State var isFirstRun: Bool = true
-    @State var pipelineSummary: String = ""
     @State var currentStatus: String = ""
-    @State var sentsToRetokenise: [String] = []
-    @State var exportContent: String = ""
     @State var currentPipelineLoaded: Bool = false
     @State var currentPipelineDesc: PipelineDesc?
     @State var showInterruptButton: Bool = false
@@ -123,8 +120,6 @@ struct PipelineSettingsView: View {
                         } label: {
                             TaggingProgressButtonExtractedView(
                                 taggingInProgress: taggingInProgress,
-                                isPipelineReady: isPipelineReady,
-                                pipelineSummary: pipelineSummary,
                                 currentPipelineDesc: $currentPipelineDesc,
                                 currentPipelineLoaded: $currentPipelineLoaded
                             )

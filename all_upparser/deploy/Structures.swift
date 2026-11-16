@@ -160,6 +160,11 @@ struct PipelineBuildRequest: Identifiable{
                             llm: base.llm
                             )
     }
+    func makePipeReqKey() -> String {
+        [base.keyChunk, languageCode.keyChunk, treebank.keyChunk]
+            .joined(separator: "-")
+    }
+
 }
 
 struct PipelineDesc{

@@ -10,9 +10,6 @@ import SwiftUI
 struct ManualTokenisationView: View {
     @Environment(AppModel.self) internal var model
 
-    //    @Binding var myConfig: TaggerConfig
-//    @Binding var builtSents: [BuiltSentHolder]
-//    @Binding var tempTokens: [TempToken]
     @State var getsentNum: Int = 0
     @State private var newSentence: String = ""
     @State private var testSentences = ["Aujourd'hui, Paris est la capitale de la France parce qu'à l'époque, c'était la capitale.", "La capitale de l'Allemagne est Berlin, parce que Bonn n'était assez bonne pour tous", "Alors que Paris est une grande ville, elle est plus petite que Tokyo", "Li chevaliers combattent les dragons."]
@@ -147,7 +144,7 @@ struct AddSentButton: View {
 
 struct PrebuiltSentsView: View {
     @Binding var newSentence: String
-    @State var showSuccess: Bool = false
+//    @State var showSuccess: Bool = false
     let testSents: [String]
     
     var body: some View{

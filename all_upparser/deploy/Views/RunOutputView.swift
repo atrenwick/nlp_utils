@@ -201,6 +201,7 @@ struct RunOutputDetailView: View{
 
 struct TaggingComparisonView: View{
     @Environment(AppModel.self) private var model
+    @State var resultSet: [ComparisonElement] = []
     
     var runPair: [RunOutput] {
         let runCount = model.myConfig.outputData.allRunOutputs.count
@@ -215,7 +216,6 @@ struct TaggingComparisonView: View{
             return []
         }
     }
-    @State var resultSet: [ComparisonElement] = []
     var body: some View{
         @Bindable var model = model
         if model.allRunOutputs.count == 2{
@@ -224,7 +224,6 @@ struct TaggingComparisonView: View{
             
             List {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                    // Optional header row
                     GridRow {
                         Text("TokID").bold()
                         Text("Form").bold()
@@ -253,21 +252,7 @@ struct TaggingComparisonView: View{
 
 
     }
-//    func getUUIDs()->[String]{
-//        var internalList: [String] = []
-//        if model.allRunOutputs.count > 0{
-//            for run in model.allRunOutputs{
-//                for sent in run.runData.sents{
-//                    for token in sent.conllData{
-//                        let key = token.unwrappedUUID
-////                        let value = token
-//                        internalList.append(key)
-//                    }
-//                }
-//            }
-//        }
-//        return internalList
-//    }
+    
     func processRunPair(run1: RunOutput, run2: RunOutput)-> [ComparisonElement] {
         var internalResults: [ComparisonElement] = []
                 for (sent1, sent2) in zip(run1.runData.sents, run2.runData.sents){

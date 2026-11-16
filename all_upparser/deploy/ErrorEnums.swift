@@ -62,7 +62,7 @@ enum PipelineError: LocalizedError{
     }
     // errors in config before calling loader
     enum ConfigurationError: LocalizedError {
-        case architectureConflict
+        case architectureConflict(String)
         case badTempTokens
         case invalidLevel(Int)
         case invalidModelInputs(String)
@@ -72,8 +72,8 @@ enum PipelineError: LocalizedError{
         
         var errorDescription: String? {
             switch self{
-            case .architectureConflict:
-                return "conflict between architecture and available models"
+            case .architectureConflict(let string):
+                return "conflict between architecture and available models\(string)"
             case .badTempTokens:
                 return "Error makiing hashable sentence from temp tokens"
             case .inputFileFormatChoiceError:

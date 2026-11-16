@@ -183,8 +183,8 @@ struct ExportConfigViewSection: View {
             }
         }
     }
+    /// Re-assign default bookmark URL back to the config instance to reset dir
     private func setOutputDirTo(_ dir: ResetDirOption) {
-        // Re-assign default bookmark URL back to the config instance
         switch dir {
         case .defaultvalue:
                 model.myConfig.exportConfig.targetFolderURL = PipelineServices.ExporterService.resolveDefaultBookmark()
@@ -335,7 +335,7 @@ struct OutputLinesExtractedView: View {
 
 /// View for looking at pretokenized sentences
 struct PretokenisedSentExtractedView : View {
-     @Environment(AppModel.self) private var model
+    @Environment(AppModel.self) private var model
     var body: some View{
         ScrollView{
             ForEach(model.pretokSentsOut, id:\.self){instance in
@@ -362,7 +362,6 @@ struct PretokenisedSentExtractedView : View {
 struct TokenisationEditView: View {
     @Environment(AppModel.self) private var model
     @FocusState var isFocused
-//    var insertImage: String { (model.myConfig.parsingConfig.insertNewTokPosition == .before) ? "arrow.turn.left.up" : "arrow.turn.left.down"}
     
     var body: some View {
         @Bindable var model = model
@@ -383,9 +382,7 @@ struct TokenisationEditView: View {
                     Button{
                         insertItem( model.myConfig.parsingConfig.insertNewTokPosition, relativeTo: token.id)
                     } label: {
-                        VStack{
                             Image(systemName: model.myConfig.parsingConfig.insertNewTokPosition.imageName)
-                        }
                     }
                 }
                 .textInputAutocapitalization(TextInputAutocapitalization.never)
@@ -494,6 +491,7 @@ struct RunExplicitButtonExtractedView: View{
 /// View to specify where to start processing sents : @ sent0, 1, 2…
 struct TaggingOffsetParamsView: View{
     @Environment(AppModel.self) private var model
+
     /// is there a previous run which might be able to be resumed
     var previousRun: [RunOutput] {
         if model.allRunOutputs.count == 0 {
@@ -545,11 +543,10 @@ struct TaggingProgressButtonExtractedView: View{
     @Environment(AppModel.self) private var model
 
     let taggingInProgress: Bool
-    let isPipelineReady: Bool
-    let pipelineSummary: String
     @Binding var currentPipelineDesc: PipelineDesc?
     @Binding var currentPipelineLoaded: Bool
     var previous: Int = 0
+
     var body: some View {
         Group {
             VStack {
@@ -580,7 +577,6 @@ struct TaggingProgressButtonExtractedView: View{
 
 /// Navigation link + image to RunOutput view
 struct ToolbarLinkToOutputExtractedView: View {
-    @Environment(AppModel.self) private var model
     var unreadCount: Int = 0
     var body: some View{
         
