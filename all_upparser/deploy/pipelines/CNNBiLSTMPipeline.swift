@@ -166,7 +166,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
             throw PipelineError.ProcessingError.predictionFailedAtLogits("unexpected model output type 310 :: \(error)")
         }
 
-        // UPOS: decoded here,
+        // UPOS: decoded here
         let upos = (1..<seqLen).map { uposVocab.decode(uposReader.argmax(row: $0)) }
         // get the lemmas with the LemmatizerRunner() as runner
         let lemmas: [String]
