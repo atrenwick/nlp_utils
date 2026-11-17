@@ -121,6 +121,8 @@ struct AppleProgressView: View {
     }
 }
 
+
+
 struct PipelineProgressView: View {
     @Binding var myConfig: TaggerConfig
     @Binding var currentStatus: String

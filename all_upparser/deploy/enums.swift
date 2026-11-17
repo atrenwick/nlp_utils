@@ -14,6 +14,16 @@ enum AssetType: String{
     case json
 }
 
+/// Control different data shown in Tagging comparisons
+enum ComparisonGridOption: String, Identifiable, CaseIterable{
+    var id: Self { self }
+    case pos
+    case lemma
+    case feats
+    case head
+    case deprel
+}
+
 /// architecture for ML model used for annotation
 enum ModelArchitecture: String, CaseIterable, Identifiable{
     var id: Self { self }
@@ -61,6 +71,8 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
     }
 }
 
+/// What type of tokenisation does the LLM base use
+/// This isn't isn't relevant for CNN, RNN and other bases that don't use LLM
 enum LLMInternalTokeniser: String {
     var id: Self {self}
     case sentencePiece

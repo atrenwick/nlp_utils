@@ -439,7 +439,6 @@ extension BERTderivedPipelineHelper  {
                     thisTokenizer = useThis
                     thisTokenizer.showPieces = myConfig.exportConfig.getsubtokens
                 } else {
-                    print("expected WPtokenizer, found SPtokenizer") // need to ensure that previous tokeniser is removed along wiht previous pipelines
                     throw PipelineError.GenericError.unexpectedOutput("expected WPtokenizer, found SPtokenizer")
                 }
             default:
@@ -451,12 +450,13 @@ extension BERTderivedPipelineHelper  {
             ) else {
                 return OnSentResult(sentence: sentence, resultType: .otherError, decoded: [])
             }
-            switch myConfig.parsingConfig.modelArchitecture{
+            switch pipelineRequest.base {
                 case .camembert, .roberta:
                     currentPieceCount = encoded.validSlots
                 case .distilbert:
                     currentPieceCount = encoded.pieces?.count ?? -4
                 default:
+                    print("parsingConfigArch::\(myConfig.parsingConfig.modelArchitecture) :: cf pipelineReq Base = \(pipelineRequest.base)") 
                     throw PipelineError.ConfigurationError.architectureConflict("line 459")
             }
             let output = try predict(encoded)
@@ -905,6 +905,8 @@ func runTagging(
                         if model.currentMode != .multi, let cachedPipeline = pipelineCache.lookup(currentKey) {
                             pipeline = cachedPipeline
                         } else {
+
+                            print("requesting \(pipelineRequest.describePipeline())")
                             let loadedPipeline = try await callPipelineLoader(for : pipelineRequest)
                             requestedOffset = 0 // reset offset to 0 if not using previous model to avoid partial processing
                             if let subAwarePipeline = loadedPipeline as? SubtokenAwarePipelineHelper {
@@ -1115,3 +1117,8 @@ final class Vocab {
         return Vocab(data: decoded)
     }
 }
+/*
+ 
+ 
+clamping.......
+ */
