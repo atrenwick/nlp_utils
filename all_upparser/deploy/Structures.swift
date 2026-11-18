@@ -249,11 +249,23 @@ struct RunOutput: Identifiable, Codable {
     let runID: String
     let runData: RunData
     var runMetas: RunMetas
+    
+    var asShortUUID: String {
+        String(Array(id.uuidString).suffix(7))
+    }
+
 }
 
 struct RunSelectorHelper{
     let runMetas: RunMetas
     let jsonFile: URL
+    
+    func descTexts() -> [String] {
+        let line1 = String("\(runMetas.sourceFileName) -> \(runMetas.exportFormat.rawValue)")
+        let line2 = "\(runMetas.processedCount) sents :: \(runMetas.lang) :: \(runMetas.treebank) :: Steps 2- \(runMetas.maxPipelineStep.rawValue)"
+        return [line1, line2]
+    }
+
 }
 
 /// import file from outside to sandbox -> sandbox, via copy, removing old instance

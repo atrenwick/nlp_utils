@@ -10,17 +10,6 @@ import NaturalLanguage
 import SwiftUI
 //----------------------------------------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------------------------------------
-enum ArrayMakingMethods{
-    case cnnbilstm
-    case sentencepieceencodedsentence
-    case wordpieceencodedsentence
-    var methodList: [String]{
-        switch self{
-                case .cnnbilstm : return ["makeIntArray" ,"makeCharIdArray", "parserArgmax"]
-        case .sentencepieceencodedsentence, .wordpieceencodedsentence: return ["multiArrays", "makeArray"]
-        }
-    }
-}
 
 enum FileIngestionWorkflow {
     //MARK : helper functions: get data from file, and specialloader from inside bundle
@@ -38,15 +27,6 @@ enum FileIngestionWorkflow {
             return returnString
         } catch {
             return error.localizedDescription
-        }
-    }
-    //2.
-    static func loadTextFromBundledFile(inputFile: String, thisExtension: String) throws -> String{
-        do {
-            let normalizedText: String = try Bundle.main.loadText(inputFile, format: thisExtension)
-            return normalizedText
-        } catch {
-            return PipelineError.LoadingError.fileLoadError.localizedDescription
         }
     }
     //3
@@ -240,7 +220,6 @@ enum ConLLParsingWorkflow{
         }
         return allSents
     }
-    
  }
 
 enum xmlConllParsingWorkflow{
@@ -772,7 +751,7 @@ enum TokenisationWorkflow{
             case .trained:
                 switch myConfig.parsingConfig.modelArchitecture {
                     case .distilbert, .camembert, .roberta, .rnn:
-                        throw PipelineError.ConfigurationError.architectureConflict
+                        throw PipelineError.ConfigurationError.architectureConflict("string")
                     case .cnnBiLSTM:
                         // retokenize everything with model
                         if myConfig.parsingConfig.verbosity.rawValue > 1 {
@@ -1195,38 +1174,6 @@ enum PrintWorkflow{
             print("Index:", path)
         }
     }
-    //2
-    static func printFromConllSents(outsents: [Sentence]) throws -> URL{
-        let mySents: [Sentence] = outsents
-        let fileName = "string_dump_\(Int(Date().timeIntervalSince1970 * 1_000_000_000))_special.conllu"
-        let newUrl: URL = URL(fileURLWithPath: "/Volumes/Kappa/Xcode/parses/\(fileName)")
-        
-        var myLines: [String] = []
-        var atStart: Bool = true
-        for sent in mySents {
-            if atStart {
-                atStart = false
-                let pattern =  #"^\n{2}"#
-                var firstSent = sent.conll
-                print(firstSent.count)
-                if let range = firstSent.range(of: pattern, options: .regularExpression) {
-                    firstSent.removeSubrange(range)
-                }
-                myLines.append(firstSent)
-                print("Appended length = \(firstSent.count)")
-            } else {
-                myLines.append(sent.conll)
-            }
-        }
-        for sent in mySents {
-            myLines.append(sent.conllTidy)
-        }
-        
-        let content = myLines.joined(separator: "")
-        try content.write(to: newUrl, atomically: true, encoding: .utf8)
-        print("Saved CoNLL dump to: \(newUrl.path)")
-        return newUrl
-    }
     
     //3
     static func dumpDetailsForRunExplicit(myConfig: TaggerConfig, taggingInProgress:Binding<Bool>) throws  {
@@ -1248,7 +1195,7 @@ enum PrintWorkflow{
             print("Main actor done, running function 277")
         }
     }
-    
+    //not called
     static func dumpScalars(_ text: String, maxChars: Int = 50) {
         // called in runTest() function
         for scalar in text.unicodeScalars.prefix(maxChars) {
@@ -1361,3 +1308,44 @@ func getNLTags(text: String) -> NLParseResults{
 //
 //        return fileURL
 //    }
+//2 not called
+//static func printFromConllSents(outsents: [Sentence]) throws -> URL{
+//    let mySents: [Sentence] = outsents
+//    let fileName = "string_dump_\(Int(Date().timeIntervalSince1970 * 1_000_000_000))_special.conllu"
+//    let newUrl: URL = URL(fileURLWithPath: "/Volumes/Kappa/Xcode/parses/\(fileName)")
+//    
+//    var myLines: [String] = []
+//    var atStart: Bool = true
+//    for sent in mySents {
+//        if atStart {
+//            atStart = false
+//            let pattern =  #"^\n{2}"#
+//            var firstSent = sent.conll
+//            print(firstSent.count)
+//            if let range = firstSent.range(of: pattern, options: .regularExpression) {
+//                firstSent.removeSubrange(range)
+//            }
+//            myLines.append(firstSent)
+//            print("Appended length = \(firstSent.count)")
+//        } else {
+//            myLines.append(sent.conll)
+//        }
+//    }
+//    for sent in mySents {
+//        myLines.append(sent.conllTidy)
+//    }
+//    
+//    let content = myLines.joined(separator: "")
+//    try content.write(to: newUrl, atomically: true, encoding: .utf8)
+//    print("Saved CoNLL dump to: \(newUrl.path)")
+//    return newUrl
+//}
+//2.
+//static func loadTextFromBundledFile(inputFile: String, thisExtension: String) throws -> String{
+//    do {
+//        let normalizedText: String = try Bundle.main.loadText(inputFile, format: thisExtension)
+//        return normalizedText
+//    } catch {
+//        return PipelineError.LoadingError.fileLoadError.localizedDescription
+//    }
+//}

@@ -8,6 +8,19 @@
 import Foundation
 internal import UniformTypeIdentifiers
 
+enum ArrayMakingMethods{
+    case cnnbilstm
+    case sentencepieceencodedsentence
+    case wordpieceencodedsentence
+    var methodList: [String]{
+        switch self{
+                case .cnnbilstm : return ["makeIntArray" ,"makeCharIdArray", "parserArgmax"]
+        case .sentencepieceencodedsentence, .wordpieceencodedsentence: return ["multiArrays", "makeArray"]
+        }
+    }
+}
+
+
 /// ultrasimple enumeration used for getting URLs for tagging assets
 enum AssetType: String{
     case mlmodelc
@@ -22,67 +35,16 @@ enum ComparisonGridOption: String, Identifiable, CaseIterable{
     case feats
     case head
     case deprel
-}
-
-/// architecture for ML model used for annotation
-enum ModelArchitecture: String, CaseIterable, Identifiable{
-    var id: Self { self }
-    case distilbert
-    case cnnBiLSTM
-    case camembert
-    case rnn
-    case roberta
-    var displayName: String{
-        switch self{
-        case .distilbert: return "DistilBERT"
-        case .cnnBiLSTM: return "CNN-BiLSTM"
-        case .camembert: return "CamemBERT"
-        case .rnn: return "RNN"
-        case .roberta: return "XLM-roBERTa"
-        }
-    }
     
-    var keyChunk: String{
+    var values: [String] {
         switch self{
-        case .distilbert: return "DIS"
-        case .cnnBiLSTM: return "CNN"
-        case .camembert: return "CAM"
-        case .rnn: return "RNN"
-        case .roberta: return "ROB"
+            case .pos: return ["pos1", "pos2"]
+            case .lemma: return ["lemma1", "lemma2"]
+            case .feats: return ["feats1", "feats2"]
+            case .head: return ["head1", "head2"]
+            case .deprel: return ["deprel1", "deprel2"]
+            
         }
-    }
-    
-    var llm: String{
-        switch self{
-        case .distilbert: return "DistilBERT"
-        case .cnnBiLSTM: return "NA"
-        case .camembert: return "CamemBERT"
-        case .rnn: return "NA"
-        case .roberta: return "XLM-roBERTa"
-        }
-    }
-    var internalTokeniser: String{
-        switch self{
-        case .distilbert: return "WPiece"
-        case .cnnBiLSTM, .rnn: return "NA"
-        case .camembert, .roberta: return "SPiece"
-        
-        }
-    }
-}
-
-/// What type of tokenisation does the LLM base use
-/// This isn't isn't relevant for CNN, RNN and other bases that don't use LLM
-enum LLMInternalTokeniser: String {
-    var id: Self {self}
-    case sentencePiece
-    case wordPiece
-
-    var shortName: String {
-    switch self {
-        case .sentencePiece: return "SPiece"
-        case .wordPiece: return "WPiece"
-    }
     }
 }
 
@@ -250,8 +212,8 @@ enum Language: String, CaseIterable, Identifiable {
         
         var id: String { rawValue }
         
+        /// RHS of model files and Picker strings
         var shortTidy: String {
-            // RHS of model files and Picker strings
             switch self {
             case .enTB1: return "EWT"
             case .enTB2: return "GUM"
@@ -265,8 +227,8 @@ enum Language: String, CaseIterable, Identifiable {
             case .enmTB1: return "RNN"
             }
         }
+        /// RHS of model files and Picker strings
         var keyChunk: String {
-            // RHS of model files and Picker strings
             switch self {
             case .enTB1: return "EWT"
             case .enTB2: return "GUM"
@@ -280,8 +242,8 @@ enum Language: String, CaseIterable, Identifiable {
             case .enmTB1: return "RNN"
             }
         }
+        /// RHS of model files and Picker strings
         var short: String {
-            // RHS of model files and Picker strings
             switch self {
             case .enTB1: return "ewt"
             case .enTB2: return "gum"
@@ -307,7 +269,6 @@ enum Language: String, CaseIterable, Identifiable {
         case .DE : return [.cnnBiLSTM, .distilbert]
         }
     }
-    
     // Returns ONLY the models valid for this language
     var availableTBs: [Treebank] {
         switch self {
@@ -338,6 +299,68 @@ enum LemmaSource: String, CaseIterable, Identifiable{
     }
 }
 
+/// What type of tokenisation does the LLM base use
+/// This isn't isn't relevant for CNN, RNN and other bases that don't use LLM
+enum LLMInternalTokeniser: String {
+    var id: Self {self}
+    case sentencePiece
+    case wordPiece
+
+    var shortName: String {
+    switch self {
+        case .sentencePiece: return "SPiece"
+        case .wordPiece: return "WPiece"
+    }
+    }
+}
+
+/// architecture for ML model used for annotation
+enum ModelArchitecture: String, CaseIterable, Identifiable{
+    var id: Self { self }
+    case distilbert
+    case cnnBiLSTM
+    case camembert
+    case rnn
+    case roberta
+    var displayName: String{
+        switch self{
+        case .distilbert: return "DistilBERT"
+        case .cnnBiLSTM: return "CNN-BiLSTM"
+        case .camembert: return "CamemBERT"
+        case .rnn: return "RNN"
+        case .roberta: return "XLM-roBERTa"
+        }
+    }
+    
+    var keyChunk: String{
+        switch self{
+        case .distilbert: return "DIS"
+        case .cnnBiLSTM: return "CNN"
+        case .camembert: return "CAM"
+        case .rnn: return "RNN"
+        case .roberta: return "ROB"
+        }
+    }
+    
+    var llm: String{
+        switch self{
+        case .distilbert: return "DistilBERT"
+        case .cnnBiLSTM: return "NA"
+        case .camembert: return "CamemBERT"
+        case .rnn: return "NA"
+        case .roberta: return "XLM-roBERTa"
+        }
+    }
+    var internalTokeniser: String{
+        switch self{
+        case .distilbert: return "WPiece"
+        case .cnnBiLSTM, .rnn: return "NA"
+        case .camembert, .roberta: return "SPiece"
+        
+        }
+    }
+}
+
 /// possible results of post-processing a sentence
 enum OnSentResultType: String, RawRepresentable, CaseIterable{
     var id : Self {self}
@@ -359,7 +382,7 @@ enum ParsingType: String, Identifiable, CaseIterable {
 enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
     /// RawValue type (Int) links each case to an integer (1, 2, 3, 4).
     /// Comparable conformance allows using <, >, <=, >= on enum cases.
-    /// step1 is tokenisation, and is handled with diff pipe
+    /// step1 is tokenisation, and is handled with tokenizer pipe or input tokenisation
     case step2 = 2
     case step3 = 3
     case step4 = 4
@@ -380,6 +403,34 @@ enum PipelineStep: Int, CaseIterable, Identifiable, Comparable, Codable {
     /// required for Comparable : Swift expects this to build other comparison operattions
     static func < (lhs: PipelineStep, rhs: PipelineStep) -> Bool {
         lhs.rawValue < rhs.rawValue
+    }
+}
+
+/// status of processing by an annotation pipeline
+enum ProcessingStatus: String, CaseIterable, Codable {
+    case notstarted
+    case inprogress
+    case interrupted
+    case success
+    case failed
+    
+    var exitStatus: String {
+        switch self {
+        case .notstarted: return "Not Started"
+        case .inprogress:  return "In Progress"
+        case .interrupted: return "Interrupted"
+        case .success: return "Success"
+        case .failed: return "Failed"
+        }
+    }
+
+    var interruptRequested: String {
+        switch self {
+            case .interrupted:
+                return "True"
+            default:
+                return "False"
+        }
     }
 }
 
@@ -416,34 +467,6 @@ enum RegexStash{
         static let contractionRegexFR = try! Regex(#"([cdjlmnrst]|qu)'"#)
         static let pronounRegexFR = try! Regex(#"(-je|-tu|-il|-elle|-on|-ça|-cela|-nous|-vous|-ils|-elles|-moi|-toi|-lui|-leur|-en|-y|-ilz)"#)
         static let eosBreakCatchRegexFR = try! Regex(#"[^\S\n]+{2,}"#)
-    }
-}
-
-/// status of processing by an annotation pipeline
-enum ProcessingStatus: String, CaseIterable, Codable {
-    case notstarted
-    case inprogress
-    case interrupted
-    case success
-    case failed
-    
-    var exitStatus: String {
-        switch self {
-        case .notstarted: return "Not Started"
-        case .inprogress:  return "In Progress"
-        case .interrupted: return "Interrupted"
-        case .success: return "Success"
-        case .failed: return "Failed"
-        }
-    }
-
-    var interruptRequested: String {
-        switch self {
-            case .interrupted:
-                return "True"
-            default:
-                return "False"
-        }
     }
 }
 
@@ -500,7 +523,6 @@ enum TokenizingMethod : String, Identifiable, CaseIterable, Codable{
 enum Verbosity: Int, CaseIterable, Identifiable, Comparable, Codable {
     /// RawValue type (Int) links each case to an integer (1, 2, 3, 4).
     /// Comparable conformance allows using <, >, <=, >= on enum cases.
-    /// step1 is tokenisation, and is handled with diff pipe
     case level0 = 0
     case level1 = 1
     case level2 = 2
