@@ -59,6 +59,6 @@ struct ExportSettingsDetailView: View{
         }
     }
 }
-#Preview {
-    ExportSettingsDetailView().environment(AppModel())
-}
+//#Preview {
+//    ExportSettingsDetailView().environment(AppModel())
+//}

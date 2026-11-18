@@ -1,3 +1,9 @@
+//
+//  CNNBiLSTMPipeline.swift
+//  Tagger
+//
+//  Created by Adam on 30/10/2026.
+//
 
 import CoreML
 import Foundation
@@ -23,9 +29,6 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
     let description = "I'm a CNN-BiLSTM pipeline"
     let maxWords: Int = 256 // prefer parse // extract from metas
     let verbosity: Verbosity
-//    internal var runExplicit: Bool {
-//        UserDefaults.standard.bool(forKey: "runExplicit")
-//    }
 
     // MARK: - Result of one tagger-parser prediction
     /// Everything one tagger-parser prediction produces. UPOS tags and neural lemmas are decoded
@@ -123,8 +126,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
     }
 
     // MARK: Step 2 -- run the tagger-parser
-    /// Runs the model once, wraps every output in a validated `LogitReader`, decodes UPOS once, and runs
-    /// the lemmatiser. The default processing level is 5 (everything is used), so all of this is done eagerly.
+    /// Run model once, wrap every output in `LogitReader`, decode UPOS once, lemmatise, default proc level = 5
     private func runTaggerParserModel(on sentence: HashableSentence) throws -> TaggerOutput {
         let tokens = sentence.tokens
         let seqLen = tokens.count + 1 // +1 for the synthetic ROOT at index 0
@@ -147,9 +149,8 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
             "char_ids": MLFeatureValue(multiArray: charIdArray),
         ])
         let output = try taggerModel.prediction(from: provider)
-        // Validate and wrap every output once. The checks cover: output present, expected rank,
-        // enough rows, a supported element type, and (where given) a label dimension that matches the vocabulary.
-        // xpos_logits is not used at present, so it is not read
+        // Validate and wrap every output once. The checks cover: output present, expected rank, row cound, supported
+        // element type, and (where given) a label dim that matches the vocabulary. xpos not used for CNN, so not read
         let uposReader: BERTpipeHelperStructs.LogitReader
         let feats: BERTpipeHelperStructs.LogitReader
         let ruleLemma: BERTpipeHelperStructs.LogitReader
@@ -168,7 +169,6 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
 
         // UPOS: decoded here
         let upos = (1..<seqLen).map { uposVocab.decode(uposReader.argmax(row: $0)) }
-        // get the lemmas with the LemmatizerRunner() as runner
         let lemmas: [String]
         do {
             let runner = self.lemmatizerRunner
@@ -195,7 +195,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
     }
 
     // MARK: XPOS (not used at present, but here to make future mods easier if it's needed)
-    // To re-enable: add an `xpos: LogitReader` to TaggerOutput, build it in runTaggerParserModel, and
+    // To re-enable: add an `xpos: LogitReader` to TaggerOutput, build it in runTaggerParserModel
     //    private func decodeXPOS(_ raw: TaggerOutput) -> [String] {
     //        (1..<raw.seqLen).map { xposVocab.decode(raw.xpos.argmax(row: $0)) }
     //    }

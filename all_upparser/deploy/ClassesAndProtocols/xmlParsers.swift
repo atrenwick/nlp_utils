@@ -6,11 +6,10 @@
 //
 import Foundation
 
-
 ///XML parsing looking for s elements ->> used for XML-CONLL parsing:: get s block, text == s.text
 /// The class has three parser functions differing by signature and operations based on start sent, in sentence or end of sent
 /// These functions are slightly different from those in the SWParser class, as they differ by guard conditions, s + w presence, and are kept separate for simplicity.
-///NOTE for parser, delegate, class :::  `parser` functions below are overloaded : functs can have same basename IF full function signatures are different :: each function  corresponds to a distinct lifecycle event that XMLParser needs to report to its delegate — names are required too - parser is the name of one of the 'behind the scenes' functions in the XMLParser I want the delegate to call
+///NOTE for parser, delegate, class ::: `parser` functions below are overloaded : functs can have same basename IF full function signatures are different :: each function  corresponds to a distinct lifecycle event that XMLParser needs to report to its delegate — names are required too - parser is the name of one of the 'behind the scenes' functions in the XMLParser I want the delegate to call
 class SParser: NSObject, XMLParserDelegate {
     var results: [XMLConllElement] = []
     private var currentID: String?
@@ -101,10 +100,32 @@ class SWParser: NSObject, XMLParserDelegate {
             case "s":
                 guard let id = currentSID else { return }
                 print("have sent :: tokens == \(currentTokens.count)")
-                results.append(HashableSentence(id: id, tokens: currentTokens, conllMetas: []))
+                results.append(HashableSentence(id: id, tokens: currentTokens, conllMetas: [], uuidList: []))
                 insideS = false
             default:
                 break
         }
     }
+}
+
+struct ComparisonElement: Identifiable {
+    var id = UUID()
+    let uuid: String
+    let tokID: String
+    let form: String
+    
+    let pos1: String
+    let pos2: String
+    
+    let lemma1: String
+    let lemma2: String
+    
+    let feats1: String
+    let feats2: String
+    
+    let deprel1: String
+    let deprel2: String
+
+    let head1: String
+    let head2: String
 }

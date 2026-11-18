@@ -347,7 +347,6 @@ func markSentEndsNextTokApproach(tokens: [String], lang: String, approach: EosAp
             item.varReason = reasonFlags[i]
             results.append(item)
         }
-        
     }
     return results
 }
@@ -364,6 +363,4 @@ struct EosTok: Identifiable, Hashable{
     let form: String
     let isEOS: String
     let reason: String
-    
 }
-

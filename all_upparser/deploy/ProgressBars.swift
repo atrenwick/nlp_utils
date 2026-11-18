@@ -90,7 +90,6 @@ struct AppleProgressView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ///  Percentage completed (leading) + Speed (trailing)
             HStack {
                 Text("\(safePercent )% completed")
                 Spacer()
@@ -99,14 +98,11 @@ struct AppleProgressView: View {
             .font(.callout)
             .foregroundColor(.primary)
 
-//            ForEach(model.myConfig.parsingConfig.pipelineRequests.enumerated(), id:\.self.offset){(num,request) in :: for each goes up i n main view
-                let total = Double(myConfig.progressConfig.totalCount)
-                let processed = Double(myConfig.progressConfig.processedCount)
-                let clampedValue = total > 0 ? max(0, min(processed, total)) : 0
-            
+            let total = Double(myConfig.progressConfig.totalCount)
+            let processed = Double(myConfig.progressConfig.processedCount)
+            let clampedValue = total > 0 ? max(0, min(processed, total)) : 0
+        
             ProgressView(value: clampedValue, total: total)
-            
-            /// Current item count (leading) + ETA (trailing)
             HStack {
                 Text("\(asString(processed)) of \(asString(clampedValue))")
                 Spacer()
@@ -120,8 +116,6 @@ struct AppleProgressView: View {
         String(format: "%.0f", number)
     }
 }
-
-
 
 struct PipelineProgressView: View {
     @Binding var myConfig: TaggerConfig

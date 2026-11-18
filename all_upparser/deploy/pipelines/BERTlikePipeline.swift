@@ -1,5 +1,5 @@
 //
-//  SentencePieceTokenizer.swift
+//  BERTlikePipeline.swift
 //  Tagger
 //
 //  Created by Adam on 30/10/2026.

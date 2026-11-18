@@ -6,6 +6,105 @@
 //
 import SwiftUI
 
+// overview list of runs == parent
+struct RunOutputView: View {
+    @Environment(AppModel.self) private var model
+    @State var showImporter: Bool = false
+    @State var runsToCompare: [RunOutput] = []
+    @State var alertMessage: String?
+    var body: some View {
+        @Bindable var model = model
+        NavigationStack{
+            VStack{
+                if model.allRunOutputs.count == 0 {
+                    Text("No previous runs for this session\nTo load saved runs, use Load")
+                } else {
+                    Form{
+                        ForEach($model.allRunOutputs){$run in
+                            NavigationLink {
+                                RunOutputDetailView( run: $run)
+                            } label: {
+                                Text(makeRunLabel(run: run, num: run.num))
+                                    .foregroundStyle(
+                                        (runsToCompare.map {$0.runID} ).contains(run.runID) ? .green : .orange)
+                            }
+                            .contentShape(Rectangle())
+                            .swipeActions(edge: .leading){
+                                Button(){
+                                    addRemoveForComparison(run: run)
+                                } label: {
+                                    Label("Compare", systemImage: "cat")
+                                }
+                            }.contentShape(Rectangle())
+                                .swipeActions(edge: .trailing){
+                                    Button(role: .destructive){
+                                        deleteRun(runID: run.runID)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                } // end of for each
+                        }
+                    Section{
+                        NavigationLink {
+                            TaggingComparisonView(runPair: runsToCompare)
+                        } label: {
+                            Text("Tagging comp view \(runsToCompare.count)")
+                        }
+                    }
+                }
+                }
+            }
+            .toolbar{  // toolbar insidethe navstack and the sheet its action button will call
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showImporter = true
+                    } label: {
+                        Text("Load")
+                    }
+                }
+            }
+            .alert("Error !",
+                   isPresented: Binding(
+                    get: {alertMessage != nil},
+                    set: {if !$0 {alertMessage = nil} } )
+            ) { Button("OK", role: .cancel) { }
+            } message: { Text(alertMessage ?? "") }
+                .sheet(isPresented: $showImporter) {
+                    RunSelectorModal { selectedURL in
+                        do {
+                            let data = try Data(contentsOf: selectedURL)
+                            let loadedResult = try JSONDecoder().decode(RunOutput.self, from: data)
+                            model.allRunOutputs.append(loadedResult)
+                        } catch {
+                            print("Failed to decode: \(error)")
+                        }
+                    }
+                }
+        }
+    }
+
+    func makeRunLabel(run: RunOutput, num: Int) -> String{
+         "Run \(num + 1): \(run.runMetas.sourceFileName) | \(run.runMetas.lang) | \(run.runMetas.safeHeaderAttribs.modelArchitecture) | \(run.runMetas.treebank) | \(run.runMetas.exportFormat)"
+    }
+
+    /// func to take an already evaluated runID and then do a delete on it, to avoid simultaneous access attempts from getID and deleteItem
+    func deleteRun(runID: String){ model.allRunOutputs.removeAll {$0.runID == runID} }
+    // add a leading edge swipe to set as run1, run2
+    func addRemoveForComparison(run: RunOutput) {
+        var existingIDs: [String] = []
+        for run in runsToCompare{ existingIDs.append(run.runID) }
+        if  existingIDs.contains(run.runID){
+            runsToCompare.removeAll {$0.runID == run.runID}
+        } else {
+            if runsToCompare.count == 2{
+                alertMessage = "2 items already present"
+            } else {
+                runsToCompare.append(run)
+            }
+        }
+    }
+}
+
 struct RunOutputDetailView: View{
     @Environment(\.openURL) var openURL
     @Environment(AppModel.self) internal var model
@@ -16,10 +115,6 @@ struct RunOutputDetailView: View{
     @State var alertMessage: String?
     @State var additionalExportFormat: ExportFormat = .conll
 
-    var shortUUID: String{
-        String(Array(run.id.uuidString).suffix(7))
-    }
-        
     var exportFormatShowCases: [ExportFormat]{
         ExportFormat.allCases.filter { format in
             format != model.myConfig.exportConfig.selectedExportFormat
@@ -29,7 +124,7 @@ struct RunOutputDetailView: View{
     var body: some View {
         NavigationStack{
             Form{
-                Section("Run \(shortUUID)"){
+                Section("Run \(run.asShortUUID)"){
                     if model.myConfig.inputConfig.inputFileType == .manual{
                         NavigationLink(destination: BuiltSentsViewer()
                         ){
@@ -105,109 +200,6 @@ struct RunOutputDetailView: View{
             run.runMetas.unread = false
         }
     }
-
-}
-
-// overview list of runs == parent
-struct RunOutputView: View {
-    @Environment(AppModel.self) private var model
-    @State var showImporter: Bool = false
-    @State var runsToCompare: [RunOutput] = []
-    @State var alertMessage: String?
-    var body: some View {
-        @Bindable var model = model
-        NavigationStack{
-            VStack{
-                if model.allRunOutputs.count == 0 {
-                    Text("No previous runs for this session\nTo load saved runs, use Load")
-                } else {
-                    Form{
-                        ForEach($model.allRunOutputs){$run in
-                            NavigationLink {
-                                RunOutputDetailView( run: $run)
-                            } label: {
-                                Text(makeRunLabel(run: run, num: run.num))
-                                    .foregroundStyle(
-                                        (runsToCompare.map {$0.runID} ).contains(run.runID) ? .green : .orange)
-                                    
-                            }
-                            .contentShape(Rectangle())
-                            .swipeActions(edge: .leading){
-                                Button(){
-                                    addRemoveForComparison(run: run)
-                                } label: {
-                                    Label("Compare", systemImage: "cat")
-                                }
-                            }.contentShape(Rectangle())
-                                .swipeActions(edge: .trailing){
-                                    Button(role: .destructive){
-                                        deleteRun(runID: run.runID)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                } // end of for each, attach deletion here
-                        }
-                    Section{
-                        NavigationLink {
-                            TaggingComparisonView(runPair: runsToCompare)
-                        } label: {
-                            Text("Tagging comp view \(runsToCompare.count)")
-                        }
-                    }
-                }
-                }
-            }
-            .toolbar{  // toolbar insidethe navstack and the sheet its action button will call
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showImporter = true
-                    } label: {
-                        Text("Load")
-                    }
-                }
-            }
-            .alert("Error !",
-                   isPresented: Binding(
-                    get: {alertMessage != nil},
-                    set: {if !$0 {alertMessage = nil} } )
-            ) { Button("OK", role: .cancel) { }
-            } message: { Text(alertMessage ?? "") }
-                .sheet(isPresented: $showImporter) {
-                    RunSelectorModal { selectedURL in
-                        do {
-                            let data = try Data(contentsOf: selectedURL)
-                            let loadedResult = try JSONDecoder().decode(RunOutput.self, from: data)
-                            model.allRunOutputs.append(loadedResult)
-                        } catch {
-                            print("Failed to decode: \(error)")
-                        }
-                    }
-                }
-        }
-    }
-
-    func makeRunLabel(run: RunOutput, num: Int) -> String{
-         "Run \(num + 1): \(run.runMetas.sourceFileName) | \(run.runMetas.lang) | \(run.runMetas.safeHeaderAttribs.modelArchitecture) | \(run.runMetas.treebank) | \(run.runMetas.exportFormat)"
-    }
-
-    /// func to take an already evaluated runID and then do a delete on it, to avoid simultaneous access attempts from getID and deleteItem
-    func deleteRun(runID: String){
-        model.allRunOutputs.removeAll {$0.runID == runID}
-    }
-    // add a leading edge swipe to set as run1, run2
-    func addRemoveForComparison(run: RunOutput) {
-        var existingIDs: [String] = []
-        for run in runsToCompare{ existingIDs.append(run.runID) }
-        if  existingIDs.contains(run.runID){
-            runsToCompare.removeAll {$0.runID == run.runID}
-        } else {
-            if runsToCompare.count == 2{
-                alertMessage = "2 items already present"
-            } else {
-                runsToCompare.append(run)
-            }
-        }
-    }
 }
 
 // Sheet to appear to choose a previous run to load
@@ -225,10 +217,11 @@ struct RunSelectorModal: View {
                     dismiss()
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(descTexts(helper: helper)[0])
+                        let descTexts = helper.descTexts()
+                        Text(descTexts[0])
                             .font(.headline)
                             .foregroundColor(.primary)
-                        Text(descTexts(helper: helper)[1])
+                        Text(descTexts[1])
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -244,11 +237,6 @@ struct RunSelectorModal: View {
                 loadRunSummaries()
             }
         }
-    }
-    private func descTexts(helper: RunSelectorHelper) -> [String] {
-        let line1 = String("\(helper.runMetas.sourceFileName) -> \(helper.runMetas.exportFormat.rawValue)")
-        let line2 = "\(helper.runMetas.processedCount) sents :: \(helper.runMetas.lang) :: \(helper.runMetas.treebank) :: Steps 2- \(helper.runMetas.maxPipelineStep.rawValue)"
-        return [line1, line2]
     }
 
     private func loadRunSummaries() {
@@ -300,7 +288,6 @@ struct RunErrorSummaryView: View{
         Form{
             Text("Sents: \(errorCases.count) errors in \(totalSents) sents -> \(sentCoverage) % coverage")
             Text("Toks: \(toksIn) in -> \(totalOutputToks) out :: \(tokCoverage) %")
-            
             ForEach(errorCases.enumerated(), id: \.offset){(num,item) in
                 VStack{
                     Text(makeSentStartString(num: num, item: item))
@@ -336,14 +323,10 @@ struct ToolbarSaveButton: View{
                         alertMessage = error.localizedDescription
                 }
             }
-
-            
         } label: {
             Text("Save")
         }
-        
     }
-    
 }
 
 struct AdditionalExportButton: View{
@@ -383,7 +366,7 @@ struct AdditionalExportButton: View{
         .tint(.green)
         .buttonStyle(.borderedProminent)
     }
-        func additionalExportRunner(
+    func additionalExportRunner(
             run: RunOutput,
             additionalExportFormat: ExportFormat,
             processingStatus: ProcessingStatus
@@ -409,7 +392,8 @@ struct AdditionalExportButton: View{
                 sents: run.runData.sents,
                 exportContent: exportContent
             )
-            let additionalExportParams = AdditionalExportParams(exportFormat: additionalExportFormat, includeConllSentText: run.runMetas.includeConllSentText)
+            let additionalExportParams = AdditionalExportParams(exportFormat: additionalExportFormat, includeConllSentText: run.runMetas.includeConllSentText
+            )
             let pipelineRequestForAdditional = PipelineBuildRequest(
                 languageCode: Language(rawValue: run.runMetas.lang) ?? Language.FR,
                 base: ModelArchitecture(rawValue: run.runMetas.safeHeaderAttribs.modelArchitecture) ?? ModelArchitecture.cnnBiLSTM,
@@ -426,5 +410,4 @@ struct AdditionalExportButton: View{
             let runOutput = RunOutput(num: newRunNumber, runID: run.runID, runData: runData, runMetas: runMetas)
             return runOutput
         }
-
 }

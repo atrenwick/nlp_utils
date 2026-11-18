@@ -23,6 +23,7 @@ struct TaggingComparisonView: View{
         if runPair.count != 2 {
             Text("Runs selected.count  != 2")
         } else {
+            ScrollView{
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                     GridRow {
                         ComparisonGridRowHead(selectedGridOption: selectedGridOption)
@@ -38,6 +39,7 @@ struct TaggingComparisonView: View{
                     }
                 }
             }
+        }
     }
     
     func processRunPair(run1: RunOutput, run2: RunOutput)-> [ComparisonElement] {
@@ -70,29 +72,28 @@ struct TaggingComparisonView: View{
 struct ComparisonGridRowBody: View{
     let selectedGridOption: ComparisonGridOption
     let item: ComparisonElement
+    
+    var annotations: [String] {
+        switch selectedGridOption {
+            case .pos: return [item.pos1, item.pos2]
+            case .lemma: return [item.lemma1, item.lemma2]
+            case .feats: return [item.feats1, item.feats2]
+            case .head: return [item.head1, item.head2]
+            case .deprel: return [item.deprel1, item.deprel2]
+        }
+    }
+    
     var body: some View{
         Text(item.tokID)
         Text(item.form)
-        switch selectedGridOption {
-            case .pos:
-                Text(item.pos1)
-                Text(item.pos2)
-            case .lemma:
-                Text(item.lemma1)
-                Text(item.lemma2)
-            case .feats:
-                Text(item.feats1)
-                Text(item.feats2)
-            case .head:
-                Text(item.head1)
-                Text(item.head2)
-            case .deprel:
-                Text(item.deprel1)
-                Text(item.deprel2)
+        Group{
+            Text(annotations[0])
+            Text(annotations[1])
         }
-        
+        .foregroundStyle(annotations[0] == annotations[1] ? .green : .orange )
     }
 }
+
 
 struct ComparisonGridRowHead: View{
     let selectedGridOption: ComparisonGridOption
@@ -118,4 +119,100 @@ struct ComparisonGridRowHead: View{
         }
         
     }
+}
+
+/// prefer pure dict to join on UUID for toks ->> dict1 of token level info, dict 2 of sent-token mapping
+func consolidateRunsToXML(runs: [RunOutput]){
+    var consolidatedSents: [ConsolidatedSentence] = []
+    var consolidatedTokens: [ConsolidatedToken] = []
+    for (runNum, run) in runs.enumerated(){
+        // process sent
+        var currentSentID: String = ""
+        for sent in run.runData.sents{
+            if runNum == 0 {
+                currentSentID = sent.sentID
+                //do this to start sent
+            }
+            // process token
+            for token in sent.conllData{
+                var tokid: Int = 0
+                var form: String = ""
+                var unwrappedUUID: String = ""
+                var posData: [ConsolidatedAnnotationData] = []
+                var lemmaData: [ConsolidatedAnnotationData] = []
+                var featsData: [ConsolidatedAnnotationData] = []
+                var headData: [ConsolidatedAnnotationData] = []
+                var deprelData: [ConsolidatedAnnotationData] = []
+                if runNum == 0 {
+                    // do this to add token
+                    let key = "\(run.runMetas.safeHeaderAttribs.modelArchitecture)_\(run.runMetas.treebank)"
+                    tokid = token.tokid
+                    form = token.form
+                    unwrappedUUID = token.preservedUUID ?? "_"
+                    posData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                    lemmaData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                    featsData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                    headData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                    deprelData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                } else {
+                    let key = "\(run.runMetas.safeHeaderAttribs.modelArchitecture)_\(run.runMetas.treebank)"
+                    posData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                    lemmaData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                    featsData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                    headData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                    deprelData.append(ConsolidatedAnnotationData(source: "\(key)", value: token.upos))
+                }
+                consolidatedTokens.append(
+                    ConsolidatedToken(
+                    tokid: tokid,
+                    tokUUID: unwrappedUUID,
+                    form: form,
+                    posData: posData,
+                    lemmaData: lemmaData,
+                    featsData: featsData,
+                    headData: headData,
+                    deprelData: deprelData
+                )
+                    )
+            }
+            
+            
+        }
+        consolidatedSents.append(
+            ConsolidatedSentence(
+                sentID: currentSentID,
+                consolidatedData: consolidatedTokens)
+        )
+        consolidatedTokens = []
+        
+        
+        
+        
+        
+    }
+    
+}
+struct ConsolidatedAnnotationData: Identifiable, Codable{
+    var id = UUID()
+    let source: String
+    let value: String
+}
+
+struct ConsolidatedToken: Identifiable, Codable{
+    var id = UUID()
+    let tokid: Int
+    let tokUUID: String
+    let form: String
+    let posData: [ConsolidatedAnnotationData]
+    let lemmaData: [ConsolidatedAnnotationData]
+    let featsData: [ConsolidatedAnnotationData]
+    let headData: [ConsolidatedAnnotationData]
+    let deprelData: [ConsolidatedAnnotationData]
+}
+
+struct ConsolidatedSentence: Identifiable, Codable{
+    var id = UUID()
+    let sentID: String
+    let consolidatedData: [ConsolidatedToken]
+    
 }
