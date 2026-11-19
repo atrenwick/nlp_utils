@@ -184,35 +184,6 @@ func consolidateRunsToXML(runs: [RunOutput]){
                 consolidatedData: consolidatedTokens)
         )
         consolidatedTokens = []
-        
-        
-        
-        
-        
     }
-    
-}
-struct ConsolidatedAnnotationData: Identifiable, Codable{
-    var id = UUID()
-    let source: String
-    let value: String
-}
-
-struct ConsolidatedToken: Identifiable, Codable{
-    var id = UUID()
-    let tokid: Int
-    let tokUUID: String
-    let form: String
-    let posData: [ConsolidatedAnnotationData]
-    let lemmaData: [ConsolidatedAnnotationData]
-    let featsData: [ConsolidatedAnnotationData]
-    let headData: [ConsolidatedAnnotationData]
-    let deprelData: [ConsolidatedAnnotationData]
-}
-
-struct ConsolidatedSentence: Identifiable, Codable{
-    var id = UUID()
-    let sentID: String
-    let consolidatedData: [ConsolidatedToken]
     
 }

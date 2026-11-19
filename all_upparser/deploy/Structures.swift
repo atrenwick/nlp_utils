@@ -64,7 +64,7 @@ struct ConfigurationRules {
             }
             case .camembert:
             switch language {
-            case .FR: return [.frTB1]
+                case .FR: return [.frTB1, .frTB4]
             default : return []
             }
             

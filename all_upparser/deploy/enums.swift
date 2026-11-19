@@ -203,6 +203,7 @@ enum Language: String, CaseIterable, Identifiable {
         case frTB1 = "fr_gsd"
         case frTB2 = "fr_sequoia"
         case frTB3 = "fr_rhapsodie"
+        case frTB4 = "fr_combined"
         case deTB1 = "de_gsd"
         case deTB2 = "de_hdt"
         case angTB1 = "ang_oedt"
@@ -221,6 +222,7 @@ enum Language: String, CaseIterable, Identifiable {
             case .frTB1, .deTB1: return "GSD"
             case .frTB2: return "Sequoia"
             case .frTB3: return "Rhapsodie"
+            case .frTB4: return "Combined"
             case .deTB2: return "HDT"
             case .angTB1: return "OEDT"
             case .frmTB1, .froTB1: return "Profiterole"
@@ -236,6 +238,7 @@ enum Language: String, CaseIterable, Identifiable {
             case .deTB1, .frTB1: return "GSD"
             case .frTB2: return "SEQ"
             case .frTB3: return "RHA"
+            case .frTB4: return "CMB"
             case .deTB2: return "HDT"
             case .angTB1: return "OED"
             case .froTB1, .frmTB1: return "PRO"
@@ -251,6 +254,7 @@ enum Language: String, CaseIterable, Identifiable {
             case .deTB1, .frTB1: return "gsd"
             case .frTB2: return "sequoia"
             case .frTB3: return "rhapsodie"
+            case .frTB4: return "combined"
             case .deTB2: return "hdt"
             case .angTB1: return "oedt"
             case .froTB1, .frmTB1: return "profiterole"
@@ -273,7 +277,7 @@ enum Language: String, CaseIterable, Identifiable {
     var availableTBs: [Treebank] {
         switch self {
         case .EN: return [.enTB1, .enTB2, .enTB3]
-        case .FR:  return [.frTB1, .frTB2, .frTB3]
+        case .FR:  return [.frTB1, .frTB2, .frTB3, .frTB4]
         case .DE:  return [.deTB1, .deTB2]
         case .ANG: return [.angTB1]
         case .FRM: return [.frmTB1]

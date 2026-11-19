@@ -114,6 +114,7 @@ struct RunOutputDetailView: View{
     @State var fileToView: URL? =   nil
     @State var alertMessage: String?
     @State var additionalExportFormat: ExportFormat = .conll
+    @State var sentDictOutput: Dictionary<String,[String:ConsolidatedToken]> = [:]
 
     var exportFormatShowCases: [ExportFormat]{
         ExportFormat.allCases.filter { format in
@@ -162,6 +163,21 @@ struct RunOutputDetailView: View{
                         Spacer()
                         AdditionalExportButton( additionalExportFormat: $additionalExportFormat, alertMessage: $alertMessage, run: run)
                     }
+                }
+                Section("Dictionary"){
+                    HStack{
+                        Text("make dict")
+                    
+                        Spacer()
+                        Button {
+                            // action
+                            sentDictOutput = makeSentDictionary(runs: model.allRunOutputs)
+                            
+                        } label : {
+                            Text("make dict")
+                        }
+                        
+                    }.buttonStyle(.borderedProminent)
                 }
             }
             .toolbar{
@@ -410,4 +426,125 @@ struct AdditionalExportButton: View{
             let runOutput = RunOutput(num: newRunNumber, runID: run.runID, runData: runData, runMetas: runMetas)
             return runOutput
         }
+}
+
+struct ConsolidatedAnnotationData: Identifiable, Codable{
+    var id = UUID()
+    let source: String
+    let value: String
+
+    var asXMLPart: String{
+        return """
+            \(source.xmlEscaped)=\"\(value.xmlEscaped)\"
+            """
+    }
+}
+
+struct ConsolidatedToken: Identifiable, Codable{
+    var id = UUID()
+    let tokid: Int
+    let tokUUID: String
+    let form: String
+    var posData: [ConsolidatedAnnotationData]
+    var lemmaData: [ConsolidatedAnnotationData]
+    var featsData: [ConsolidatedAnnotationData]
+    var headData: [ConsolidatedAnnotationData]
+    var deprelData: [ConsolidatedAnnotationData]
+    
+    var asXML: String{
+        return """
+            <w UUID=\"\(tokUUID)\" consoltokID=\"\(id)\" tokID=\"\(tokid)\" form=\"\(form.xmlEscaped)\" \(posData.makeXMLchunk()) \(lemmaData.makeXMLchunk()) \(featsData.makeXMLchunk()) \(headData.makeXMLchunk()) \(deprelData.makeXMLchunk())>\(form.xmlEscaped)</w>  
+            """
+    }
+}
+
+struct ConsolidatedSentence: Identifiable, Codable{
+    var id = UUID()
+    let sentID: String
+    let consolidatedData: [ConsolidatedToken]
+
+    func makeXMLsent() -> String {
+        var xmlTokenElements: [String] = []
+        let sentHeader = """
+        <s id=\"\(sentID)\">
+        """
+        let sentFooter = """
+            </s>
+            """
+        xmlTokenElements.append(sentHeader)
+        xmlTokenElements.append(consolidatedData.makeSentXML())
+        xmlTokenElements.append(sentFooter)
+        return xmlTokenElements.joined(separator: "\n")
+    }
+    
+}
+
+func makeSentDictionary(runs: [RunOutput])-> Dictionary<String,[String:ConsolidatedToken]>{
+    var currentSentID: String = ""
+    var toksInCurrentSent: Dictionary<String,ConsolidatedToken> = [:]
+    var sentToTokDict: Dictionary<String,[String:ConsolidatedToken]> = [:]
+    var currentToken: ConsolidatedToken
+    var currentTokID: String
+    for run in runs{
+        for sent in run.runData.sents{
+            currentSentID = sent.sentID
+            if sentToTokDict.keys.contains(currentSentID){
+                toksInCurrentSent = sentToTokDict[currentSentID]!
+            } else {
+                toksInCurrentSent = [:]
+                
+            }
+            for token in sent.conllData{
+                currentTokID = token.unwrappedUUID
+                if toksInCurrentSent.keys.contains(currentTokID){
+                    currentToken = toksInCurrentSent[currentTokID]!
+                } else {
+                    currentToken = ConsolidatedToken(
+                        tokid: token.tokid,
+                        tokUUID: token.unwrappedUUID,
+                        form: token.form,
+                        posData: [],
+                        lemmaData: [],
+                        featsData: [],
+                        headData: [],
+                        deprelData: []
+                    )
+                }
+                let runDesc = [run.runMetas.safeHeaderAttribs.modelArchitecture, run.runMetas.lang, run.runMetas.treebank].joined(separator: "_")
+                currentToken.posData.append(
+                    ConsolidatedAnnotationData(source: "\(runDesc)_pos", value: token.upos == "_" ? token.xpos : token.upos)
+                )
+                currentToken.lemmaData.append(
+                    ConsolidatedAnnotationData(source: "\(runDesc)_lemma", value: token.lemma)
+                )
+                
+                currentToken.featsData.append(
+                    ConsolidatedAnnotationData(source: "\(runDesc)_feats", value: token.feats)
+                )
+                currentToken.headData.append(
+                    ConsolidatedAnnotationData(source: "\(runDesc)_head", value: token.head)
+                )
+                currentToken.deprelData.append(
+                    ConsolidatedAnnotationData(source: "\(runDesc)_deprel", value: token.deprel)
+                )
+                toksInCurrentSent[currentTokID] = currentToken
+            }
+            sentToTokDict[currentSentID] = toksInCurrentSent
+        }
+    }
+    var myStringDump: [String] = []
+    var sentNum: Int = 0
+    for key in sentToTokDict.keys{
+        sentNum += 1
+        myStringDump.append("<s id = \"\(key.xmlEscaped)\" num=\"\(sentNum)\">\n")
+        let blob = sentToTokDict[key]!
+        let str = blob.values
+            .sorted {$0.tokid < $1.tokid}
+            .map { $0.asXML}
+            .joined(separator: "\n")
+        myStringDump.append(str)
+        myStringDump.append("\n</s>\n\n")
+    }
+//    print( myStringDump.joined(separator: ""))
+    return sentToTokDict
 }
