@@ -95,3 +95,15 @@ extension URL {
         standardizedFileURL.resolvingSymlinksInPath()
     }
 }
+
+extension Sequence where Element == ConsolidatedAnnotationData{
+    func makeXMLchunk() -> String{
+        return self.map {$0.asXMLPart}.joined(separator: " ")
+    }
+}
+
+extension Sequence where Element == ConsolidatedToken{
+    func makeSentXML() -> String{
+        return self.map {$0.asXML}.joined(separator: "\n")
+    }
+}
