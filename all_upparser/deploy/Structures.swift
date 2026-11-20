@@ -96,6 +96,56 @@ struct ConfigurationRules {
     }
 }
 
+struct ConsolidatedAnnotationData: Identifiable, Codable{
+    var id = UUID()
+    let source: String
+    let value: String
+
+    var asXMLPart: String{
+        return """
+            \(source.xmlEscaped)=\"\(value.xmlEscaped)\"
+            """
+    }
+}
+
+struct ConsolidatedToken: Identifiable, Codable{
+    var id = UUID()
+    let tokid: Int
+    let tokUUID: String
+    let form: String
+    var posData: [ConsolidatedAnnotationData]
+    var lemmaData: [ConsolidatedAnnotationData]
+    var featsData: [ConsolidatedAnnotationData]
+    var headData: [ConsolidatedAnnotationData]
+    var deprelData: [ConsolidatedAnnotationData]
+    
+    var asXML: String{
+        return """
+            <w UUID=\"\(tokUUID)\" consoltokID=\"\(id)\" tokID=\"\(tokid)\" form=\"\(form.xmlEscaped)\" \(posData.makeXMLchunk()) \(lemmaData.makeXMLchunk()) \(featsData.makeXMLchunk()) \(headData.makeXMLchunk()) \(deprelData.makeXMLchunk())>\(form.xmlEscaped)</w>  
+            """
+    }
+}
+
+struct ConsolidatedSentence: Identifiable, Codable{
+    var id = UUID()
+    let sentID: String
+    let consolidatedData: [ConsolidatedToken]
+
+    func makeXMLsent() -> String {
+        var xmlTokenElements: [String] = []
+        let sentHeader = """
+        <s id=\"\(sentID)\">
+        """
+        let sentFooter = """
+            </s>
+            """
+        xmlTokenElements.append(sentHeader)
+        xmlTokenElements.append(consolidatedData.makeSentXML())
+        xmlTokenElements.append(sentFooter)
+        return xmlTokenElements.joined(separator: "\n")
+    }
+}
+
 struct Document {
     var id = UUID()
     let sentences:[Sentence]
@@ -164,7 +214,6 @@ struct PipelineBuildRequest: Identifiable{
         [base.keyChunk, languageCode.keyChunk, treebank.keyChunk]
             .joined(separator: "-")
     }
-
 }
 
 struct PipelineDesc{
@@ -253,7 +302,6 @@ struct RunOutput: Identifiable, Codable {
     var asShortUUID: String {
         String(Array(id.uuidString).suffix(7))
     }
-
 }
 
 struct RunSelectorHelper{
@@ -265,7 +313,6 @@ struct RunSelectorHelper{
         let line2 = "\(runMetas.processedCount) sents :: \(runMetas.lang) :: \(runMetas.treebank) :: Steps 2- \(runMetas.maxPipelineStep.rawValue)"
         return [line1, line2]
     }
-
 }
 
 /// import file from outside to sandbox -> sandbox, via copy, removing old instance
@@ -281,7 +328,6 @@ struct SandboxImporter {
         }
         // Copy the file to sandbox
         try fileManager.copyItem(at: externalURL, to: targetURL)
-        
         return targetURL
     }
 }
@@ -292,6 +338,8 @@ struct Sentence: Identifiable, Codable {
     let conllData: [Token]
     let conllMetas: [String]
     var tokCount: Int { conllData.count }
+    var sentIdAsMeta: String {  "\n\n# sent_id = \(runSentIdRegexes)"   }
+
     var runSentIdRegexes: String{
         var content = sentID.trimmingCharacters(in: .newlines)
         // 2. Remove existing header if any
@@ -308,10 +356,6 @@ struct Sentence: Identifiable, Codable {
         var internalList: [String] = ["# sent_text = "]
         internalList.append(contentsOf: conllData.map {$0.form})
         return internalList.joined(separator: " ")
-    }
-    
-    var sentIdAsMeta: String {
-        return "\n\n# sent_id = \(runSentIdRegexes)"
     }
     
     func makeXMLsent(exportFormat: ExportFormat, includeConllSentText: Bool) -> String {

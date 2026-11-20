@@ -945,7 +945,7 @@ enum XMLMakingWorkflow{
         )
         return outputStruct
     }
-
+    
     static func sentListToXML(headers: XmlHeaderAttribs, sents: [Sentence], exportFormat: ExportFormat, includeConllSentText: Bool, processingStatus: ProcessingStatus) -> String {
         let safeHeaderAttribs = headers
         let sentences = sents
@@ -1017,10 +1017,61 @@ enum XMLMakingWorkflow{
         }
         outputStore.append(xmlFooter)
         let returnItem = outputStore.joined(separator: "\n")
-//        print("returnItem 937 count = \(returnItem.count)")
+        //        print("returnItem 937 count = \(returnItem.count)")
         return returnItem
         
     }
+    
+    static func makeSentDictionaryHeader(sentNum: Int, tokNum: Int, safeHeaderAttribs: XmlHeaderAttribs, processingStatus: ProcessingStatus)-> String{
+        
+        let xmlHeader = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <TEI.2>
+        <teiHeader>
+        <fileDesc>
+        <titleStmt>
+        <title>\(safeHeaderAttribs.xmlTitle)</title>
+        <author>\(safeHeaderAttribs.xmlAuthorName)</author>
+        </titleStmt>
+        <publicationStmt>
+        <publisher />
+        <date />
+        <pubDate />
+        <sourceDesc 
+            model="multi"
+            treebank="multi"
+            tagging_date="\(safeHeaderAttribs.taggingDate)"
+            sourcefile="\(safeHeaderAttribs.sourceFile)"
+            runID="\(safeHeaderAttribs.runID)"
+            maxPipelineStep="\(safeHeaderAttribs.maxPipelineStep)"
+            modelArchitecture="multi"
+            runRetokeniser="multi"
+            tokenizingMethod="\(safeHeaderAttribs.tokenizingMethod)"
+            sentencizingMethod="\(safeHeaderAttribs.sentencizingMethod)"
+            maxWords="\(safeHeaderAttribs.maxWords)"
+            maxSeqLen="\(safeHeaderAttribs.maxSeqLen)"
+            sentCount="\(sentNum)"
+            tokenCount="\(tokNum)"
+            exitCondition="\(processingStatus.exitStatus)"
+            interruptRequested="\(processingStatus.interruptRequested)">
+        </sourceDesc>
+        </fileDesc>
+        <profileDesc>
+        <langUsage>
+        <language ident="\(safeHeaderAttribs.lang)"/>
+        </langUsage>
+        <textDesc thema=\"\" type="unk" sub_genre=\"\" />
+        </profileDesc>
+        </teiHeader>
+        <text>
+        <body>
+        <p>        
+        """
+            
+        return xmlHeader
+    }
+
+
 }
 
 enum WritingWorkflow{

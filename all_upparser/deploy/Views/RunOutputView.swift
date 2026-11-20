@@ -108,14 +108,15 @@ struct RunOutputView: View {
 struct RunOutputDetailView: View{
     @Environment(\.openURL) var openURL
     @Environment(AppModel.self) internal var model
-
+    
     @Binding var run: RunOutput
     @State var hasAppeared: Bool = false
     @State var fileToView: URL? =   nil
     @State var alertMessage: String?
     @State var additionalExportFormat: ExportFormat = .conll
     @State var sentDictOutput: Dictionary<String,[String:ConsolidatedToken]> = [:]
-
+    @State var outputString: String?
+    @State var savedURL: URL?
     var exportFormatShowCases: [ExportFormat]{
         ExportFormat.allCases.filter { format in
             format != model.myConfig.exportConfig.selectedExportFormat
@@ -167,16 +168,17 @@ struct RunOutputDetailView: View{
                 Section("Dictionary"){
                     HStack{
                         Text("make dict")
-                    
                         Spacer()
                         Button {
-                            // action
-                            sentDictOutput = makeSentDictionary(runs: model.allRunOutputs)
-                            
+                            do {
+                                savedURL = try runXMLWriter()
+                            } catch {
+                                error
+                                print("Error caught @ 180")
+                            }
                         } label : {
-                            Text("make dict")
+                            Text("ExportConsolidated")
                         }
-                        
                     }.buttonStyle(.borderedProminent)
                 }
             }
@@ -195,7 +197,7 @@ struct RunOutputDetailView: View{
                                 runID: run.runMetas.runID,
                                 url: hasURL
                             )
-                            )
+                        )
                         fileToView = hasURL
                     }
                 }
@@ -216,14 +218,126 @@ struct RunOutputDetailView: View{
             run.runMetas.unread = false
         }
     }
+    
+    func runXMLWriter()  throws -> URL? {
+        @Bindable var model = model
+        guard let folderURL = model.myConfig.exportConfig.targetFolderURL else {
+            if model.myConfig.parsingConfig.verbosity.rawValue > 1{ print("Guard 661 fail")
+            }
+            throw PipelineError.ExportError.outputFolderCreationError
+        }
+        outputString = makeSentDictionary(runs: model.allRunOutputs, safeHeaderAttribs: run.runMetas.safeHeaderAttribs, processingStatus: run.runMetas.processingStatus)
+        guard let outputString else {
+            savedURL = nil
+            throw PipelineError.ExportError.makeExportContentError
+        }
+        savedURL = try PipelineServices.ExporterService.exportDataToFile(
+            exportContent: outputString,
+            customName: run.runID,
+            targetFolderURL: model.myConfig.exportConfig.targetFolderURL!,
+            exportFormat: .xml,
+            verbosity: .level2
+        )
+        if let savedURL = savedURL{
+            return savedURL
+        } else {
+            return nil
+        }
+    }
+    
+    func makeSentDictionary(runs: [RunOutput], safeHeaderAttribs: XmlHeaderAttribs,processingStatus: ProcessingStatus )-> String {
+        var currentSentID: String = ""
+        var toksInCurrentSent: Dictionary<String,ConsolidatedToken> = [:]
+        var sentToTokDict: Dictionary<String,[String:ConsolidatedToken]> = [:]
+        var currentToken: ConsolidatedToken
+//        var stringStorage: [String] = []
+        var currentTokID: String
+        for run in runs{
+            for sent in run.runData.sents{
+                currentSentID = sent.sentID
+                if sentToTokDict.keys.contains(currentSentID){
+                    toksInCurrentSent = sentToTokDict[currentSentID]!
+                } else {
+                    toksInCurrentSent = [:]
+                    
+                }
+                for token in sent.conllData{
+                    currentTokID = token.unwrappedUUID
+                    if toksInCurrentSent.keys.contains(currentTokID){
+                        currentToken = toksInCurrentSent[currentTokID]!
+                    } else {
+                        currentToken = ConsolidatedToken(
+                            tokid: token.tokid,
+                            tokUUID: token.unwrappedUUID,
+                            form: token.form,
+                            posData: [],
+                            lemmaData: [],
+                            featsData: [],
+                            headData: [],
+                            deprelData: []
+                        )
+                    }
+                    let runDesc = [run.runMetas.safeHeaderAttribs.modelArchitecture, run.runMetas.lang, run.runMetas.treebank].joined(separator: "_")
+                    currentToken.posData.append(
+                        ConsolidatedAnnotationData(source: "\(runDesc)_pos", value: token.upos == "_" ? token.xpos : token.upos)
+                    )
+                    currentToken.lemmaData.append(
+                        ConsolidatedAnnotationData(source: "\(runDesc)_lemma", value: token.lemma)
+                    )
+                    currentToken.featsData.append(
+                        ConsolidatedAnnotationData(source: "\(runDesc)_feats", value: token.feats)
+                    )
+                    currentToken.headData.append(
+                        ConsolidatedAnnotationData(source: "\(runDesc)_head", value: token.head)
+                    )
+                    currentToken.deprelData.append(
+                        ConsolidatedAnnotationData(source: "\(runDesc)_deprel", value: token.deprel)
+                    )
+                    toksInCurrentSent[currentTokID] = currentToken
+                }
+                sentToTokDict[currentSentID] = toksInCurrentSent
+            }
+        }
+        var myStringDump: [String] = []
+        var sentNum: Int = 0
+        var tokNum: Int = 0
+        for key in sentToTokDict.keys{
+            sentNum += 1
+            myStringDump.append("<s id = \"\(key.xmlEscaped)\" num=\"\(sentNum)\">\n")
+            let blob = sentToTokDict[key]!
+            let str = blob.values
+                .sorted {$0.tokid < $1.tokid}
+                .map { $0.asXML}
+                .joined(separator: "\n")
+            myStringDump.append(str)
+            myStringDump.append("\n</s>\n\n")
+            tokNum += blob.values.count
+        }
+        
+        let xmlHeader = XMLMakingWorkflow.makeSentDictionaryHeader(
+            sentNum: sentNum,
+            tokNum: tokNum,
+            safeHeaderAttribs: safeHeaderAttribs,
+            processingStatus: processingStatus
+        )
+        
+        let xmlFooter = """
+        </p>
+        </body>
+        </text>
+        </TEI.2>
+        """
+        let outputString = [xmlHeader, myStringDump.joined(separator: "\n"), xmlFooter].joined(separator: "\n")
+        return outputString
+    }
 }
 
 // Sheet to appear to choose a previous run to load
 struct RunSelectorModal: View {
     @Environment(\.dismiss) var dismiss
     @State private var runFiles: [URL] = []
-    let onSelect: (URL) -> Void
     @State var runHelpers: [RunSelectorHelper] = []
+    let onSelect: (URL) -> Void
     
     var body: some View {
         NavigationStack {
@@ -382,6 +496,7 @@ struct AdditionalExportButton: View{
         .tint(.green)
         .buttonStyle(.borderedProminent)
     }
+    
     func additionalExportRunner(
             run: RunOutput,
             additionalExportFormat: ExportFormat,
@@ -426,125 +541,4 @@ struct AdditionalExportButton: View{
             let runOutput = RunOutput(num: newRunNumber, runID: run.runID, runData: runData, runMetas: runMetas)
             return runOutput
         }
-}
-
-struct ConsolidatedAnnotationData: Identifiable, Codable{
-    var id = UUID()
-    let source: String
-    let value: String
-
-    var asXMLPart: String{
-        return """
-            \(source.xmlEscaped)=\"\(value.xmlEscaped)\"
-            """
-    }
-}
-
-struct ConsolidatedToken: Identifiable, Codable{
-    var id = UUID()
-    let tokid: Int
-    let tokUUID: String
-    let form: String
-    var posData: [ConsolidatedAnnotationData]
-    var lemmaData: [ConsolidatedAnnotationData]
-    var featsData: [ConsolidatedAnnotationData]
-    var headData: [ConsolidatedAnnotationData]
-    var deprelData: [ConsolidatedAnnotationData]
-    
-    var asXML: String{
-        return """
-            <w UUID=\"\(tokUUID)\" consoltokID=\"\(id)\" tokID=\"\(tokid)\" form=\"\(form.xmlEscaped)\" \(posData.makeXMLchunk()) \(lemmaData.makeXMLchunk()) \(featsData.makeXMLchunk()) \(headData.makeXMLchunk()) \(deprelData.makeXMLchunk())>\(form.xmlEscaped)</w>  
-            """
-    }
-}
-
-struct ConsolidatedSentence: Identifiable, Codable{
-    var id = UUID()
-    let sentID: String
-    let consolidatedData: [ConsolidatedToken]
-
-    func makeXMLsent() -> String {
-        var xmlTokenElements: [String] = []
-        let sentHeader = """
-        <s id=\"\(sentID)\">
-        """
-        let sentFooter = """
-            </s>
-            """
-        xmlTokenElements.append(sentHeader)
-        xmlTokenElements.append(consolidatedData.makeSentXML())
-        xmlTokenElements.append(sentFooter)
-        return xmlTokenElements.joined(separator: "\n")
-    }
-    
-}
-
-func makeSentDictionary(runs: [RunOutput])-> Dictionary<String,[String:ConsolidatedToken]>{
-    var currentSentID: String = ""
-    var toksInCurrentSent: Dictionary<String,ConsolidatedToken> = [:]
-    var sentToTokDict: Dictionary<String,[String:ConsolidatedToken]> = [:]
-    var currentToken: ConsolidatedToken
-    var currentTokID: String
-    for run in runs{
-        for sent in run.runData.sents{
-            currentSentID = sent.sentID
-            if sentToTokDict.keys.contains(currentSentID){
-                toksInCurrentSent = sentToTokDict[currentSentID]!
-            } else {
-                toksInCurrentSent = [:]
-                
-            }
-            for token in sent.conllData{
-                currentTokID = token.unwrappedUUID
-                if toksInCurrentSent.keys.contains(currentTokID){
-                    currentToken = toksInCurrentSent[currentTokID]!
-                } else {
-                    currentToken = ConsolidatedToken(
-                        tokid: token.tokid,
-                        tokUUID: token.unwrappedUUID,
-                        form: token.form,
-                        posData: [],
-                        lemmaData: [],
-                        featsData: [],
-                        headData: [],
-                        deprelData: []
-                    )
-                }
-                let runDesc = [run.runMetas.safeHeaderAttribs.modelArchitecture, run.runMetas.lang, run.runMetas.treebank].joined(separator: "_")
-                currentToken.posData.append(
-                    ConsolidatedAnnotationData(source: "\(runDesc)_pos", value: token.upos == "_" ? token.xpos : token.upos)
-                )
-                currentToken.lemmaData.append(
-                    ConsolidatedAnnotationData(source: "\(runDesc)_lemma", value: token.lemma)
-                )
-                
-                currentToken.featsData.append(
-                    ConsolidatedAnnotationData(source: "\(runDesc)_feats", value: token.feats)
-                )
-                currentToken.headData.append(
-                    ConsolidatedAnnotationData(source: "\(runDesc)_head", value: token.head)
-                )
-                currentToken.deprelData.append(
-                    ConsolidatedAnnotationData(source: "\(runDesc)_deprel", value: token.deprel)
-                )
-                toksInCurrentSent[currentTokID] = currentToken
-            }
-            sentToTokDict[currentSentID] = toksInCurrentSent
-        }
-    }
-    var myStringDump: [String] = []
-    var sentNum: Int = 0
-    for key in sentToTokDict.keys{
-        sentNum += 1
-        myStringDump.append("<s id = \"\(key.xmlEscaped)\" num=\"\(sentNum)\">\n")
-        let blob = sentToTokDict[key]!
-        let str = blob.values
-            .sorted {$0.tokid < $1.tokid}
-            .map { $0.asXML}
-            .joined(separator: "\n")
-        myStringDump.append(str)
-        myStringDump.append("\n</s>\n\n")
-    }
-//    print( myStringDump.joined(separator: ""))
-    return sentToTokDict
 }
