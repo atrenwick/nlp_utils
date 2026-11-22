@@ -64,7 +64,7 @@ struct TaggerConfig{
         var maxWords: Int
         var verbosity: Verbosity
         
-        // need to add = nil in init of it's to truly allow no parameters to be specified
+        // need to add = nil in init of items to truly allow no parameters to be specified
         init(
             key: String? = nil,
             parsingType: ParsingType? = nil,

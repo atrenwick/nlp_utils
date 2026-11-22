@@ -364,3 +364,115 @@ struct EosTok: Identifiable, Hashable{
     let isEOS: String
     let reason: String
 }
+
+
+
+
+//            ##python -m tagger_parser.train_bert --train /Users/Adam/Downloads/allup/data/fr/fr_sequoia-ud-train.conllu --dev /Users/Adam/Downloads/allup/data/fr/fr_sequoia-ud-dev.conllu --output /Users/Adam/Downloads/allup/frombert/from_bertttrain4_sequoiafr512 --base_model distilbert-base-multilingual-cased --max_subwords 512
+//distilbert convert
+//            python -m tagger_parser.convert_bert --useBest --model_dir /Users/Adam/Downloads/allup/frombert/from_bertttrain_fro_profiterole_512/ --output_name FROfrom_bertttrain_fro_profiterole_512.mlpackage --max_words 192 --seq_len 512
+
+//            python -m tagger_parser.convert_camembertlikes --useBest --model_dir /Users/Adam/Downloads/allup/frombert/from_bert_camembert_gsd_fr512 --output_name FR_camembert_tagger_parsergsdv2.mlpackage --max_words 192 --seq_len 512
+
+//func makeCommandsForTraining(modelArchitecture: ModelArchitecture, inputParams: TrainingParams, arg3: String){
+//    var trainCommand: String = ""
+//    var convertCommand: String = ""
+//    var tokeniserCommand: String = ""
+//    var tokeniserGoldCommand: String = ""
+//    switch modelArchitecture {
+//        case .distilbert:
+//            trainCommand = "python -m tagger_parser.\(modelArchitecture.trainingScriptName) --train \(inputParams.dataLocation)/\(trainName) -- dev \(inputParams.dataLocation)/\(devName) -- output \(inputParams.outputFolder) --base_model \(inputParams.basemodel) --max_subwords \(maxSubwords)"
+//            
+//            convertCommand = "python -m tagger_parser.\(modelArchitecture.converterScriptName) --useBest --model_dir \(inputParams.outputFolder)/ -- output_name \(outputPackageName) --max_words \(inputParams.maxWords) --seq_len \(inputParams.maxSubwords)"
+//            
+//            
+//        case .cnnBiLSTM:
+//            
+//            // train cnn lstm lemmatizer
+//            //            #python3 -m lemmatizer.train --train /Users/Adam/Downloads/allup/data/ang/ang_oedt-ud-train.conllu --dev /Users/Adam/Downloads/allup/data/ang/ang_oedt-ud-dev.conllu --output /Users/Adam/Downloads/allup/ang_lemmatizer_out_oedt
+//            
+//            // train cnn tagger-parser
+//            //            python -m tagger_parser.train --train /Users/Adam/Downloads/allup/data/en/en_lines-ud-train.conllu --dev /Users/Adam/Downloads/allup/data/en/en_lines-ud-test.conllu --output /Users/Adam/Downloads/allup/en_tagger_parser_out_lines
+//            // train cnn tokenizer
+//            //            #python -m tokenizer.train --train data/ang/ang_oedt-ud-train.conllu --test data/ang/ang_oedt-ud-test.conllu --output /Users/Adam/Downloads/allup/ang_tokeniser_out_oedt
+//            //
+//            //            # convert cnn tokenizer tokeniser
+//            //            (.venv) (base) Adam@MacBook-ProM4 allup % python -m tokenizer.convert --checkpoint /Users/Adam/Downloads/allup/tokenizer_out/best.pt --model_dir /Users/Adam/Downloads/allup/tokenizer_out --output /Users/Adam/Downloads/allup/tokenizer_out/for_xcode --max_seq_len 1024
+//            //
+//            
+//            trainCommand = ""
+//            convertCommand = ""
+//        case .camembert:
+//            // camembert convert
+//            trainCommand = ""
+//            convertCommand = "python -m tagger_parser.\(modelArchitecture.converterScriptName) --useBest --model_dir \(inputParams.outputFolder)/ -- output_name \(outputPackageName) --max_words \(inputParams.maxWords) --seq_len \(inputParams.maxSubwords)"
+//            
+//        case .rnn:
+//            trainCommand = ""
+//            convertCommand = ""
+//            
+//        case .roberta:
+//            // from roberta
+//            //            python -m tagger_parser.convert_camembertlikes --useBest --model_dir /Users/Adam/Downloads/allup/frombert/from_bert_xlm-roberta-large_gsd_fr512 --output_name FR_roberta_tagger_parserv2.mlpackage --max_words 192 --seq_len 512
+//            
+//            
+//    }
+////    if camember, roberta{
+//        //    python /Users/Adam/Downloads/allup/tagger_parser/export_BERTtokenizer_files.py --tokenizer_dir /Users/Adam/Downloads/allup/frombert/from_bert_camembert_combined_fr512/tokenizer}
+//        //
+//        //    tokeniserGoldCommand = "python /Users/Adam/Downloads/allup/tagger_parser/make_camembert_gold.py \(inputParams.outputFolder)/tokenizer \(inputParams.outputFolder)/\(inputParams.goldTokFilename).json"
+    
+struct TrainingParams {
+    let maxSubwords: Int?
+    let maxWords: Int?
+    let devName: String?
+    let trainName: String?
+    let dataLocation: String?
+    let outputFolder: String?
+    let trainDataName: String?
+    let devDataName: String?
+    let batchSize: Int?
+    let modelOutputName: String?
+    let modelDir: String?
+    let cnnTokMaxSentLen: Int?
+    let tokenizerDir: String?
+    let baseModel: String?
+    let rnnTaggerDataFolder: String?
+    let rnnLemDataFolder: String?
+    
+    init(
+        maxSubwords: Int? = nil,
+        maxWords: Int? = nil,
+        devName: String? = nil,
+        trainName: String? = nil,
+        dataLocation: String? = nil,
+        outputFolder: String? = nil,
+        trainDataName: String? = nil,
+        devDataName: String? = nil,
+        batchSize: Int? = nil,
+        modelOutputName: String? = nil,
+        modelDir: String? = nil,
+        cnnTokMaxSentLen: Int? = nil,
+        tokenizerDir: String? = nil,
+        baseModel: String? = nil,
+        rnnTaggerDataFolder: String? = nil,
+        rnnLemDataFolder: String? = nil,
+    ) {
+        self.maxSubwords = maxSubwords
+        self.maxWords = maxWords
+        self.devName = devName
+        self.trainName = trainName
+        self.dataLocation = dataLocation
+        self.outputFolder = outputFolder
+        self.trainDataName = trainDataName
+        self.devDataName = devDataName
+        self.batchSize = batchSize
+        self.modelOutputName = modelOutputName
+        self.modelDir = modelDir
+        self.cnnTokMaxSentLen = cnnTokMaxSentLen
+        self.tokenizerDir = tokenizerDir
+        self.baseModel = baseModel
+        self.rnnTaggerDataFolder = rnnTaggerDataFolder
+        self.rnnLemDataFolder = rnnLemDataFolder
+    }
+}

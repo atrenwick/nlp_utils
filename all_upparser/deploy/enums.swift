@@ -363,6 +363,32 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         
         }
     }
+    
+    var trainingScriptName: String{
+        switch self {
+        case .distilbert: return "train_bert"
+        case .cnnBiLSTM: return "abc123"
+        case.rnn: return "def456"
+        case .camembert, .roberta: return "SPiece"
+        }
+    }
+
+    var converterScriptName: String{
+        switch self {
+        case .distilbert: return "convert_bert"
+        case .cnnBiLSTM: return "abc123"
+        case.rnn: return "def456"
+        case .camembert, .roberta: return "convert_camembertlikes"
+        }
+    }
+    var trainableElements: [ElementToTrain] {
+        switch self {
+            case .cnnBiLSTM: return [ElementToTrain.neurallem, ElementToTrain.tokenizer, ElementToTrain.taggerparser]
+            case .rnn: return [ElementToTrain.rnnlemmatizer, ElementToTrain.taggerparser]
+            case .distilbert, .camembert, .roberta : return [ElementToTrain.tokenizer, ElementToTrain.taggerparser]
+        }
+    }
+
 }
 
 /// possible results of post-processing a sentence
