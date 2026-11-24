@@ -49,20 +49,20 @@ final class BERTlikePipeline: BERTderivedPipelineHelper, SubtokenAwarePipelineHe
             return OnSentResult(sentence: sentence, resultType: .tooManyWords, decoded: [])
         }
 
-        var wordPieceTokenizer = self.tokenizer                  // a copy; the vocabulary isn't duplicated
-        wordPieceTokenizer.showPieces = myConfig.exportConfig.getsubtokens
-        var currentWordpieceCount: Int = -3
+        var selectedTokenizer = self.tokenizer                  // a copy; the vocabulary isn't duplicated
+        selectedTokenizer.showPieces = myConfig.exportConfig.getsubtokens
+        var currentSubTokCount: Int = -3
         do {
-            guard let encoded = try wordPieceTokenizer.encode(words: sentence.tokens, seqLen: seqLen, maxWords: maxWords
+            guard let encoded = try selectedTokenizer.encode(words: sentence.tokens, seqLen: seqLen, maxWords: maxWords
                 ) else {
                 return OnSentResult(sentence: sentence, resultType: .otherError, decoded: [])
             }
-            currentWordpieceCount = encoded.pieces?.count ?? -4
+            currentSubTokCount = encoded.pieces?.count ?? -4
             let output = try predict(encoded)
             let decoded = try decode(output, words: sentence.tokens, pieces: encoded.pieces, uuidList: sentence.uuidList)
-            return OnSentResult(sentence: sentence,  subtokCount: currentWordpieceCount, resultType: .success, decoded: decoded)
+            return OnSentResult(sentence: sentence,  subtokCount: currentSubTokCount, resultType: .success, decoded: decoded)
         } catch PipelineError.TokPieceError.tooManySubwords {
-            return OnSentResult(sentence: sentence,  subtokCount: currentWordpieceCount, resultType: .tooManySubtoks, decoded: [])
+            return OnSentResult(sentence: sentence,  subtokCount: currentSubTokCount, resultType: .tooManySubtoks, decoded: [])
         } catch PipelineError.TokPieceError.tooManyWords {                              // backstop; the guard above catches this first
             return OnSentResult(sentence: sentence, resultType: .tooManyWords, decoded: [])
         } catch {

@@ -324,6 +324,7 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
     case distilbert
     case cnnBiLSTM
     case camembert
+    case camembertav2
     case rnn
     case roberta
     var displayName: String{
@@ -331,6 +332,7 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .distilbert: return "DistilBERT"
         case .cnnBiLSTM: return "CNN-BiLSTM"
         case .camembert: return "CamemBERT"
+        case .camembertav2: return "CamemBERTav2"
         case .rnn: return "RNN"
         case .roberta: return "XLM-roBERTa"
         }
@@ -341,6 +343,7 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .distilbert: return "DIS"
         case .cnnBiLSTM: return "CNN"
         case .camembert: return "CAM"
+        case .camembertav2: return "CAV"
         case .rnn: return "RNN"
         case .roberta: return "ROB"
         }
@@ -351,6 +354,7 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .distilbert: return "DistilBERT"
         case .cnnBiLSTM: return "NA"
         case .camembert: return "CamemBERT"
+        case .camembertav2: return "CamemBERTav2"
         case .rnn: return "NA"
         case .roberta: return "XLM-roBERTa"
         }
@@ -360,7 +364,7 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .distilbert: return "WPiece"
         case .cnnBiLSTM, .rnn: return "NA"
         case .camembert, .roberta: return "SPiece"
-        
+            case .camembertav2: return ""
         }
     }
     
@@ -370,6 +374,7 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .cnnBiLSTM: return "abc123"
         case.rnn: return "def456"
         case .camembert, .roberta: return "SPiece"
+        case .camembertav2: return "train_bert"
         }
     }
 
@@ -379,13 +384,17 @@ enum ModelArchitecture: String, CaseIterable, Identifiable{
         case .cnnBiLSTM: return "abc123"
         case.rnn: return "def456"
         case .camembert, .roberta: return "convert_camembertlikes"
+        case .camembertav2: return "foobat"
         }
     }
     var trainableElements: [ElementToTrain] {
         switch self {
-            case .cnnBiLSTM: return [ElementToTrain.neurallem, ElementToTrain.tokenizer, ElementToTrain.taggerparser]
-            case .rnn: return [ElementToTrain.rnnlemmatizer, ElementToTrain.taggerparser]
-            case .distilbert, .camembert, .roberta : return [ElementToTrain.tokenizer, ElementToTrain.taggerparser]
+            case .cnnBiLSTM:
+                return [ElementToTrain.neurallem, ElementToTrain.tokenizer, ElementToTrain.taggerparser]
+            case .rnn:
+                return [ElementToTrain.rnnlemmatizer, ElementToTrain.taggerparser]
+            case .distilbert, .camembert, .roberta, .camembertav2 :
+                return [ElementToTrain.tokenizer, ElementToTrain.taggerparser]
         }
     }
 
