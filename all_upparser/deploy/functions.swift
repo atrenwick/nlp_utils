@@ -750,7 +750,7 @@ enum TokenisationWorkflow{
                 
             case .trained:
                 switch myConfig.parsingConfig.modelArchitecture {
-                    case .distilbert, .camembert, .roberta, .rnn:
+                    case .distilbert, .camembert, .camembertav2, .roberta, .rnn:
                         throw PipelineError.ConfigurationError.architectureConflict("string")
                     case .cnnBiLSTM:
                         // retokenize everything with model

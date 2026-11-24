@@ -790,7 +790,7 @@ extension PipelineSettingsView {
         defer { isLoading = false }
         do {
             switch pipelineRequest.base {
-            case .camembert, .roberta, .distilbert:
+                case .camembert, .camembertav2, .roberta, .distilbert:
                     print("case bert")
                 let loader = BERTlikePipelineLoader()
                 pipeline = try await loader.loadBERTlikePipeline(myConfig: model.myConfig, pipelineBuildRequest: pipelineRequest) { step, message in
@@ -831,6 +831,9 @@ extension PipelineSettingsView {
             case .camembert:
                 tok = "SPiece"
                 llm = "CamemBERT"
+            case .camembertav2:
+                tok = "WPiece"
+                llm = "CamemBERTv2"
             case .roberta:
                 tok = "SPiece"
                 llm = "XLM-roBERTa"

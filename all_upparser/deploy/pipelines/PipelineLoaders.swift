@@ -22,6 +22,9 @@ extension PipelineLoader{
             case .camembert:
                 tokName = "_camembert_tokenizer_"
                 tagParsName = "_camembert_tagger_parser_"
+            case .camembertav2:
+                tokName = "_camembertav2_tokenizer_"
+                tagParsName = "_camembertav2_tagger_parser_"
             case .distilbert:
                 tokName = "_this will be ignored_"
                 tagParsName = "_distilbert_tagger_parser_"
@@ -71,6 +74,8 @@ extension PipelineLoader{
             switch modelArchitecture {
             case .distilbert:
                 name = "\(languageCode)_distilbert_\(label)_vocab_\(treebank)"
+            case .camembertav2:
+                name = "\(languageCode)_camembertav2_\(label)_vocab_\(treebank)"
             case .camembert:
                 name = "\(languageCode)_camembert_\(label)_vocab_\(treebank)"
             case .roberta:
@@ -123,7 +128,7 @@ extension PipelineLoader{
         print(url)
         do {
             switch pipelineBuildRequest.base {
-                case .distilbert, .camembert, .roberta, .rnn:
+                case .distilbert, .camembert, .camembertav2, .roberta, .rnn:
                 let configuration = MLModelConfiguration()
                 configuration.computeUnits = .all
                 return try MLModel(contentsOf: url, configuration: configuration)
@@ -261,7 +266,7 @@ final class RNNPipelineLoader: ObservableObject, PipelineLoader{
     }
 }
 
-// loader and pipeline based on pipeline using SentPiece tokenizer :: loader uses switch on BertBase
+// loader and pipeline based on pipeline using subTokenisers :: loader uses switch on BertBase
 class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
     @Published var loadingProgress: Double = min(1.0, 0.0)
     @Published var statusMessage: String = "Waiting to load..."
@@ -354,6 +359,14 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
                     throw PipelineError.GenericError.missingResource("\(mlcPackagePaths.tokenizerName).json")
                 }
                 tokenizer = internalTokenizer
+            case .camembertav2:
+                await onProgress(2, "Loading camembertav2 tokenizer")
+                guard let internalTokenizer = try? await CamemBERTv2Tokenizer.fromBundle(languageCode: languageCode, treebank: treebank) else {
+                    print("camembertpipeline line 110")
+                    throw PipelineError.GenericError.missingResource("camembertav2 tokenizer files missing.")
+                }
+                tokenizer = internalTokenizer
+
             case .distilbert:
                 await onProgress(2, "Loading wordpiece tokenizer")
                 guard let internalTokenizer = try? await WordPieceTokenizer.fromBundle(languageCode: languageCode, treebank: treebank) else {
