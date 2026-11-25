@@ -299,7 +299,7 @@ final class CNNBiLSTMPipeline: PipelineHelper, LinguisticProcessingHelper, Obser
                     col8: myConfig.parsingConfig.getSecLems ? secondaryLemmas[i] : "_",
                     col9: "_",
                     subTokens: [],
-                    preservedUUID: 1 == 1 ? sentence.uuidList[i] : "_"
+                    preservedUUID: sentence.uuidList.count > 0 ? sentence.uuidList[i] : "_"
                 )
             }
             return OnSentResult(sentence: sentence, subtokCount: wordPieceCount, resultType: .success, decoded: tokens)
