@@ -55,15 +55,18 @@ struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper {
 
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let model = root["model"] as? [String: Any],
-              (model["type"] as? String) == "WordPiece",
+              (model["type"] as? String) == "BPE", // was WPiece
               let vocabDict = model["vocab"] as? [String: Int]
         else { throw PipelineError.TokPieceError.missingSetting("model.vocab (WordPiece)") }
-
+        print("asking for isolatedscalars")
         self.isolatedScalars = try Self.verifyPipeline(root)
+        print("have isolatedscalars")
         self.splitRegex = try SplitRegex(CamembertV2Pipeline.elisionAndPunct)
+        print("have regex")
         self.continuingPrefix = Array(((model["continuing_subword_prefix"] as? String) ?? "##").utf8)
+        print("have continuingPrefix")
         self.maxInputCharsPerWord = (model["max_input_chars_per_word"] as? Int) ?? 100
-
+        print("maxchars set")
         // vocabulary: token bytes -> id, plus id -> token bytes for showing pieces
         let maxID = vocabDict.values.max() ?? -1
         var table = [[UInt8]: Int32](minimumCapacity: vocabDict.count)
@@ -98,9 +101,12 @@ struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper {
 
     /// Adapt the resource name / folder to however you ship the file.
     static func fromBundle(_ bundle: Bundle = .main,  languageCode: String, treebank: String) throws -> CamemBERTv2Tokenizer {
-        guard let url = bundle.url(forResource: "\(languageCode)_distilbert_tok_vocab_\(treebank)", withExtension: "json") else {
+        print("trying to get url")
+        guard let url = bundle.url(forResource: "\(languageCode)_camembertav2_tok_vocab_\(treebank)", withExtension: "json") else {           
+            print("foooooooooooo")
             throw PipelineError.TokPieceError.vocabUnreadable(bundle.bundleURL)
         }
+        print("Got url: \(url)")
         return try CamemBERTv2Tokenizer(tokenizerJSONURL: url)
     }
 
@@ -279,8 +285,7 @@ struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper {
     private func wordPiece(_ token: [Unicode.Scalar]) -> [Int32] {
         if token.count > maxInputCharsPerWord { return [unkID] }
 
-        // UTF-8 bytes of the token plus the byte offset where each scalar starts, so a
-        // substring [start, end) in scalars is one slice of bytes.
+        // UTF-8 bytes of token + byte offset where each scalar starts:: substr [start, end] in scalars = 1x slice of bytes
         var bytes: [UInt8] = []
         var offsets: [Int] = []
         for scalar in token {
