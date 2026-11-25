@@ -292,6 +292,8 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
                 "CamemBERT based pipeline with SentPiece tokenizer"
             case .cnnBiLSTM:
                  "architectureConflict"
+            case .camembertav2:
+                "CamemBERTav2 based pipeline with special WPiece tokenizer"
             default:
                 "Undetermined as yet, as coming from optional"
         }
@@ -361,6 +363,8 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
                 tokenizer = internalTokenizer
             case .camembertav2:
                 await onProgress(2, "Loading camembertav2 tokenizer")
+                await print("Loading camembertav2 tokenizer")
+
                 guard let internalTokenizer = try? await CamemBERTv2Tokenizer.fromBundle(languageCode: languageCode, treebank: treebank) else {
                     print("camembertpipeline line 110")
                     throw PipelineError.GenericError.missingResource("camembertav2 tokenizer files missing.")
