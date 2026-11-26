@@ -9,9 +9,9 @@ import Foundation
 import SwiftUI
 
 enum ProgressBarStyle: String, CaseIterable, Identifiable {
+    var id: String { rawValue }
     case tqdm = "tqdm"
     case apple = "Apple"
-    var id: String { rawValue }
 }
 
 struct ProgressBarStylePicker: View {

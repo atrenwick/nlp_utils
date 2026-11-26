@@ -1,5 +1,5 @@
 //
-//  WordPieceToksForBert.swift
+//  DistilBERTWordPieceTokenizer.swift
 //  Tagger
 //
 //  Created by Adam on 17/10/2026.
@@ -9,8 +9,7 @@
 //      word_index  [1, maxWords]  position of each word's first subword; slot 0 is ROOT -> [CLS];
 //                                 padded with -1
 //
-//  Each word tokenised on its own, as train_bert.py does it, using same
-//  pipeline as Hugging Face's BertTokenizerFast:
+//  Each word tokenised on its own, as train_bert.py does it, using same pipeline as HF's BertTokenizerFast:
 //      1. clean      drop NUL / U+FFFD / control characters, map whitespace to " "
 //      2. CJK        put spaces around CJK ideographs (tokenize_chinese_chars)
 //      3. accents    NFD, drop combining marks (only if stripping accents)
@@ -21,14 +20,14 @@
 //
 //  A word that produces no pieces at all becomes a single [UNK], as in train_bert.py.
 //
-//  Everything works on Unicode scalars, not Swift Characters, because Python and Rust
-//  iterate code points and Swift Characters merge combining sequences. The vocabulary is
-//  keyed by UTF-8 bytes for the same reason: Swift String equality treats canonically
-//  equivalent strings ("é" vs "e" + U+0301) as equal, which Python's dict does not.
-//
+//  Work swith Unicode scalars, not Swift Characters, as Python and Rust both interate code points whereas Swift chars
+//  merge combining sequences. The vocabulary is keyed by UTF-8 bytes for the same reason: Swift String equality treats
+//  canonically equivalent strings ("é" vs "e" + U+0301) as equal, which Python's dict does not.
+
 import Foundation
 import CoreML
 import SwiftUI
+
 
 // MARK: - Output type as struct :: data
 struct WordPieceEncodedSentence: BERTpipeEncodedSentence {
@@ -46,7 +45,7 @@ struct WordPieceEncodedSentence: BERTpipeEncodedSentence {
 }
 
 // MARK: - Tokenizer
-struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
+struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper, WPieceHelper {
     var showPieces: Bool
     var showWordPieces: Bool = false
     let clsID: Int32
@@ -55,7 +54,7 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
     let unkID: Int32
 
     private let vocab: [[UInt8]: Int32]
-    private let idToToken: [[UInt8]]               // id -> token bytes, for showing word pieces
+    let idToToken: [[UInt8]]               // id -> token bytes, for showing word pieces
     private let specialTokenIDs: [String: Int32]
     private let continuingPrefix: [UInt8]
     private let maxInputCharsPerWord: Int
@@ -132,7 +131,6 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
         self.maxInputCharsPerWord = maxInputCharsPerWord
     }
 
-    // MARK: Public API
     /// Subword ids for one word. Never empty: falls back to a single [UNK].
     func pieces(for word: String) -> [Int32] {
         if let id = specialTokenIDs[word] { return [id] }
@@ -153,24 +151,24 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper {
         return (result.inputIDs, result.wordIndex)
     }
     
-    private func encodeDetailed(words: [String], collectPieces: Bool)
-        -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]]) {
-        var ids: [Int32] = [clsID]
-        var wordIndex: [Int32] = [0]                    // ROOT slot points at [CLS]
-        var perWord: [[Int32]] = []
-        for word in words {
-            wordIndex.append(Int32(ids.count))
-            let wordPieces = pieces(for: word)
-            ids.append(contentsOf: wordPieces)
-            if collectPieces { perWord.append(wordPieces) }
-        }
-        ids.append(sepID)
-        return (ids, wordIndex, perWord)
-    }
-    
-    private func strings(for ids: [Int32]) -> [String] {
-        ids.map { String(decoding: idToToken[Int($0)], as: UTF8.self) }
-    }
+//    private func encodeDetailed(words: [String], collectPieces: Bool)
+//        -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]]) {
+//        var ids: [Int32] = [clsID]
+//        var wordIndex: [Int32] = [0]                    // ROOT slot points at [CLS]
+//        var perWord: [[Int32]] = []
+//        for word in words {
+//            wordIndex.append(Int32(ids.count))
+//            let wordPieces = pieces(for: word)
+//            ids.append(contentsOf: wordPieces)
+//            if collectPieces { perWord.append(wordPieces) }
+//        }
+//        ids.append(sepID)
+//        return (ids, wordIndex, perWord)
+//    }
+    // moved to extension
+//    private func strings(for ids: [Int32]) -> [String] {
+//        ids.map { String(decoding: idToToken[Int($0)], as: UTF8.self) }
+//    }
     /// Padded encoding for the fixed-length Core ML model. Use the same seqLen and maxWords
     /// the model was converted with (convert_bert.py prints them).
     func encode(words: [String], seqLen: Int, maxWords: Int) throws ->  BERTpipeEncodedSentence? {
