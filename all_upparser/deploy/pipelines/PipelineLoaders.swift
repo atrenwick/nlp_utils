@@ -363,7 +363,7 @@ class BERTlikePipelineLoader: ObservableObject, PipelineLoader{
                 tokenizer = internalTokenizer
             case .camembertav2:
                 await onProgress(2, "Loading camembertav2 tokenizer")
-                await print("Loading camembertav2 tokenizer")
+                print("Loading camembertav2 tokenizer")
 
                 guard let internalTokenizer = try? await CamemBERTv2Tokenizer.fromBundle(languageCode: languageCode, treebank: treebank) else {
                     print("camembertpipeline line 110")

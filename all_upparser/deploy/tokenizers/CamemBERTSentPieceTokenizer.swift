@@ -1,5 +1,5 @@
 //
-//  BertPipelineSettingsTestView.swift
+//  CamemBERTSentPieceTokenizer.swift
 //  Tagger
 //
 //  Created by Adam on 20/10/2026.
@@ -15,8 +15,7 @@ struct SentencePieceEncodedSentence: BERTpipeEncodedSentence {
     let wordCount: Int          // real words, without the ROOT slot
     let length: Int             // real tokens in inputIDs, including <s> and </s>
     let pieces: [[String]]?
-    /// Rows/columns of each model output that are meaningful (words + ROOT).
-    var validSlots: Int { wordCount + 1 }
+    var validSlots: Int { wordCount + 1 }          /// Rows/columns of each model output that are meaningful (words + ROOT).
 }
 
 // MARK: - tokenizer.json (Hugging Face fast tokenizer) decoding
@@ -52,13 +51,12 @@ private struct SentencePieceTokenizerFile: Decodable {
 
 /// Reimplements what the Hugging Face fast CamemBERT tokenizer does when it is
 /// given pre-split words (`is_split_into_words=True`):
-///
 ///   per word:  normalize (NFKC approximation) -> prepend "▁" -> Unigram/Viterbi split
 ///   sentence:  <s> + all pieces + </s>
 ///
 /// Load it from the `tokenizer.json` that train_bert.py saved in the model's `tokenizer/` folder. Special-tokens
 /// are read from the file, not hardcoded (for camembert-base they are <pad>=1, <unk>=3, <s>=5, </s>=6).
-final class SentencePieceTokenizer: SubwordEncoder, BERTlikeTokenizerHelper {
+final class SentencePieceTokenizer: SubwordEncoder, BERTlikeTokenizerHelper, SPieceHelper {
     let padID: Int32
     let startID: Int32      // <s>, plays the role of [CLS]
     let endID: Int32        // </s>, plays the role of [SEP]
@@ -90,8 +88,7 @@ final class SentencePieceTokenizer: SubwordEncoder, BERTlikeTokenizerHelper {
         endID = end
         unkID = unk
 
-        // Special tokens (<s>, <pad>, <mask>, ...) must never come out of the
-        // Viterbi search for ordinary text, so keep them out of the lookup table.
+        // Special tpls (<s>, <pad>, <mask>, ...) must never come out of Viterbi search for ordinary text, so keep them separate
         var skip = Set((file.addedTokens ?? []).filter { $0.special }.map { $0.id })
         skip.formUnion([pad, start, end, unk].map { Int($0) })
 
@@ -151,10 +148,8 @@ final class SentencePieceTokenizer: SubwordEncoder, BERTlikeTokenizerHelper {
         )
     }
 
-    /// Approximates SentencePiece's nmt_nfkc normalizer: NFKC, then whitespace
-    /// variants -> plain space and other control characters are dropped.
-    /// A word that contains whitespace after normalization splits into several
-    /// parts (each gets its own "▁"), all belonging to the same word.
+    /// Approximates SentencePiece's nmt_nfkc normalizer: NFKC, then whitespace variants->plain space then other control chars
+    /// are dropped. A word that contains whitespace after normalization splits into several parts, each with _
     private func normalize(_ word: String) -> [String] {
         var cleaned = String.UnicodeScalarView()
         for scalar in word.precomposedStringWithCompatibilityMapping.unicodeScalars {

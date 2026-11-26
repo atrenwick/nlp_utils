@@ -31,7 +31,7 @@ private enum CamembertV2Pipeline {
     static let elisionAndPunct = #"(?i:\b[cmnjstdl]|qu|puisqu|lorsqu|quelqu|presqu|quoiqu|jusqu)['´’]|['´’](?i:[sdmt]|ll|ve|re)\b|\p{P}{1,4}|[^\p{L}\p{N}\p{Z}]"#
 }
 
-struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper {
+struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper,WPieceHelper {
     var showPieces: Bool = false
     var showWordPieces: Bool = false
     let clsID: Int32
@@ -40,7 +40,7 @@ struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper {
     let unkID: Int32
 
     private let vocab: [[UInt8]: Int32]
-    private let idToToken: [[UInt8]]
+    let idToToken: [[UInt8]]
     private let specialTokenIDs: [String: Int32]
     private let continuingPrefix: [UInt8]
     private let maxInputCharsPerWord: Int
@@ -55,18 +55,14 @@ struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper {
 
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let model = root["model"] as? [String: Any],
-              (model["type"] as? String) == "BPE", // was WPiece
+              (model["type"] as? String) == "WordPiece", // was WPiece
               let vocabDict = model["vocab"] as? [String: Int]
         else { throw PipelineError.TokPieceError.missingSetting("model.vocab (WordPiece)") }
-        print("asking for isolatedscalars")
+
         self.isolatedScalars = try Self.verifyPipeline(root)
-        print("have isolatedscalars")
         self.splitRegex = try SplitRegex(CamembertV2Pipeline.elisionAndPunct)
-        print("have regex")
         self.continuingPrefix = Array(((model["continuing_subword_prefix"] as? String) ?? "##").utf8)
-        print("have continuingPrefix")
         self.maxInputCharsPerWord = (model["max_input_chars_per_word"] as? Int) ?? 100
-        print("maxchars set")
         // vocabulary: token bytes -> id, plus id -> token bytes for showing pieces
         let maxID = vocabDict.values.max() ?? -1
         var table = [[UInt8]: Int32](minimumCapacity: vocabDict.count)
@@ -101,19 +97,14 @@ struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper {
 
     /// Adapt the resource name / folder to however you ship the file.
     static func fromBundle(_ bundle: Bundle = .main,  languageCode: String, treebank: String) throws -> CamemBERTv2Tokenizer {
-        print("trying to get url")
-        guard let url = bundle.url(forResource: "\(languageCode)_camembertav2_tok_vocab_\(treebank)", withExtension: "json") else {           
-            print("foooooooooooo")
+
+        guard let url = bundle.url(forResource: "\(languageCode)_camembertav2_tok_vocab_\(treebank)", withExtension: "json") else {
             throw PipelineError.TokPieceError.vocabUnreadable(bundle.bundleURL)
         }
-        print("Got url: \(url)")
         return try CamemBERTv2Tokenizer(tokenizerJSONURL: url)
     }
 
-
-    
     // MARK: Public API (same shape as WordPieceTokenizer)
-
     /// Subword ids for one word. Never empty: falls back to a single [UNK].
     func pieces(for word: String) -> [Int32] {
         if let id = specialTokenIDs[word] { return [id] }
@@ -157,24 +148,24 @@ struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper {
         )
     }
 
-    private func encodeDetailed(words: [String], collectPieces: Bool)
-        -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]]) {
-        var ids: [Int32] = [clsID]
-        var wordIndex: [Int32] = [0]                    // ROOT slot points at [CLS]
-        var perWord: [[Int32]] = []
-        for word in words {
-            wordIndex.append(Int32(ids.count))
-            let wordPieces = pieces(for: word)
-            ids.append(contentsOf: wordPieces)
-            if collectPieces { perWord.append(wordPieces) }
-        }
-        ids.append(sepID)
-        return (ids, wordIndex, perWord)
-    }
+//    private func encodeDetailed(words: [String], collectPieces: Bool)
+//        -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]]) {
+//        var ids: [Int32] = [clsID]
+//        var wordIndex: [Int32] = [0]                    // ROOT slot points at [CLS]
+//        var perWord: [[Int32]] = []
+//        for word in words {
+//            wordIndex.append(Int32(ids.count))
+//            let wordPieces = pieces(for: word)
+//            ids.append(contentsOf: wordPieces)
+//            if collectPieces { perWord.append(wordPieces) }
+//        }
+//        ids.append(sepID)
+//        return (ids, wordIndex, perWord)
+//    }
 
-    private func strings(for ids: [Int32]) -> [String] {
-        ids.map { String(decoding: idToToken[Int($0)], as: UTF8.self) }
-    }
+//    private func strings(for ids: [Int32]) -> [String] {
+//        ids.map { String(decoding: idToToken[Int($0)], as: UTF8.self) }
+//    }
 
     // MARK: Normalizer
     // 1. every \p{Z} scalar -> " "   2. delete [\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f] | Cf | Co | Cs | U+FE0F

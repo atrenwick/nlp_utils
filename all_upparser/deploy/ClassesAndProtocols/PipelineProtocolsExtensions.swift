@@ -434,6 +434,13 @@ extension BERTderivedPipelineHelper  {
                 } else {
                     throw PipelineError.GenericError.unexpectedOutput("tok distilbertA")
                 }
+            case .camembertav2:
+                if let useThis = tokenizer as? CamemBERTv2Tokenizer {
+                    thisTokenizer = useThis
+                    thisTokenizer.showPieces = myConfig.exportConfig.getsubtokens
+                } else {
+                    throw PipelineError.GenericError.unexpectedOutput("expected CamV2WPiecetokenizer, found SPtokenizer")
+                }
             case .distilbert:
                 if let useThis = tokenizer as? WordPieceTokenizer {
                     thisTokenizer = useThis
@@ -453,7 +460,7 @@ extension BERTderivedPipelineHelper  {
             switch pipelineRequest.base {
                 case .camembert, .roberta:
                     currentPieceCount = encoded.validSlots
-                case .distilbert:
+                case .distilbert, .camembertav2:
                     currentPieceCount = encoded.pieces?.count ?? -4
                 default:
                     print("parsingConfigArch::\(myConfig.parsingConfig.modelArchitecture) :: cf pipelineReq Base = \(pipelineRequest.base)") 
@@ -704,10 +711,71 @@ enum PipelineServices {
     }
 }
 
+protocol SPieceHelper {
+
+}
+
+extension SPieceHelper {
+    
+}
+
 protocol BERTlikeTokenizerHelper {
     var showPieces: Bool  { get set }
     func encode(words: [String], seqLen: Int, maxWords: Int) throws -> BERTpipeEncodedSentence?
+    
+
+    
 }
+
+protocol WPieceHelper {
+    var idToToken: [[UInt8]] { get }        // the stored property both structs already have
+    func strings(for ids: [Int32]) -> [String] // func which uses idToToken
+    var clsID: Int32 { get }
+    var sepID: Int32 { get }
+//    func encodeDetailed(words: [String], collectPieces: Bool)
+    func pieces(for word: String) -> [Int32]
+}
+
+extension WPieceHelper {
+    func strings(for ids: [Int32]) -> [String] {
+        ids.map { String(decoding: idToToken[Int($0)], as: UTF8.self) }
+    }
+    func encodeDetailed(words: [String], collectPieces: Bool) -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]]) {
+        var ids: [Int32] = [clsID]
+        var wordIndex: [Int32] = [0]                    // ROOT slot points at [CLS]
+        var perWord: [[Int32]] = []
+        for word in words {
+            wordIndex.append(Int32(ids.count))
+            let wordPieces = pieces(for: word)
+            ids.append(contentsOf: wordPieces)
+            if collectPieces { perWord.append(wordPieces) }
+        }
+        ids.append(sepID)
+        return (ids, wordIndex, perWord)
+    }
+}
+
+
+/*
+// distilbert wptok methods
+pieces(for word: String) -> [Int32] --<< WPExtension
+
+ subtokens(for word: String) -> [String]--<< WPExtension
+ encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32]) --<< WPExtension
+ encodeDetailed(words: [String], collectPieces: Bool) -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]])
+
+ 
+//cambertav2 methods in tokenizer::
+ pieces(for word: String) -> [Int32] --<< WPExtension
+ subtokens(for word: String) -> [String]--<< WPExtension
+ encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32])--<< WPExtension
+
+ encodeDetailed(words: [String], collectPieces: Bool) -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]])
+ 
+  
+  
+ */
+
 
 /// SentencePieceTokenizer, so the export/prediction code doesn't care which one it has.
 protocol SubwordEncoder {
@@ -1120,8 +1188,3 @@ final class Vocab {
         return Vocab(data: decoded)
     }
 }
-/*
- 
- 
-clamping.......
- */
