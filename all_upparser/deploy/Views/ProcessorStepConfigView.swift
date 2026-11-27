@@ -93,6 +93,15 @@ struct ProcessorStepConfigViewSection: View {
             }
         }
     }
+}
+
+#Preview {
+//    @Previewable @State var previewConfig: TaggerConfig = TaggerConfig()
+    ProcessorStepConfigViewSection().environment(AppModel())
+}
+
+extension ProcessorStepConfigViewSection{
+    
     private func isStepActive(_ step: PipelineStep) -> Bool {
         let maxStep = model.myConfig.parsingConfig.maxPipelineStep
         if maxStep >= step { return true }
@@ -120,9 +129,5 @@ struct ProcessorStepConfigViewSection: View {
             }
         )
     }
-}
 
-#Preview {
-//    @Previewable @State var previewConfig: TaggerConfig = TaggerConfig()
-    ProcessorStepConfigViewSection().environment(AppModel())
 }

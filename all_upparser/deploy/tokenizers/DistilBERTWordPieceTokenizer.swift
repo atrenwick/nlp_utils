@@ -140,17 +140,18 @@ struct WordPieceTokenizer: Sendable, BERTlikeTokenizerHelper, WPieceHelper {
         }
         return ids.isEmpty ? [unkID] : ids
     }
+    // moved to wphelperext
     ///Subword strings for one word, eg ["play", "##ing"]. Always available, indep. of showWordPieces.
-    func subtokens(for word: String) -> [String] {
-        strings(for: pieces(for: word))
-    }
-
+//    func subtokens(for word: String) -> [String] {
+//        strings(for: pieces(for: word))
+//    }
+    // moved to extension
     /// Unpadded encoding: [CLS] pieces... [SEP] and the ROOT-first word index.
-    func encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32]) {
-        let result = encodeDetailed(words: words, collectPieces: false)
-        return (result.inputIDs, result.wordIndex)
-    }
-    
+//    func encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32]) {
+//        let result = encodeDetailed(words: words, collectPieces: false)
+//        return (result.inputIDs, result.wordIndex)
+//    }
+    // moved to extension
 //    private func encodeDetailed(words: [String], collectPieces: Bool)
 //        -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]]) {
 //        var ids: [Int32] = [clsID]

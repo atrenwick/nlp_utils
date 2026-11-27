@@ -8,36 +8,6 @@
 import SwiftUI
 import Foundation
 
-enum ElementToTrain: String, Identifiable, CaseIterable{
-    var id: Self {self}
-    case neurallem
-    case tokenizer
-    case taggerparser
-    case rnnlemmatizer
-    
-    var tidy: String {
-        switch self {
-            case .neurallem: return "NeuralLemmatizer"
-            case .tokenizer:  return "Tokenizer"
-            case .taggerparser: return "Tagger-Parser"
-            case .rnnlemmatizer: return "RNN-Lemmatizer"
-        }
-    }
-}
-enum CommandType: String, Identifiable, CaseIterable{
-    var id: Self {self}
-    case train
-    case convert
-    case vocab
-    
-    var tidy: String {
-        switch self{
-            case .train: return "train"
-            case .convert: return "convert"
-            case .vocab: return "vocab"
-        }
-    }
-}
 
 struct TrainingPrepView: View{
     @State private var coordinator = TrainingCoordinator()
@@ -66,23 +36,6 @@ struct TrainingPrepView: View{
     @State var testtrainparams: TrainingParams = TrainingParams()
     @State var selectedCommandType: CommandType = CommandType.train
     
-    var filteredCommandTypes: [CommandType] {
-        switch coordinator.selectedArchitecture {
-            case .rnn: return [CommandType.convert]
-            case .cnnBiLSTM : return [CommandType.train, CommandType.convert]
-          default: return [CommandType.train, CommandType.convert, CommandType.vocab]
-        }
-    }
-    
-    var filteredElements: [ElementToTrain]{
-        switch coordinator.selectedArchitecture {
-            case .rnn:
-                return [ElementToTrain.rnnlemmatizer, ElementToTrain.taggerparser]
-            case .cnnBiLSTM:
-                return ElementToTrain.allCases.filter {$0.tidy != "RNN-Lemmatizer"}
-            default : return [ElementToTrain.taggerparser, ElementToTrain.tokenizer]
-        }
-    }
     
     var body: some View{
         Form{
@@ -177,6 +130,27 @@ struct TrainingPrepView: View{
 }
 #Preview{
     TrainingPrepView()
+}
+
+extension TrainingPrepView{
+    var filteredCommandTypes: [CommandType] {
+        switch coordinator.selectedArchitecture {
+            case .rnn: return [CommandType.convert]
+            case .cnnBiLSTM : return [CommandType.train, CommandType.convert]
+          default: return [CommandType.train, CommandType.convert, CommandType.vocab]
+        }
+    }
+    
+    var filteredElements: [ElementToTrain]{
+        switch coordinator.selectedArchitecture {
+            case .rnn:
+                return [ElementToTrain.rnnlemmatizer, ElementToTrain.taggerparser]
+            case .cnnBiLSTM:
+                return ElementToTrain.allCases.filter {$0.tidy != "RNN-Lemmatizer"}
+            default : return [ElementToTrain.taggerparser, ElementToTrain.tokenizer]
+        }
+    }
+
 }
 
 

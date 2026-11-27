@@ -29,43 +29,11 @@ struct PipelineSettingsView: View {
     @State var showInterruptButton: Bool = false
     @State var interruptSignalled: Bool = false
     @State var loadedPipelines: [PipelineHelper] = [ ]
-    
-    var unreadCount: Int {
-        model.allRunOutputs.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
-    }
-    
-    var bigButtonColor: Color {
-        if model.pipelineCache.isLive{
-            return buttonColor1
-        } else {
-            return buttonColor2
-        }
-    }
-    
-    var previousRun: [RunOutput] {
-        if model.allRunOutputs.count == 0 {
-            return []
-        } else if model.allRunOutputs.count == 1 {
-            return model.allRunOutputs
-        } else {
-            let sorted = model.allRunOutputs.sorted {$0.runMetas.safeHeaderAttribs.taggingDate < $1.runMetas.safeHeaderAttribs.taggingDate}
-            if let mostRecent = sorted.last{
-                return [mostRecent]
-            } else {
-                return []
-            }
-        }
-    }
-    var previousResumable: Bool{
-        if previousRun.count >= 1  && previousRun[0].runMetas.processingStatus.interruptRequested == "True" {
-            return true
-        } else {
-            return false
-        }
-    }
+
 #if DEBUG
     let runfive = false //
 #endif
+
     var body: some View {
         @Bindable var model = model
 
@@ -79,8 +47,8 @@ struct PipelineSettingsView: View {
                     InputFileViewEncapsulator()
                     MatchDetectToggleView()
                     ArchitecturePickerView()
-                    ConstrainedPickerForLang()
-                    ConstrainedPickerForTB()
+                    ConstrainedPickerForLangView()
+                    ConstrainedPickerForTBView()
                     NavigationLink("Select processor steps"){ ProcessorStepConfigViewSection() }
                     NavigationLink("Define offsets"){ TaggingOffsetParamsView() }
                 }
@@ -166,7 +134,7 @@ struct PipelineSettingsView: View {
             .toolbar{
                 if model.myConfig.inputData.builtSents.count > 0 {
                     ToolbarItem(placement: .topBarTrailing) {
-                        ManualTokenisationToolbarItem()
+                        ManualTokenisationToolbarButtonView()
                     }
                 }
             }
@@ -177,4 +145,40 @@ struct PipelineSettingsView: View {
 
 #Preview {
     PipelineSettingsView().environment(AppModel())
+}
+
+extension PipelineSettingsView{
+    var unreadCount: Int {
+        model.allRunOutputs.reduce(0) { $1.runMetas.unread ? $0 + 1 : $0 }
+    }
+    
+    var bigButtonColor: Color {
+        if model.pipelineCache.isLive{
+            return buttonColor1
+        } else {
+            return buttonColor2
+        }
+    }
+    
+    var previousRun: [RunOutput] {
+        if model.allRunOutputs.count == 0 {
+            return []
+        } else if model.allRunOutputs.count == 1 {
+            return model.allRunOutputs
+        } else {
+            let sorted = model.allRunOutputs.sorted {$0.runMetas.safeHeaderAttribs.taggingDate < $1.runMetas.safeHeaderAttribs.taggingDate}
+            if let mostRecent = sorted.last{
+                return [mostRecent]
+            } else {
+                return []
+            }
+        }
+    }
+    var previousResumable: Bool{
+        if previousRun.count >= 1  && previousRun[0].runMetas.processingStatus.interruptRequested == "True" {
+            return true
+        } else {
+            return false
+        }
+    }
 }
