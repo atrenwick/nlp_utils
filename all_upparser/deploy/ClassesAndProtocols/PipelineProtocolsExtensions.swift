@@ -557,6 +557,15 @@ protocol TreebankProvidable {
     var defaultTB: TreebankType { get } //
 }
 
+extension TreebankProvidable{
+     
+    
+}
+
+
+
+
+
 /// 2. Conforming  language enum to it
 extension Language: TreebankProvidable {
     typealias TreebankType = Language.Treebank
@@ -729,17 +738,17 @@ protocol BERTlikeTokenizerHelper {
 
 protocol WPieceHelper {
     var idToToken: [[UInt8]] { get }        // the stored property both structs already have
-    func strings(for ids: [Int32]) -> [String] // func which uses idToToken
+    
     var clsID: Int32 { get }
     var sepID: Int32 { get }
-//    func encodeDetailed(words: [String], collectPieces: Bool)
+    func encodeDetailed(words: [String], collectPieces: Bool) -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]])
+    func encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32])
     func pieces(for word: String) -> [Int32]
+    func strings(for ids: [Int32]) -> [String] // func which uses idToToken
+    func subtokens(for word: String) -> [String]
 }
 
 extension WPieceHelper {
-    func strings(for ids: [Int32]) -> [String] {
-        ids.map { String(decoding: idToToken[Int($0)], as: UTF8.self) }
-    }
     func encodeDetailed(words: [String], collectPieces: Bool) -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]]) {
         var ids: [Int32] = [clsID]
         var wordIndex: [Int32] = [0]                    // ROOT slot points at [CLS]
@@ -753,27 +762,29 @@ extension WPieceHelper {
         ids.append(sepID)
         return (ids, wordIndex, perWord)
     }
+
+    func strings(for ids: [Int32]) -> [String] {
+        ids.map { String(decoding: idToToken[Int($0)], as: UTF8.self) }
+    }
+
+    func subtokens(for word: String) -> [String] { strings(for: pieces(for: word)) }
+
+    func encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32]) {
+        let result = encodeDetailed(words: words, collectPieces: false)
+        return (result.inputIDs, result.wordIndex)
+    }
+
 }
 
 
 /*
 // distilbert wptok methods
-pieces(for word: String) -> [Int32] --<< WPExtension
-
- subtokens(for word: String) -> [String]--<< WPExtension
- encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32]) --<< WPExtension
- encodeDetailed(words: [String], collectPieces: Bool) -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]])
+encodeDetailed(words: [String], collectPieces: Bool) -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]])
 
  
 //cambertav2 methods in tokenizer::
- pieces(for word: String) -> [Int32] --<< WPExtension
- subtokens(for word: String) -> [String]--<< WPExtension
- encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32])--<< WPExtension
-
  encodeDetailed(words: [String], collectPieces: Bool) -> (inputIDs: [Int32], wordIndex: [Int32], pieces: [[Int32]])
  
-  
-  
  */
 
 

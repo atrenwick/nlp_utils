@@ -27,6 +27,38 @@ enum AssetType: String{
     case json
 }
 
+enum ElementToTrain: String, Identifiable, CaseIterable{
+    var id: Self {self}
+    case neurallem
+    case tokenizer
+    case taggerparser
+    case rnnlemmatizer
+    
+    var tidy: String {
+        switch self {
+            case .neurallem: return "NeuralLemmatizer"
+            case .tokenizer:  return "Tokenizer"
+            case .taggerparser: return "Tagger-Parser"
+            case .rnnlemmatizer: return "RNN-Lemmatizer"
+        }
+    }
+}
+enum CommandType: String, Identifiable, CaseIterable{
+    var id: Self {self}
+    case train
+    case convert
+    case vocab
+    
+    var tidy: String {
+        switch self{
+            case .train: return "train"
+            case .convert: return "convert"
+            case .vocab: return "vocab"
+        }
+    }
+}
+
+
 /// Control different data shown in Tagging comparisons
 enum ComparisonGridOption: String, Identifiable, CaseIterable{
     var id: Self { self }
@@ -472,6 +504,15 @@ enum ProcessingStatus: String, CaseIterable, Codable {
         }
     }
 }
+
+
+enum ProgressBarStyle: String, CaseIterable, Identifiable {
+    var id: String { rawValue }
+    case tqdm = "tqdm"
+    case apple = "Apple"
+}
+
+
 
 /// general stash of regexes for tokenisation and sentencisation
 enum RegexStash{

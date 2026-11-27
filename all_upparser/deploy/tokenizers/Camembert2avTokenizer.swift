@@ -8,9 +8,6 @@
 //                     then a fixed list of emoji isolated
 //    model          : WordPiece, "##" prefix, max_input_chars_per_word from the file (16)
 //    post-processor : [CLS] ... [SEP]
-//
-//  Reuses WordPieceEncodedSentence and PipelineError.TokPieceError from the existing pipeline.
-//
 
 import Foundation
 
@@ -120,13 +117,13 @@ struct CamemBERTv2Tokenizer: Sendable, BERTlikeTokenizerHelper,WPieceHelper {
         }
         return ids
     }
-
-    func subtokens(for word: String) -> [String] { strings(for: pieces(for: word)) }
-
-    func encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32]) {
-        let r = encodeDetailed(words: words, collectPieces: false)
-        return (r.inputIDs, r.wordIndex)
-    }
+    // moved to extension
+//    func subtokens(for word: String) -> [String] { strings(for: pieces(for: word)) }
+    // moved to extension
+//    func encodeUnpadded(words: [String]) -> (inputIDs: [Int32], wordIndex: [Int32]) {
+//        let result = encodeDetailed(words: words, collectPieces: false)
+//        return (result.inputIDs, result.wordIndex)
+//    }
 
     func encode(words: [String], seqLen: Int, maxWords: Int) throws -> BERTpipeEncodedSentence? {
         let detailed = encodeDetailed(words: words, collectPieces: showWordPieces)

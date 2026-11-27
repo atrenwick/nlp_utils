@@ -268,7 +268,7 @@ struct GoSectionUpperHalf: View{
             }
         }
         if myConfig.viewSettings.showProcessingProgress {
-            PipelineProgressView(myConfig: $myConfig, currentStatus: $currentStatus).id("processingProgressView")
+            PipelineProcessingProgressView(myConfig: $myConfig, currentStatus: $currentStatus).id("processingProgressView")
         }
     }
 }
@@ -408,27 +408,6 @@ struct TokenisationEditView: View {
 /////////////////////////////////////////         VIEW ELEMENTS AND SUBPARTS       ///////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-///Show the not-ready warning messages
-struct BigGoButtonReadinessExtractedView: View{
-    let isPipelineReady: Bool
-    let missingReqsMessage: String
-    var body: some View{
-            if !isPipelineReady {
-                VStack{
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                    Text(missingReqsMessage)
-                }
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.orange)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-        }
-    }
-}
 
 /// Picker for input types and its onChange modifiers
 struct InputTypeExtractedView: View{
@@ -457,36 +436,7 @@ struct InputTypeExtractedView: View{
     }
 }
 
-///View for set of buttons to run test load functions
-struct RunExplicitButtonExtractedView: View{
-    @Environment(AppModel.self) private var model
-    @State var outputString: String = "not yet run"
-    
-    var body: some View{
-        if model.myConfig.parsingConfig.verbosity.rawValue > 0{
-            HStack{
-                Button {
-                    //                    outputString = testInstantiatePipeline(myConfig: myConfig)
-                } label: {
-                    Text("Test load")
-                }
-                .tint(.orange)
-                .buttonStyle(.borderedProminent)
-                
-                Button {
-                    outputString = "reset"
-                } label: {
-                    Text("reset")
-                }
-                .tint(.blue)
-                .buttonStyle(.borderedProminent)
-                
-                Text("Use \(model.myConfig.parsingConfig.selectedLanguage.displayName) \(model.myConfig.parsingConfig.selectedTreebank.short)")
-                Text(outputString)
-            }
-        }
-    }
-}
+
 
 /// View to specify where to start processing sents : @ sent0, 1, 2…
 struct TaggingOffsetParamsView: View{
@@ -538,62 +488,4 @@ struct TaggingOffsetParamsView: View{
     }
 }
 
-/// visual of the button to push to run the pipeline
-struct TaggingProgressButtonExtractedView: View{
-    @Environment(AppModel.self) private var model
 
-    let taggingInProgress: Bool
-    @Binding var currentPipelineDesc: PipelineDesc?
-    @Binding var currentPipelineLoaded: Bool
-    var previous: Int = 0
-
-    var body: some View {
-        Group {
-            VStack {
-                HStack {
-                    Image(systemName: taggingInProgress ? "progress.indicator" : "play.fill")
-                        .symbolEffect(.rotate, options: .repeating, isActive: taggingInProgress)
-                    Text(taggingInProgress ? "Running" : "Run")
-                        .fontWeight(.semibold)
-                }
-                if currentPipelineLoaded, let loadedDesc = currentPipelineDesc {
-                    HStack{
-                        Text(loadedDesc.lang.uppercased())
-                        Spacer()
-                        Text(loadedDesc.tb)
-                        Spacer()
-                        Text(loadedDesc.llm)
-                        Spacer()
-                        Text(loadedDesc.tok)
-                    }
-                }
-            }
-            .font(.headline)
-            .frame(maxWidth: .infinity)
-            .padding()
-        }
-    }
-}
-
-/// Navigation link + image to RunOutput view
-struct ToolbarLinkToOutputExtractedView: View {
-    var unreadCount: Int = 0
-    var body: some View{
-        
-        NavigationLink{
-            RunOutputView()
-        } label: {
-            Image(systemName: "book.pages.fill")
-                .overlay(alignment: .topTrailing) {
-                    if unreadCount > 0 {
-                        Text(String(unreadCount))
-                            .font(.caption2)
-                            .foregroundStyle(.white)
-                            .padding(4)
-                            .background(Circle().fill(.red))
-                            .offset(x: 8, y: -8)
-                    }
-                }
-        }
-    }
-}

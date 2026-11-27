@@ -51,6 +51,8 @@ struct ConfigurationRules {
     
     // Define which treebanks are available based on the language & architecture combination
     static func availableTreebanks(for architecture: ModelArchitecture, language: Language) -> [Language.Treebank] {
+        let availableTBs: [Language.Treebank]
+        
         switch architecture {
         case .cnnBiLSTM:
             switch language {
@@ -99,6 +101,8 @@ struct ConfigurationRules {
             case .ENM: return [.enmTB1]
             }
         }
+        
+        return availableTBs.sorted { $0.rawValue < $1.rawValue }
     }
 }
 

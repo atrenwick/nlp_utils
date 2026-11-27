@@ -81,15 +81,15 @@ struct SetDefaultsView: View {
                         selection: $selectedLanguageDefault,
                         selectedArchitecture: $selectedArchitectureDefault
                 )
-                    
-                    Picker("Treebank", selection: $selectedTreebankDefault){
-                        ForEach(selectedLanguageDefault.availableTBs.sorted {$0.shortTidy < $1.shortTidy}){tb in
-                            Text(tb.shortTidy).tag(tb)
-                        }
-                    }
-                    .onChange(of: selectedLanguageDefault) { _, newLang in
-                        selectedTreebankDefault = newLang.defaultTB
-                    }
+                    ConstrainedDefaultTreebankPickerView(title: "Treebank", selectedLang: $selectedLanguageDefault, selectedTreebank: $selectedTreebankDefault, selectedArchitecture: $selectedArchitectureDefault)
+//                    Picker("Treebank", selection: $selectedTreebankDefault){
+//                        ForEach(selectedLanguageDefault.availableTBs.sorted {$0.shortTidy < $1.shortTidy}){tb in
+//                            Text(tb.shortTidy).tag(tb)
+//                        }
+//                    }
+//                    .onChange(of: selectedLanguageDefault) { _, newLang in
+//                        selectedTreebankDefault = newLang.defaultTB
+//                    }
                     
                     Picker("Max pipeline step", selection: $maxPipelineStepDefault){
                         ForEach(PipelineStep.allCases){step in

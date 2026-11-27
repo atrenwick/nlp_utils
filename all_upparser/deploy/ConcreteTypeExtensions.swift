@@ -9,6 +9,30 @@ import Foundation
 import SwiftUI
 internal import UniformTypeIdentifiers
 
+
+extension Binding where Value == String? {
+    func stringBinding() -> Binding<String> {
+        Binding<String>(
+            get: { self.wrappedValue ?? "" },
+            set: { newValue in
+                self.wrappedValue = newValue.isEmpty ? nil : newValue
+            }
+        )
+    }
+}
+
+extension Binding where Value == Int? {
+    func intBinding() -> Binding<Int> {
+        Binding<Int>(
+            get: { self.wrappedValue ?? 0 },
+            set: { newValue in
+                self.wrappedValue = newValue   // always store what was entered
+            }
+        )
+    }
+}
+
+
 /// use collection as need to get .Count
 extension Collection where Element == TempToken {
     
@@ -90,11 +114,6 @@ extension Sequence where Element == Token {
     }
 }
 
-extension URL {
-    var normalizedDir: URL {
-        standardizedFileURL.resolvingSymlinksInPath()
-    }
-}
 
 extension Sequence where Element == ConsolidatedAnnotationData{
     func makeXMLchunk() -> String{
@@ -105,5 +124,11 @@ extension Sequence where Element == ConsolidatedAnnotationData{
 extension Sequence where Element == ConsolidatedToken{
     func makeSentXML() -> String{
         return self.map {$0.asXML}.joined(separator: "\n")
+    }
+}
+
+extension URL {
+    var normalizedDir: URL {
+        standardizedFileURL.resolvingSymlinksInPath()
     }
 }
